@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+gunicorn
+pymongo
+jinja2
+python-multipart
+python-dotenv
+redis

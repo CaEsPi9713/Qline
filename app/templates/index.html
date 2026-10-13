@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MongoDB Web Admin</title>
+<link rel="stylesheet" href="{{ base }}/static/style.css">
+</head>
+<body>
+<header>
+<h1>MongoDB Web Admin</h1>
+<div>Usuario: <strong>{{ usuario }}</strong> &nbsp; | &nbsp; Base: <strong>{{ base_datos }}</strong></div>
+</header>
+<div class="contenedor">
+<aside class="sidebar">
+<h3>Colecciones</h3>
+{% for nombre in colecciones %}
+<a href="{{ base }}/?coleccion={{ nombre|urlencode }}" class="{{ 'activa' if nombre == coleccion else '' }}">{{ nombre }}</a>
+{% endfor %}
+{% if not colecciones %}<p>No existen colecciones.</p>{% endif %}
+<hr>
+<h4>Nueva colección</h4>
+<form method="post" action="{{ base }}/crear_coleccion">
+<input type="text" name="nombre_coleccion" placeholder="Nombre" required>
+<br><br><button type="submit">Crear</button>
+</form>
+</aside>
+<main class="contenido">
+{% if mensaje %}<div class="ok">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if not coleccion %}
+<div class="card"><h2>Seleccione una colección</h2><p>Seleccione una colección en el menú izquierdo o cree una nueva.</p></div>
+{% else %}
+<div class="card">
+{% if doc_editar %}
+<h2>Editar documento</h2>
+<form method="post" action="{{ base }}/actualizar?coleccion={{ coleccion|urlencode }}">
+<input type="hidden" name="id" value="{{ id_editar }}">
+<textarea name="json" spellcheck="false">{{ doc_editar }}</textarea>
+<br><br><button type="submit">Guardar cambios</button> &nbsp; <a href="{{ base }}/?coleccion={{ coleccion|urlencode }}">Cancelar</a>
+</form>
+{% else %}
+<h2>Insertar documento</h2>
+<form method="post" action="{{ base }}/insertar?coleccion={{ coleccion|urlencode }}">
+<textarea name="json" spellcheck="false">{% if json_texto is not none %}{{ json_texto }}{% else %}{
+  "nombre": "Juan",
+  "telefono": "8888-8888"
+}{% endif %}</textarea>
+<br><br><button type="submit">Insertar documento</button>
+</form>
+{% endif %}
+</div>
+<div class="card">
+<h2>Colección: {{ coleccion }}</h2>
+<p>Mostrando un máximo de <strong>50 documentos</strong>.</p>
+<table>
+<thead><tr><th style="width:200px;">_id</th><th>Documento</th><th style="width:140px;">Acciones</th></tr></thead>
+<tbody>
+{% for d in documentos %}
+<tr>
+<td class="codigo">{{ d.id }}</td>
+<td><pre>{{ d.json }}</pre></td>
+<td class="acciones">
+<a class="editar" href="{{ base }}/?coleccion={{ coleccion|urlencode }}&editar={{ d.id|urlencode }}">Editar</a>
+<br><br>
+<form method="post" action="{{ base }}/eliminar?coleccion={{ coleccion|urlencode }}" onsubmit="return confirm('¿Eliminar este documento?');">
+<input type="hidden" name="id" value="{{ d.id }}">
+<button type="submit" class="borrar">Eliminar</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+{% if not documentos %}<tr><td colspan="3">No existen documentos en esta colección.</td></tr>{% endif %}
+</tbody>
+</table>
+</div>
+{% endif %}
+</main>
+</div>
+</body>
+</html>
