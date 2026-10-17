@@ -12,10 +12,16 @@ from bson import ObjectId, json_util
 from bson.errors import InvalidId
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pymongo import MongoClient
+from redis.exceptions import RedisError
+
+from app import cola as cola_redis
+from app.llamado import LlamadoError, llamar_siguiente_turno
+from app.constantes import SERVICIO_NOMBRE, VENTANILLAS
+from app.redis_client import verificar_conexion as verificar_redis
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR.parent / ".env")
@@ -116,6 +122,68 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
     except Exception as e:
         contexto["error"] = contexto["error"] or f"Error de MongoDB: {e}"
     return templates.TemplateResponse(request, "index.html", contexto)
+
+
+@app.get("/redis/estado")
+def redis_estado():
+    """Estado de la conexión a Redis (TT-006)."""
+    return verificar_redis()
+
+
+@app.get("/api/cola")
+def api_cola():
+    """Turnos disponibles en orden de atención (HU-004). Solo lectura."""
+    try:
+        return {"ok": True, "turnos": cola_redis.ver_cola()}
+    except RedisError as e:
+        return JSONResponse({"ok": False, "error": f"Redis no disponible: {e}"}, status_code=503)
+
+
+def _llamar(ventanilla: str):
+    """(resultado, error, status) para las rutas de llamada."""
+    try:
+        return llamar_siguiente_turno(get_db(), ventanilla), "", 200
+    except cola_redis.ColaError as e:
+        return None, str(e), 400
+    except LlamadoError as e:
+        return None, str(e), e.status
+    except RedisError as e:
+        return None, f"Redis no disponible: {e}", 503
+
+
+@app.post("/api/llamar")
+def api_llamar(ventanilla: str = Form(...)):
+    """Llamar al siguiente turno desde una ventanilla (HU-005)."""
+    res, error, status = _llamar(ventanilla.strip())
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=status)
+    return {"ok": True, **res}
+
+
+@app.post("/cola/llamar")
+def cola_llamar(ventanilla: str = Form(...)):
+    res, error, _ = _llamar(ventanilla.strip())
+    if error:
+        return RedirectResponse(f"{BASE}/cola?error={quote_plus(error)}", status_code=303)
+    if res["codigo"] is None:
+        msg = res["mensaje"]
+    else:
+        msg = f"{res['ventanilla']} llamó al turno {res['codigo']} ({res['prioridad']})."
+    return RedirectResponse(f"{BASE}/cola?msg={quote_plus(msg)}", status_code=303)
+
+
+@app.get("/cola", response_class=HTMLResponse)
+def ver_cola(request: Request, msg: str = "", error: str = ""):
+    turnos = []
+    try:
+        turnos = cola_redis.ver_cola()
+    except RedisError as e:
+        error = error or f"Redis no disponible: {e}"
+    return templates.TemplateResponse(
+        request, "cola.html",
+        {"base": BASE, "servicio": SERVICIO_NOMBRE, "turnos": turnos, "error": error,
+         "mensaje": msg, "ventanillas": VENTANILLAS},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
