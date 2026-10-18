@@ -16,9 +16,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 from redis.exceptions import RedisError
 
 from app import cola as cola_redis
+from app.emitir import EmisionError, emitir_turno
+from app.consultar import ConsultaError, consultar_turno
 from app.llamado import LlamadoError, llamar_siguiente_turno
 from app.constantes import SERVICIO_NOMBRE, VENTANILLAS
 from app.redis_client import verificar_conexion as verificar_redis
@@ -158,6 +161,148 @@ def api_llamar(ventanilla: str = Form(...)):
     if error:
         return JSONResponse({"ok": False, "error": error}, status_code=status)
     return {"ok": True, **res}
+
+
+@app.post("/api/turnos/emitir")
+async def api_emitir_turno(request: Request):
+    """Emitir un nuevo turno para Atención General (HU-001)."""
+    prioridad = ""
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                prioridad = body.get("prioridad", "")
+        except Exception:
+            return JSONResponse({"ok": False, "error": "Cuerpo JSON inválido."}, status_code=400)
+    else:
+        try:
+            form = await request.form()
+            prioridad = form.get("prioridad", "")
+        except Exception:
+            return JSONResponse({"ok": False, "error": "Datos de formulario inválidos."}, status_code=400)
+
+    try:
+        resultado = emitir_turno(get_db(), prioridad)
+        return {"ok": True, "turno": resultado}
+    except EmisionError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=e.status)
+    except RedisError:
+        return JSONResponse({"ok": False, "error": "Redis no disponible temporalmente."}, status_code=503)
+    except PyMongoError:
+        return JSONResponse({"ok": False, "error": "MongoDB no disponible temporalmente."}, status_code=503)
+
+
+@app.get("/emitir", response_class=HTMLResponse)
+def vista_emitir(request: Request, error: str = ""):
+    """Formulario web para emitir turno (HU-001)."""
+    return templates.TemplateResponse(
+        request,
+        "emitir.html",
+        {
+            "base": BASE,
+            "servicio": SERVICIO_NOMBRE,
+            "error": error,
+            "prioridad_seleccionada": "normal",
+        },
+    )
+
+
+@app.post("/emitir", response_class=HTMLResponse)
+def accion_emitir(request: Request, prioridad: str = Form("")):
+    """Procesar emisión de turno desde formulario web (HU-001)."""
+    try:
+        turno = emitir_turno(get_db(), prioridad)
+        return templates.TemplateResponse(
+            request,
+            "turno_confirmado.html",
+            {
+                "base": BASE,
+                "turno": turno,
+                "servicio": SERVICIO_NOMBRE,
+            },
+        )
+    except EmisionError as e:
+        return templates.TemplateResponse(
+            request,
+            "emitir.html",
+            {
+                "base": BASE,
+                "servicio": SERVICIO_NOMBRE,
+                "error": str(e),
+                "prioridad_seleccionada": prioridad,
+            },
+            status_code=e.status,
+        )
+    except (RedisError, PyMongoError):
+        return templates.TemplateResponse(
+            request,
+            "emitir.html",
+            {
+                "base": BASE,
+                "servicio": SERVICIO_NOMBRE,
+                "error": "El servicio no se encuentra disponible temporalmente. Por favor intente de nuevo más tarde.",
+                "prioridad_seleccionada": prioridad,
+            },
+            status_code=503,
+        )
+
+
+# --- HU-002: consulta de turnos (solo lectura) -------------------------------
+
+@app.get("/api/turnos/{codigo}")
+def api_consultar_turno(codigo: str):
+    """Devuelve estado de MongoDB y posicion de Redis si sigue pendiente."""
+    try:
+        return {"ok": True, "turno": consultar_turno(get_db(), codigo)}
+    except ConsultaError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=e.status)
+    except PyMongoError:
+        return JSONResponse(
+            {"ok": False, "error": "MongoDB no disponible temporalmente."},
+            status_code=503,
+        )
+
+
+def _mostrar_consulta(request: Request, codigo: str = ""):
+    """Comparte plantilla entre buscador y enlace directo por codigo."""
+    turno = None
+    error = ""
+    status = 200
+    if codigo.strip():
+        try:
+            turno = consultar_turno(get_db(), codigo)
+        except ConsultaError as e:
+            error = str(e)
+            status = e.status
+        except PyMongoError:
+            error = "MongoDB no disponible temporalmente."
+            status = 503
+
+    return templates.TemplateResponse(
+        request,
+        "consultar.html",
+        {
+            "base": BASE,
+            "servicio": SERVICIO_NOMBRE,
+            "codigo": codigo,
+            "turno": turno,
+            "error": error,
+        },
+        status_code=status,
+    )
+
+
+@app.get("/consultar", response_class=HTMLResponse)
+def vista_consultar(request: Request, codigo: str = ""):
+    """Formulario de busqueda; GET /consultar?codigo=A-001."""
+    return _mostrar_consulta(request, codigo)
+
+
+@app.get("/turno/{codigo}", response_class=HTMLResponse)
+def vista_turno(request: Request, codigo: str):
+    """Enlace directo a la consulta de un turno concreto."""
+    return _mostrar_consulta(request, codigo)
 
 
 @app.post("/cola/llamar")
