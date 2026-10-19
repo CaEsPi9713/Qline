@@ -20,7 +20,7 @@ import random
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-from .constantes import (
+from app.constantes import (
     ESTADO_ABANDONADO,
     ESTADO_ATENDIDO,
     ESTADO_EN_ATENCION,
@@ -28,7 +28,7 @@ from .constantes import (
     ESTADO_PENDIENTE,
     PRIORIDAD_NORMAL,
     PRIORIDAD_PREFERENCIAL,
-    SERVICIO_INICIAL,
+    SERVICIO_ID,
     TTL_ABANDONO_SEG,
     VENTANILLAS,
 )
@@ -54,6 +54,11 @@ class Parametros:
     # Instante "ahora" simulado dentro del último día (hora UTC, decimal: 18.5 = 18:30).
     hora_corte_utc: float = 18.5
     prefijo_codigo: str = PREFIJO_POR_DEFECTO
+    # False (por defecto): los turnos que al corte estarían 'llamado' o 'en_atencion'
+    # se cierran (atendido/abandonado). Así los datos sintéticos no dejan turnos
+    # "activos" que se confundan con la operación real (p. ej. en el panel de
+    # atención). Los 'pendiente' sí se conservan. True: instantánea fiel del corte.
+    dejar_turnos_activos: bool = False
 
     def validar(self) -> None:
         if self.dias < 1:
@@ -163,7 +168,7 @@ def _a_documento(sim: dict, codigo: str, ahora: int | None) -> dict | None:
 
     return {
         "codigo": codigo,
-        "servicio": SERVICIO_INICIAL,
+        "servicio": SERVICIO_ID,
         "prioridad": sim["prioridad"],
         "estado": estado,
         "ventanilla": None if estado == ESTADO_PENDIENTE else sim["ventanilla"],
@@ -212,5 +217,7 @@ def generar_turnos(parametros: Parametros | None = None) -> list[dict]:
     ancho = max(3, len(str(len(simulados))))
     documentos = []
     for numero, (sim, corte) in enumerate(simulados, start=1):
+        if corte is not None and not p.dejar_turnos_activos and sim["llamado"] <= corte:
+            corte = None  # ya estaba en curso al corte: se muestra terminado
         documentos.append(_a_documento(sim, f"{p.prefijo_codigo}-{numero:0{ancho}d}", corte))
     return documentos

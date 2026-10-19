@@ -18,7 +18,12 @@ from fastapi.templating import Jinja2Templates
 from pymongo import MongoClient
 from redis.exceptions import RedisError
 
+from app import atencion
 from app import cola as cola_redis
+from app.excepciones import ErrorAtencion
+from app.panel_atencion import estado_ventanillas
+from app.redis_atencion import liberar_turno
+from app.schemas import TurnoEnAtencion, TurnoFinalizado
 from app.llamado import LlamadoError, llamar_siguiente_turno
 from app.constantes import SERVICIO_NOMBRE, VENTANILLAS
 from app.redis_client import verificar_conexion as verificar_redis
@@ -184,6 +189,71 @@ def ver_cola(request: Request, msg: str = "", error: str = ""):
         {"base": BASE, "servicio": SERVICIO_NOMBRE, "turnos": turnos, "error": error,
          "mensaje": msg, "ventanillas": VENTANILLAS},
     )
+
+
+@app.exception_handler(ErrorAtencion)
+def _error_atencion(request: Request, exc: ErrorAtencion):
+    """Errores controlados del ciclo de atención: nunca un 500 sin explicar."""
+    return JSONResponse({"ok": False, "error": exc.mensaje}, status_code=exc.status_code)
+
+
+@app.post("/api/atencion/iniciar", response_model=TurnoEnAtencion)
+def api_iniciar_atencion(codigo: str = Form(...), ventanilla: str = Form(...)):
+    """Iniciar la atención de un turno llamado: llamado -> en_atencion (HU-006)."""
+    return atencion.iniciar_atencion(get_db()["turnos"], codigo, ventanilla)
+
+
+@app.post("/api/atencion/finalizar", response_model=TurnoFinalizado)
+def api_finalizar_atencion(codigo: str = Form(...), ventanilla: str = Form(...)):
+    """Finalizar la atención: en_atencion -> atendido y liberar Redis (HU-007)."""
+    return atencion.finalizar_atencion(
+        get_db()["turnos"], codigo, ventanilla,
+        al_finalizar=lambda c: liberar_turno(c, ventanilla.strip()),
+    )
+
+
+def _redirigir_panel(**params) -> RedirectResponse:
+    extra = "&".join(f"{k}={quote_plus(v)}" for k, v in params.items())
+    return RedirectResponse(f"{BASE}/panel?{extra}", status_code=303)
+
+
+@app.get("/panel", response_class=HTMLResponse)
+def panel_atencion(request: Request, msg: str = "", error: str = ""):
+    """Panel del operador: turno actual por ventanilla con Iniciar / Finalizar."""
+    ventanillas, avisos = [], []
+    try:
+        ventanillas, avisos = estado_ventanillas(get_db())
+    except Exception as e:
+        error = error or f"MongoDB no disponible: {e}"
+    return templates.TemplateResponse(
+        request, "panel.html",
+        {"base": BASE, "servicio": SERVICIO_NOMBRE, "ventanillas": ventanillas,
+         "avisos": avisos, "mensaje": msg, "error": error},
+    )
+
+
+@app.post("/panel/iniciar")
+def panel_iniciar(codigo: str = Form(...), ventanilla: str = Form(...)):
+    try:
+        r = atencion.iniciar_atencion(get_db()["turnos"], codigo, ventanilla)
+    except ErrorAtencion as e:
+        return _redirigir_panel(error=e.mensaje)
+    return _redirigir_panel(msg=f"{r['ventanilla']}: atención iniciada para {r['codigo']}.")
+
+
+@app.post("/panel/finalizar")
+def panel_finalizar(codigo: str = Form(...), ventanilla: str = Form(...)):
+    try:
+        r = atencion.finalizar_atencion(
+            get_db()["turnos"], codigo, ventanilla,
+            al_finalizar=lambda c: liberar_turno(c, ventanilla.strip()),
+        )
+    except ErrorAtencion as e:
+        return _redirigir_panel(error=e.mensaje)
+    msg = f"{r['ventanilla']}: atención de {r['codigo']} finalizada ({r['atencion_seg']} s)."
+    if r["redis_liberado"] is False:
+        msg += " Aviso: no se pudo limpiar el estado en Redis."
+    return _redirigir_panel(msg=msg)
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -7,8 +7,8 @@ import threading
 import unittest
 from datetime import datetime, timezone
 
-from qline_hu006.servicio import iniciar_atencion
-from qline_hu007.excepciones import (
+from app.atencion import calcular_atencion_seg, finalizar_atencion, iniciar_atencion
+from app.excepciones import (
     DatosInvalidos,
     ServicioNoDisponible,
     TransicionNoPermitida,
@@ -16,7 +16,6 @@ from qline_hu007.excepciones import (
     TurnoNoEncontrado,
     VentanillaNoCoincide,
 )
-from qline_hu007.servicio import calcular_atencion_seg, finalizar_atencion
 
 from .fakes import ColeccionFalsa, turno, utc
 

@@ -7,18 +7,20 @@ Uso:
     python scripts/sembrar_turnos_hu006.py            # inserta/restaura
     python scripts/sembrar_turnos_hu006.py --limpiar  # borra solo A-015..A-020
 
-Lee las variables de entorno de .env.example (MONGO_*). No contiene secretos.
+Lee MONGO_* del .env (ver .env.example). No contiene secretos.
 Nota: esto cubre solo los casos de HU-006; el script completo es TT-005.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
+import sys
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote_plus
+from pathlib import Path
 
-from pymongo import MongoClient
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.sinteticos import cargador  # noqa: E402
 
 BASE = datetime(2026, 10, 18, 14, 0, 0, tzinfo=timezone.utc)
 
@@ -60,22 +62,16 @@ TURNOS = [
 ]
 
 
-def conectar():
-    user = quote_plus(os.environ["MONGO_USER"])
-    pwd = quote_plus(os.environ["MONGO_PASS"])
-    host = os.environ["MONGO_HOST"]
-    port = os.environ.get("MONGO_PORT", "27017")
-    db = os.environ.get("MONGO_DB", "grupo2_db")
-    cliente = MongoClient(f"mongodb://{user}:{pwd}@{host}:{port}/{db}", serverSelectionTimeoutMS=5000)
-    return cliente[db]["turnos"]
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limpiar", action="store_true", help="elimina solo A-015..A-020")
     args = parser.parse_args()
 
-    coleccion = conectar()
+    try:
+        coleccion = cargador.conectar()
+    except cargador.ErrorCarga as err:
+        print(f"Error: {err}", file=sys.stderr)
+        raise SystemExit(1)
     codigos = [t["codigo"] for t in TURNOS]
     if args.limpiar:
         r = coleccion.delete_many({"codigo": {"$in": codigos}})

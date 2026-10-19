@@ -1,4 +1,1 @@
-"""HU-006 · Iniciar atención (QLine, Seguimiento 2).
-
-Responsable: Abigail Urbina / aurbina.
-"""
+"""Scripts de apoyo de QLine (verificación de Redis, datos sintéticos y pruebas)."""

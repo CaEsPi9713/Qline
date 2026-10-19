@@ -24,16 +24,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from qline_tt005 import cargador  # noqa: E402
-from qline_tt005.generador import (  # noqa: E402
+from scripts.sinteticos import cargador  # noqa: E402
+from scripts.sinteticos.generador import (  # noqa: E402
     FECHA_FIN_POR_DEFECTO,
     PREFIJO_POR_DEFECTO,
     SEMILLA_POR_DEFECTO,
     Parametros,
     generar_turnos,
 )
-from qline_tt005.serializacion import a_jsonl  # noqa: E402
-from qline_tt005.validador import resumen, validar_conjunto  # noqa: E402
+from scripts.sinteticos.serializacion import a_jsonl  # noqa: E402
+from scripts.sinteticos.validador import resumen, validar_conjunto  # noqa: E402
 
 
 def construir_parser() -> argparse.ArgumentParser:
@@ -45,8 +45,11 @@ def construir_parser() -> argparse.ArgumentParser:
                    help="último día simulado, AAAA-MM-DD (default: %(default)s; fija, no es la fecha de hoy)")
     g.add_argument("--llegadas-por-hora", type=float, default=30.0, help="llegadas por hora (default: %(default)s)")
     g.add_argument("--prefijo", default=PREFIJO_POR_DEFECTO,
-                   help="letra del código sintético (default: %(default)s → S-001). Distinto de 'A' para no "
+                   help="letra del código sintético (default: %(default)s da S-001). Distinto de 'A' para no "
                         "colisionar con los turnos de la operación real")
+    g.add_argument("--con-activos", action="store_true",
+                   help="deja turnos 'llamado'/'en_atencion' al corte (por defecto se cierran para no "
+                        "confundirse con la operación real)")
     a = p.add_argument_group("acciones (sin ninguna, solo vista previa)")
     a.add_argument("--salida", type=Path, help="escribe los turnos en JSON Lines (Extended JSON)")
     a.add_argument("--cargar", action="store_true", help="upsert en MongoDB (no duplica)")
@@ -68,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         parametros = Parametros(semilla=args.semilla, dias=args.dias, fecha_fin=args.fecha_fin,
-                                llegadas_por_hora=args.llegadas_por_hora, prefijo_codigo=args.prefijo)
+                                llegadas_por_hora=args.llegadas_por_hora, prefijo_codigo=args.prefijo,
+                                dejar_turnos_activos=args.con_activos)
         if args.limpiar and (args.cargar or args.reiniciar or args.salida):
             print("--limpiar se usa solo; para limpiar y volver a cargar use --reiniciar.", file=sys.stderr)
             return 2

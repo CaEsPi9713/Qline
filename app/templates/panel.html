@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QLine · Panel de atención</title>
+<link rel="stylesheet" href="{{ base }}/static/style.css">
+<style>
+.ventanillas{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.ventanillas .card{margin-bottom:0}
+.turno{font-size:2em;font-weight:bold;font-family:Consolas,Monaco,monospace;margin:8px 0}
+.estado{display:inline-block;padding:3px 9px;border-radius:12px;background:#eee;font-size:.85em}
+.estado.llamado{background:#fff3cd}
+.estado.en_atencion{background:#d1ecf1}
+.aviso{padding:12px;background:#fff8e1;border:1px solid #ffe082;margin-bottom:15px}
+.ventanillas button{margin-top:10px;width:100%}
+</style>
+</head>
+<body>
+<header>
+<h1>QLine · Panel de atención</h1>
+<div>Servicio: <strong>{{ servicio }}</strong> &nbsp; | &nbsp;
+<a href="{{ base }}/cola" style="color:inherit">Cola activa</a> &nbsp; | &nbsp;
+<a href="{{ base }}/" style="color:inherit">Administración MongoDB</a></div>
+</header>
+<main class="contenido" style="padding:20px">
+{% if mensaje %}<div class="ok">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% for a in avisos %}<div class="aviso">{{ a }}</div>{% endfor %}
+<p>Para obtener un turno, use <em>Llamar siguiente</em> en la <a href="{{ base }}/cola">cola activa</a>. <a href="{{ base }}/panel">Actualizar</a></p>
+<div class="ventanillas">
+{% for v in ventanillas %}
+<div class="card">
+<h2>{{ v.id }}</h2>
+{% if v.turno %}
+<div class="turno">{{ v.turno.codigo }}</div>
+<span class="estado {{ v.turno.estado }}">{{ v.turno.estado|replace('_', ' ') }}</span>
+<span class="estado">{{ v.turno.prioridad }}</span>
+{% if v.turno.puede_iniciar %}
+<form method="post" action="{{ base }}/panel/iniciar">
+<input type="hidden" name="codigo" value="{{ v.turno.codigo }}">
+<input type="hidden" name="ventanilla" value="{{ v.id }}">
+<button type="submit">Iniciar atención</button>
+</form>
+{% elif v.turno.puede_finalizar %}
+<form method="post" action="{{ base }}/panel/finalizar">
+<input type="hidden" name="codigo" value="{{ v.turno.codigo }}">
+<input type="hidden" name="ventanilla" value="{{ v.id }}">
+<button type="submit">Finalizar atención</button>
+</form>
+{% endif %}
+{% else %}
+<p>Sin turno asignado.</p>
+{% endif %}
+</div>
+{% endfor %}
+</div>
+</main>
+</body>
+</html>

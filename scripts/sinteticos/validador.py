@@ -12,10 +12,7 @@ import statistics
 from collections import Counter
 from datetime import datetime
 
-from .constantes import (
-    CAMPOS_METRICAS,
-    CAMPOS_TIMESTAMPS,
-    CAMPOS_TURNO,
+from app.constantes import (
     ESTADO_ABANDONADO,
     ESTADO_ATENDIDO,
     ESTADO_EN_ATENCION,
@@ -24,10 +21,12 @@ from .constantes import (
     ESTADOS,
     PRIORIDAD_PREFERENCIAL,
     PRIORIDADES,
-    SERVICIO_INICIAL,
+    SERVICIO_ID,
     TTL_ABANDONO_SEG,
     VENTANILLAS,
 )
+
+from .contrato import CAMPOS_METRICAS, CAMPOS_TIMESTAMPS, CAMPOS_TURNO
 
 PATRON_CODIGO = re.compile(r"^[A-Z]-\d{3,}$")
 
@@ -52,8 +51,8 @@ def validar_turno(doc: dict) -> list[str]:
 
     if not isinstance(doc["codigo"], str) or not PATRON_CODIGO.match(doc["codigo"]):
         errores.append(f"{cod}: código con formato inválido")
-    if doc["servicio"] != SERVICIO_INICIAL:
-        errores.append(f"{cod}: servicio debe ser {SERVICIO_INICIAL}")
+    if doc["servicio"] != SERVICIO_ID:
+        errores.append(f"{cod}: servicio debe ser {SERVICIO_ID}")
     if doc["prioridad"] not in PRIORIDADES:
         errores.append(f"{cod}: prioridad desconocida {doc['prioridad']!r}")
     if doc["estado"] not in ESTADOS:

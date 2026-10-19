@@ -1,4 +1,4 @@
-"""Errores de negocio controlados de HU-006.
+"""Errores de negocio controlados del ciclo de atención (HU-006 y HU-007).
 
 Cada excepción lleva el código HTTP con el que el router la traduce,
 para que ningún caso termine en un error 500 sin controlar.
@@ -34,6 +34,11 @@ class TransicionNoPermitida(ErrorAtencion):
 class VentanillaNoCoincide(ErrorAtencion):
     status_code = 409
     mensaje = "El turno fue llamado por otra ventanilla"
+
+
+class TurnoInconsistente(ErrorAtencion):
+    status_code = 409
+    mensaje = "El turno está en un estado incoherente con sus datos"
 
 
 class ServicioNoDisponible(ErrorAtencion):
