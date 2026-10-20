@@ -50,45 +50,45 @@
 
   <!-- Tarjetas KPI Principales -->
   <div class="grid-metricas">
-    <div class="card-metrica" style="border-left: 4px solid #f59e0b;">
+    <div class="card-metrica kpi-esperando">
       <div class="titulo">Turnos Esperando</div>
-      <div class="valor" style="color: #d97706;">{{ metricas.totales.esperando }}</div>
+      <div class="valor">{{ metricas.totales.esperando }}</div>
       <div class="subtitulo">En cola de atención</div>
     </div>
 
-    <div class="card-metrica" style="border-left: 4px solid #10b981;">
+    <div class="card-metrica kpi-atendidos">
       <div class="titulo">Turnos Atendidos</div>
-      <div class="valor" style="color: #059669;">{{ metricas.totales.atendidos }}</div>
+      <div class="valor">{{ metricas.totales.atendidos }}</div>
       <div class="subtitulo">Atenciones completadas</div>
     </div>
 
-    <div class="card-metrica" style="border-left: 4px solid #3b82f6;">
+    <div class="card-metrica kpi-prom-espera">
       <div class="titulo">Promedio de Espera</div>
-      <div class="valor" style="color: #2563eb;">{{ metricas.promedios.espera_seg }} <span style="font-size: 16px;">s</span></div>
+      <div class="valor">{{ metricas.promedios.espera_seg }} <span style="font-size: 16px;">s</span></div>
       <div class="subtitulo">Hasta ser llamado a ventanilla</div>
     </div>
 
-    <div class="card-metrica" style="border-left: 4px solid #6366f1;">
+    <div class="card-metrica kpi-prom-atencion">
       <div class="titulo">Promedio de Atención</div>
-      <div class="valor" style="color: #4f46e5;">{{ metricas.promedios.atencion_seg }} <span style="font-size: 16px;">s</span></div>
+      <div class="valor">{{ metricas.promedios.atencion_seg }} <span style="font-size: 16px;">s</span></div>
       <div class="subtitulo">Duración efectiva del servicio</div>
     </div>
 
-    <div class="card-metrica" style="border-left: 4px solid #8b5cf6;">
+    <div class="card-metrica kpi-ventanillas">
       <div class="titulo">Ventanillas Activas</div>
-      <div class="valor" style="color: #7c3aed;">
+      <div class="valor">
         {{ metricas.ventanillas.activas }} <span style="font-size: 18px; color: #94a3b8;">/ {{ metricas.ventanillas.total_configuradas }}</span>
       </div>
       <div class="subtitulo">Con atención o llamado en curso</div>
     </div>
 
-    <div class="card-metrica" style="border-left: 4px solid {% if metricas.sla.estado == 'CUMPLIDO' %}#10b981{% else %}#ef4444{% endif %};">
+    <div class="card-metrica {% if metricas.sla.estado == 'CUMPLIDO' %}kpi-sla-cumplido{% else %}kpi-sla-incumplido{% endif %}">
       <div class="titulo">Cumplimiento SLA</div>
-      <div class="valor" style="color: {% if metricas.sla.estado == 'CUMPLIDO' %}#059669{% else %}#dc2626{% endif %};">
+      <div class="valor">
         {{ metricas.sla.porcentaje_cumplimiento }}%
       </div>
       <div class="subtitulo">
-        <span class="badge badge-{% if metricas.sla.estado == 'CUMPLIDO' %}cumplido{% else %}incumplido{% endif %}">
+        <span class="badge {% if metricas.sla.estado == 'CUMPLIDO' %}badge-cumplido{% else %}badge-incumplido{% endif %}">
           {{ metricas.sla.estado }}
         </span>
         ({{ metricas.sla.cumplen }} de {{ metricas.sla.total_evaluados }} turnos)
