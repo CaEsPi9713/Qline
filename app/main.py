@@ -28,8 +28,12 @@ from app.schemas import TurnoEnAtencion, TurnoFinalizado
 from app.emitir import EmisionError, emitir_turno
 from app.consultar import ConsultaError, consultar_turno
 from app.llamado import LlamadoError, llamar_siguiente_turno
-from app.constantes import SERVICIO_NOMBRE, VENTANILLAS
+from app.constantes import ESTADOS, PRIORIDADES, SERVICIO_ID, SERVICIO_NOMBRE, VENTANILLAS
 from app.redis_client import verificar_conexion as verificar_redis
+from app.turnos_schema import TurnoValidationError, validar_documento_turno
+from app.historial import obtener_historial_turnos
+from app.dashboard import calcular_metricas_dashboard
+
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR.parent / ".env")
@@ -103,12 +107,61 @@ def ir(coleccion: str, **params) -> RedirectResponse:
     return RedirectResponse(f"{BASE}/?coleccion={quote_plus(coleccion)}{extra}", status_code=303)
 
 
+from datetime import datetime, timezone
+
+
+def _parsear_iso_o_fecha(valor):
+    """Convierte strings ISO o valores existentes a datetime UTC."""
+    if not valor:
+        return None
+    if isinstance(valor, datetime):
+        return valor
+    if isinstance(valor, str):
+        val = valor.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(val)
+        except ValueError:
+            return None
+    return None
+
+
+def normalizar_timestamps_turno(doc: dict) -> None:
+    """Asegura que los timestamps en el documento sean datetime UTC para MongoDB."""
+    if "timestamps" in doc and isinstance(doc["timestamps"], dict):
+        for k in ("creado", "llamado", "inicio_atencion", "finalizado", "abandonado"):
+            val = doc["timestamps"].get(k)
+            if val is not None:
+                parsed = _parsear_iso_o_fecha(val)
+                doc["timestamps"][k] = parsed
+
+
 def render(request: Request, coleccion: str = "", editar: str = "", error: str = "",
-           ok: str = "", json_texto: str = None):
+           ok: str = "", json_texto: str = None, filtro_estado: str = ""):
+    plantilla_turnos = json.dumps({
+        "codigo": "A-099",
+        "servicio": SERVICIO_ID,
+        "prioridad": "normal",
+        "estado": "pendiente",
+        "ventanilla": None,
+        "operador": None,
+        "timestamps": {
+            "creado": datetime.now(timezone.utc).isoformat(),
+            "llamado": None,
+            "inicio_atencion": None,
+            "finalizado": None,
+            "abandonado": None,
+        },
+        "metricas": {
+            "espera_seg": None,
+            "atencion_seg": None,
+        },
+    }, indent=2)
+
     contexto = {
         "usuario": MONGO_USER, "base": BASE, "base_datos": MONGO_DB, "coleccion": coleccion,
         "colecciones": [], "documentos": [], "doc_editar": None, "id_editar": "",
         "mensaje": MENSAJES.get(ok, ""), "error": error, "json_texto": json_texto,
+        "filtro_estado": filtro_estado, "plantilla_turnos": plantilla_turnos,
     }
     try:
         db = get_db()
@@ -123,13 +176,30 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
             except Exception as e:
                 contexto["error"] = f"Error cargando documento: {e}"
         if coleccion:
-            cursor = db[coleccion].find({}).sort("_id", -1).limit(50)
-            contexto["documentos"] = [
-                {"id": str(d.get("_id", "")), "json": a_json_bonito(d)} for d in cursor
-            ]
+            query = {}
+            if coleccion == "turnos" and filtro_estado:
+                query["estado"] = filtro_estado
+            cursor = db[coleccion].find(query).sort("_id", -1).limit(50)
+            documentos = []
+            for d in cursor:
+                resumen_turno = None
+                if coleccion == "turnos" and isinstance(d, dict):
+                    resumen_turno = {
+                        "codigo": d.get("codigo"),
+                        "prioridad": d.get("prioridad"),
+                        "estado": d.get("estado"),
+                        "ventanilla": d.get("ventanilla"),
+                    }
+                documentos.append({
+                    "id": str(d.get("_id", "")),
+                    "json": a_json_bonito(d),
+                    "resumen_turno": resumen_turno,
+                })
+            contexto["documentos"] = documentos
     except Exception as e:
         contexto["error"] = contexto["error"] or f"Error de MongoDB: {e}"
     return templates.TemplateResponse(request, "index.html", contexto)
+
 
 
 @app.get("/redis/estado")
@@ -402,8 +472,8 @@ def panel_finalizar(codigo: str = Form(...), ventanilla: str = Form(...)):
 
 
 @app.get("/", response_class=HTMLResponse)
-def inicio(request: Request, coleccion: str = "", editar: str = "", ok: str = ""):
-    return render(request, coleccion.strip(), editar.strip(), ok=ok)
+def inicio(request: Request, coleccion: str = "", editar: str = "", ok: str = "", filtro_estado: str = ""):
+    return render(request, coleccion.strip(), editar.strip(), ok=ok, filtro_estado=filtro_estado.strip())
 
 
 @app.post("/crear_coleccion")
@@ -421,8 +491,14 @@ def crear_coleccion(request: Request, nombre_coleccion: str = Form("")):
 @app.post("/insertar")
 def insertar(request: Request, coleccion: str = "", json_doc: str = Form("", alias="json")):
     try:
-        get_db()[coleccion].insert_one(json_a_documento(json_doc))
+        doc = json_a_documento(json_doc)
+        if coleccion == "turnos":
+            normalizar_timestamps_turno(doc)
+            validar_documento_turno(doc)
+        get_db()[coleccion].insert_one(doc)
         return ir(coleccion, ok="insertado")
+    except TurnoValidationError as e:
+        return render(request, coleccion, error=f"Validación de turno falló (TT-002): {e}", json_texto=json_doc)
     except Exception as e:
         return render(request, coleccion, error=f"Error insertando: {e}", json_texto=json_doc)
 
@@ -432,8 +508,13 @@ def actualizar(request: Request, coleccion: str = "", id: str = Form(""),
                json_doc: str = Form("", alias="json")):
     try:
         doc = json_a_documento(json_doc)
+        if coleccion == "turnos":
+            normalizar_timestamps_turno(doc)
+            validar_documento_turno(doc)
         get_db()[coleccion].update_one({"_id": a_object_id(id)}, {"$set": doc})
         return ir(coleccion, ok="actualizado")
+    except TurnoValidationError as e:
+        return render(request, coleccion, editar=id, error=f"Validación de turno falló (TT-002): {e}", json_texto=json_doc)
     except Exception as e:
         return render(request, coleccion, editar=id, error=f"Error actualizando: {e}")
 
@@ -445,3 +526,124 @@ def eliminar(request: Request, coleccion: str = "", id: str = Form("")):
         return ir(coleccion, ok="eliminado")
     except Exception as e:
         return render(request, coleccion, error=f"Error eliminando: {e}")
+
+
+# --- HU-010: Historial y Auditoría (Carlos Espinoza) -------------------------
+
+@app.get("/api/historial")
+def api_historial(
+    estado: str = "",
+    ventanilla: str = "",
+    prioridad: str = "",
+    codigo: str = "",
+    limite: int = 100,
+    salto: int = 0,
+):
+    """Consulta turnos históricos con filtros y métricas calculadas (HU-010)."""
+    try:
+        return obtener_historial_turnos(
+            get_db(),
+            estado=estado.strip() or None,
+            ventanilla=ventanilla.strip() or None,
+            prioridad=prioridad.strip() or None,
+            codigo=codigo.strip() or None,
+            limite=limite,
+            salto=salto,
+        )
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Error al consultar historial: {e}"}, status_code=500)
+
+
+@app.get("/historial", response_class=HTMLResponse)
+def vista_historial(
+    request: Request,
+    estado: str = "",
+    ventanilla: str = "",
+    prioridad: str = "",
+    codigo: str = "",
+):
+    """Vista de supervisión y auditoría del historial de turnos (HU-010)."""
+    try:
+        res = obtener_historial_turnos(
+            get_db(),
+            estado=estado.strip() or None,
+            ventanilla=ventanilla.strip() or None,
+            prioridad=prioridad.strip() or None,
+            codigo=codigo.strip() or None,
+            limite=100,
+        )
+        return templates.TemplateResponse(
+            request,
+            "historial.html",
+            {
+                "base": BASE,
+                "turnos": res["turnos"],
+                "total": res["total"],
+                "filtros": res["filtros"],
+                "estados_disponibles": ESTADOS,
+                "ventanillas_disponibles": VENTANILLAS,
+                "prioridades_disponibles": PRIORIDADES,
+                "error": "",
+            },
+        )
+    except Exception as e:
+        return templates.TemplateResponse(
+            request,
+            "historial.html",
+            {
+                "base": BASE,
+                "turnos": [],
+                "total": 0,
+                "filtros": {"estado": estado, "ventanilla": ventanilla, "prioridad": prioridad, "codigo": codigo},
+                "estados_disponibles": ESTADOS,
+                "ventanillas_disponibles": VENTANILLAS,
+                "prioridades_disponibles": PRIORIDADES,
+                "error": f"Error cargando historial de MongoDB: {e}",
+            },
+            status_code=500,
+        )
+
+
+# --- HU-011: Dashboard y Métricas SLA (Carlos Espinoza) ----------------------
+
+@app.get("/api/dashboard")
+def api_dashboard(sla_espera: int = 300):
+    """Indicadores operacionales y métricas SLA calculadas con aggregation pipelines (HU-011)."""
+    try:
+        return calcular_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Error calculando métricas: {e}"}, status_code=500)
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def vista_dashboard(request: Request, sla_espera: int = 300):
+    """Panel visual para supervisores con KPIs de espera, atención y SLA (HU-011)."""
+    try:
+        metricas = calcular_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera)
+        return templates.TemplateResponse(
+            request,
+            "dashboard.html",
+            {
+                "base": BASE,
+                "metricas": metricas,
+                "error": "",
+            },
+        )
+    except Exception as e:
+        metricas_vacias = {
+            "totales": {"esperando": 0, "llamados": 0, "en_atencion": 0, "atendidos": 0, "abandonados": 0, "total_turnos": 0},
+            "promedios": {"espera_seg": 0.0, "atencion_seg": 0.0},
+            "ventanillas": {"total_configuradas": len(VENTANILLAS), "activas": 0, "detalle": [{"ventanilla": v, "ocupada": False, "turnos_en_proceso": 0} for v in VENTANILLAS]},
+            "sla": {"objetivo_max_espera_seg": sla_espera, "total_evaluados": 0, "cumplen": 0, "incumplen": 0, "porcentaje_cumplimiento": 100.0, "tasa_minima_requerida": 80.0, "estado": "CUMPLIDO"},
+        }
+        return templates.TemplateResponse(
+            request,
+            "dashboard.html",
+            {
+                "base": BASE,
+                "metricas": metricas_vacias,
+                "error": f"Error conectando a MongoDB para calcular métricas: {e}",
+            },
+            status_code=500,
+        )
+

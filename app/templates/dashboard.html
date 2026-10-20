@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QLine — Dashboard y SLA (HU-011)</title>
+<link rel="stylesheet" href="{{ base }}/static/style.css">
+</head>
+<body>
+<header>
+  <h1>QLine · Dashboard Operacional y SLA</h1>
+  <nav>
+    <a href="{{ base }}/">Admin MongoDB</a>
+    <a href="{{ base }}/cola">Cola Redis</a>
+    <a href="{{ base }}/emitir">Emitir</a>
+    <a href="{{ base }}/consultar">Consultar</a>
+    <a href="{{ base }}/historial">Historial</a>
+    <a href="{{ base }}/dashboard" class="activo">Dashboard SLA</a>
+  </nav>
+</header>
+<div class="sub-header">
+  Supervisión en tiempo real derivada de MongoDB · Cumplimiento de objetivos operacionales
+</div>
+
+<main style="padding: 24px; max-width: 1400px; margin: 0 auto;">
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <!-- Control de Meta SLA -->
+  <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+    <div>
+      <h2 style="margin: 0 0 4px 0;">Configuración de Objetivo SLA</h2>
+      <div style="font-size: 13px; color: #64748b;">
+        Mide el porcentaje de turnos cuya espera no superó el umbral establecido (mínimo exigido: {{ metricas.sla.tasa_minima_requerida }}%).
+      </div>
+    </div>
+    <form method="get" action="{{ base }}/dashboard" style="display: flex; gap: 8px; align-items: center;">
+      <label for="sla_espera" style="font-size: 13px; font-weight: 600;">Espera máxima:</label>
+      <select id="sla_espera" name="sla_espera" style="width: auto;">
+        <option value="120" {% if metricas.sla.objetivo_max_espera_seg == 120 %}selected{% endif %}>2 minutos (120 s)</option>
+        <option value="180" {% if metricas.sla.objetivo_max_espera_seg == 180 %}selected{% endif %}>3 minutos (180 s)</option>
+        <option value="300" {% if metricas.sla.objetivo_max_espera_seg == 300 %}selected{% endif %}>5 minutos (300 s)</option>
+        <option value="600" {% if metricas.sla.objetivo_max_espera_seg == 600 %}selected{% endif %}>10 minutos (600 s)</option>
+      </select>
+      <button type="submit" class="btn btn-secundario">Actualizar</button>
+      <a href="{{ base }}/api/dashboard?sla_espera={{ metricas.sla.objetivo_max_espera_seg }}" target="_blank" style="font-size: 13px; margin-left: 10px; color: #2563eb; text-decoration: none;">API JSON &rarr;</a>
+    </form>
+  </div>
+
+  <!-- Tarjetas KPI Principales -->
+  <div class="grid-metricas">
+    <div class="card-metrica kpi-esperando">
+      <div class="titulo">Turnos Esperando</div>
+      <div class="valor">{{ metricas.totales.esperando }}</div>
+      <div class="subtitulo">En cola de atención</div>
+    </div>
+
+    <div class="card-metrica kpi-atendidos">
+      <div class="titulo">Turnos Atendidos</div>
+      <div class="valor">{{ metricas.totales.atendidos }}</div>
+      <div class="subtitulo">Atenciones completadas</div>
+    </div>
+
+    <div class="card-metrica kpi-prom-espera">
+      <div class="titulo">Promedio de Espera</div>
+      <div class="valor">{{ metricas.promedios.espera_seg }} <span style="font-size: 16px;">s</span></div>
+      <div class="subtitulo">Hasta ser llamado a ventanilla</div>
+    </div>
+
+    <div class="card-metrica kpi-prom-atencion">
+      <div class="titulo">Promedio de Atención</div>
+      <div class="valor">{{ metricas.promedios.atencion_seg }} <span style="font-size: 16px;">s</span></div>
+      <div class="subtitulo">Duración efectiva del servicio</div>
+    </div>
+
+    <div class="card-metrica kpi-ventanillas">
+      <div class="titulo">Ventanillas Activas</div>
+      <div class="valor">
+        {{ metricas.ventanillas.activas }} <span style="font-size: 18px; color: #94a3b8;">/ {{ metricas.ventanillas.total_configuradas }}</span>
+      </div>
+      <div class="subtitulo">Con atención o llamado en curso</div>
+    </div>
+
+    <div class="card-metrica {% if metricas.sla.estado == 'CUMPLIDO' %}kpi-sla-cumplido{% else %}kpi-sla-incumplido{% endif %}">
+      <div class="titulo">Cumplimiento SLA</div>
+      <div class="valor">
+        {{ metricas.sla.porcentaje_cumplimiento }}%
+      </div>
+      <div class="subtitulo">
+        <span class="badge {% if metricas.sla.estado == 'CUMPLIDO' %}badge-cumplido{% else %}badge-incumplido{% endif %}">
+          {{ metricas.sla.estado }}
+        </span>
+        ({{ metricas.sla.cumplen }} de {{ metricas.sla.total_evaluados }} turnos)
+      </div>
+    </div>
+  </div>
+
+  <!-- Detalles por Estados y Ventanillas -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px;">
+    <!-- Desglose de Estados -->
+    <div class="card">
+      <h2>Distribución por Estados</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Estado</th>
+            <th style="text-align: right;">Cantidad</th>
+            <th style="text-align: right;">% del Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-pendiente">Pendiente</span></td>
+            <td style="text-align: right; font-weight: 600;">{{ metricas.totales.esperando }}</td>
+            <td style="text-align: right; color: #64748b;">
+              {% if metricas.totales.total_turnos > 0 %}{{ (metricas.totales.esperando / metricas.totales.total_turnos * 100)|round(1) }}%{% else %}0%{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-llamado">Llamado</span></td>
+            <td style="text-align: right; font-weight: 600;">{{ metricas.totales.llamados }}</td>
+            <td style="text-align: right; color: #64748b;">
+              {% if metricas.totales.total_turnos > 0 %}{{ (metricas.totales.llamados / metricas.totales.total_turnos * 100)|round(1) }}%{% else %}0%{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-en_atencion">En Atención</span></td>
+            <td style="text-align: right; font-weight: 600;">{{ metricas.totales.en_atencion }}</td>
+            <td style="text-align: right; color: #64748b;">
+              {% if metricas.totales.total_turnos > 0 %}{{ (metricas.totales.en_atencion / metricas.totales.total_turnos * 100)|round(1) }}%{% else %}0%{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-atendido">Atendido</span></td>
+            <td style="text-align: right; font-weight: 600;">{{ metricas.totales.atendidos }}</td>
+            <td style="text-align: right; color: #64748b;">
+              {% if metricas.totales.total_turnos > 0 %}{{ (metricas.totales.atendidos / metricas.totales.total_turnos * 100)|round(1) }}%{% else %}0%{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-abandonado">Abandonado</span></td>
+            <td style="text-align: right; font-weight: 600;">{{ metricas.totales.abandonados }}</td>
+            <td style="text-align: right; color: #64748b;">
+              {% if metricas.totales.total_turnos > 0 %}{{ (metricas.totales.abandonados / metricas.totales.total_turnos * 100)|round(1) }}%{% else %}0%{% endif %}
+            </td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background: #f8fafc; font-weight: 700;">
+            <td>Total procesados</td>
+            <td style="text-align: right;">{{ metricas.totales.total_turnos }}</td>
+            <td style="text-align: right;">100%</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Desglose por Ventanilla -->
+    <div class="card">
+      <h2>Ocupación de Ventanillas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Ventanilla</th>
+            <th>Estado Actual</th>
+            <th style="text-align: right;">Turnos en proceso</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in metricas.ventanillas.detalle %}
+          <tr>
+            <td class="codigo">{{ v.ventanilla }}</td>
+            <td>
+              {% if v.ocupada %}
+                <span class="badge badge-llamado">Atendiendo</span>
+              {% else %}
+                <span class="badge badge-normal">Disponible</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right; font-weight: 600;">{{ v.turnos_en_proceso }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="margin-top: 20px; font-size: 13px; color: #64748b; line-height: 1.5;">
+        * Una ventanilla se considera activa cuando tiene asignado un turno en estado <code>llamado</code> o <code>en_atencion</code>.
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>
