@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Consultar turno | QLine</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #263238; background: #f4f5f7; font: 16px Arial, sans-serif; }
+    header { background: #263238; color: #fff; padding: 20px max(20px, calc((100vw - 850px)/2)); }
+    header h1 { margin: 0 0 8px; font-size: 28px; }
+    nav a { color: #fff; margin-right: 20px; }
+    main { max-width: 700px; margin: 24px auto; padding: 0 16px; }
+    .panel { background: #fff; border: 1px solid #dadddf; border-radius: 5px; padding: 22px; margin-bottom: 18px; }
+    h2 { margin-top: 0; font-size: 22px; }
+    label { display: block; font-weight: bold; margin: 16px 0 7px; }
+    input { width: 100%; padding: 13px; border: 1px solid #b8c0c4; border-radius: 4px; font-size: 17px; }
+    button { margin-top: 14px; padding: 12px 20px; background: #263238; color: #fff; border: 0; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #455a64; }
+    .error { padding: 14px; background: #fff1f0; border-left: 4px solid #b53d32; margin-top: 16px; }
+    .aviso { padding: 14px; background: #fff9e6; border-left: 4px solid #aa850b; margin-top: 16px; }
+    .code { font-size: 30px; font-weight: bold; letter-spacing: 1px; margin-bottom: 10px; }
+    dl { display: grid; grid-template-columns: minmax(110px, 180px) 1fr; gap: 12px 8px; margin-bottom: 0; }
+    dt { color: #59656b; }
+    dd { margin: 0; font-weight: bold; overflow-wrap: anywhere; }
+    .hint { color: #53616a; font-size: 14px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>QLine · Consulta de turnos</h1>
+    <nav><a href="{{ base }}/emitir">Solicitar turno</a><a href="{{ base }}/cola">Ver cola en espera</a></nav>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>Consultar mi turno</h2>
+      <p>Ingrese el código de su turno de <strong>{{ servicio }}</strong> para conocer su estado.</p>
+      <form action="{{ base }}/consultar" method="get">
+        <label for="codigo">Código de turno</label>
+        <input id="codigo" name="codigo" type="text" value="{{ codigo }}"
+               placeholder="A-001" pattern="[aA]-[0-9]{3,}" maxlength="32" required
+               autocomplete="off" aria-describedby="formato">
+        <p id="formato" class="hint">Ejemplo: A-001</p>
+        <button type="submit">Consultar turno</button>
+      </form>
+      {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    </section>
+    {% if turno %}
+    <section class="panel" aria-live="polite">
+      <h2>Resultado de la consulta</h2>
+      <div class="code">{{ turno.codigo }}</div>
+      <dl>
+        <dt>Estado</dt><dd>{{ turno.estado|replace('_', ' ')|title }}</dd>
+        <dt>Prioridad</dt><dd>{{ turno.prioridad|capitalize }}</dd>
+        {% if turno.ventanilla %}
+          <dt>Ventanilla</dt><dd>{{ turno.ventanilla }}</dd>
+        {% endif %}
+        {% if turno.turnos_antes is not none %}
+          <dt>Turnos por delante</dt><dd>{{ turno.turnos_antes }}</dd>
+          <dt>Posición en la cola</dt><dd>{{ turno.posicion }}</dd>
+        {% endif %}
+      </dl>
+      {% if turno.aviso %}<div class="aviso" role="status">{{ turno.aviso }}</div>{% endif %}
+      <p class="hint">Actualice esta página para consultar el estado más reciente.</p>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>
