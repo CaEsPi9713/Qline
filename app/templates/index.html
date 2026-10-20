@@ -3,78 +3,147 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MongoDB Web Admin</title>
+<title>MongoDB Web Admin · QLine</title>
 <link rel="stylesheet" href="{{ base }}/static/style.css">
 </head>
 <body>
 <header>
-<h1>MongoDB Web Admin</h1>
-<div>Usuario: <strong>{{ usuario }}</strong> &nbsp; | &nbsp; Base: <strong>{{ base_datos }}</strong></div>
+  <h1>QLine · MongoDB Web Admin</h1>
+  <nav>
+    <a href="{{ base }}/" class="activo">Admin MongoDB</a>
+    <a href="{{ base }}/cola">Cola Redis</a>
+    <a href="{{ base }}/emitir">Emitir</a>
+    <a href="{{ base }}/consultar">Consultar</a>
+    <a href="{{ base }}/historial">Historial</a>
+    <a href="{{ base }}/dashboard">Dashboard SLA</a>
+  </nav>
 </header>
+<div class="sub-header">
+  Usuario: <strong>{{ usuario }}</strong> &nbsp;|&nbsp; Base de datos: <strong>{{ base_datos }}</strong>
+</div>
+
 <div class="contenedor">
 <aside class="sidebar">
-<h3>Colecciones</h3>
-{% for nombre in colecciones %}
-<a href="{{ base }}/?coleccion={{ nombre|urlencode }}" class="{{ 'activa' if nombre == coleccion else '' }}">{{ nombre }}</a>
-{% endfor %}
-{% if not colecciones %}<p>No existen colecciones.</p>{% endif %}
-<hr>
-<h4>Nueva colección</h4>
-<form method="post" action="{{ base }}/crear_coleccion">
-<input type="text" name="nombre_coleccion" placeholder="Nombre" required>
-<br><br><button type="submit">Crear</button>
-</form>
+  <h3>Colecciones</h3>
+  {% for nombre in colecciones %}
+  <a href="{{ base }}/?coleccion={{ nombre|urlencode }}" class="{{ 'activa' if nombre == coleccion else '' }}">
+    {{ nombre }} {% if nombre == "turnos" %}&#9733;{% endif %}
+  </a>
+  {% endfor %}
+  {% if not colecciones %}<p style="color:#64748b;">No existen colecciones.</p>{% endif %}
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">
+  <h4>Nueva colección</h4>
+  <form method="post" action="{{ base }}/crear_coleccion">
+    <input type="text" name="nombre_coleccion" placeholder="Nombre de colección" required>
+    <br><br><button type="submit" class="btn btn-secundario" style="width:100%;">Crear</button>
+  </form>
 </aside>
+
 <main class="contenido">
-{% if mensaje %}<div class="ok">{{ mensaje }}</div>{% endif %}
-{% if error %}<div class="error">{{ error }}</div>{% endif %}
-{% if not coleccion %}
-<div class="card"><h2>Seleccione una colección</h2><p>Seleccione una colección en el menú izquierdo o cree una nueva.</p></div>
-{% else %}
-<div class="card">
-{% if doc_editar %}
-<h2>Editar documento</h2>
-<form method="post" action="{{ base }}/actualizar?coleccion={{ coleccion|urlencode }}">
-<input type="hidden" name="id" value="{{ id_editar }}">
-<textarea name="json" spellcheck="false">{{ doc_editar }}</textarea>
-<br><br><button type="submit">Guardar cambios</button> &nbsp; <a href="{{ base }}/?coleccion={{ coleccion|urlencode }}">Cancelar</a>
-</form>
-{% else %}
-<h2>Insertar documento</h2>
-<form method="post" action="{{ base }}/insertar?coleccion={{ coleccion|urlencode }}">
-<textarea name="json" spellcheck="false">{% if json_texto is not none %}{{ json_texto }}{% else %}{
-  "nombre": "Juan",
-  "telefono": "8888-8888"
+  {% if mensaje %}<div class="ok">{{ mensaje }}</div>{% endif %}
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  {% if not coleccion %}
+  <div class="card">
+    <h2>Panel de Administración de Datos</h2>
+    <p>Seleccione una colección en el menú izquierdo (por ejemplo, <strong>turnos</strong>) para visualizar, insertar, editar o eliminar documentos.</p>
+  </div>
+  {% else %}
+
+  <!-- Formulario de Inserción / Edición -->
+  <div class="card">
+    {% if doc_editar %}
+    <h2>Editar documento en '{{ coleccion }}' (TT-003)</h2>
+    <form method="post" action="{{ base }}/actualizar?coleccion={{ coleccion|urlencode }}">
+      <input type="hidden" name="id" value="{{ id_editar }}">
+      <textarea name="json" spellcheck="false">{{ doc_editar }}</textarea>
+      <br><br>
+      <button type="submit">Guardar cambios</button> &nbsp;
+      <a href="{{ base }}/?coleccion={{ coleccion|urlencode }}" class="btn btn-secundario">Cancelar</a>
+    </form>
+    {% else %}
+    <h2>Insertar documento en '{{ coleccion }}' (TT-003)</h2>
+    <form method="post" action="{{ base }}/insertar?coleccion={{ coleccion|urlencode }}">
+      <textarea name="json" spellcheck="false">{% if json_texto is not none %}{{ json_texto }}{% elif coleccion == "turnos" %}{{ plantilla_turnos }}{% else %}{
+  "nombre": "Ejemplo",
+  "activo": true
 }{% endif %}</textarea>
-<br><br><button type="submit">Insertar documento</button>
-</form>
-{% endif %}
-</div>
-<div class="card">
-<h2>Colección: {{ coleccion }}</h2>
-<p>Mostrando un máximo de <strong>50 documentos</strong>.</p>
-<table>
-<thead><tr><th style="width:200px;">_id</th><th>Documento</th><th style="width:140px;">Acciones</th></tr></thead>
-<tbody>
-{% for d in documentos %}
-<tr>
-<td class="codigo">{{ d.id }}</td>
-<td><pre>{{ d.json }}</pre></td>
-<td class="acciones">
-<a class="editar" href="{{ base }}/?coleccion={{ coleccion|urlencode }}&editar={{ d.id|urlencode }}">Editar</a>
-<br><br>
-<form method="post" action="{{ base }}/eliminar?coleccion={{ coleccion|urlencode }}" onsubmit="return confirm('¿Eliminar este documento?');">
-<input type="hidden" name="id" value="{{ d.id }}">
-<button type="submit" class="borrar">Eliminar</button>
-</form>
-</td>
-</tr>
-{% endfor %}
-{% if not documentos %}<tr><td colspan="3">No existen documentos en esta colección.</td></tr>{% endif %}
-</tbody>
-</table>
-</div>
-{% endif %}
+      <br><br>
+      <button type="submit">Insertar documento</button>
+      {% if coleccion == "turnos" %}
+      <span style="font-size:12px;color:#64748b;margin-left:12px;">* Se valida automáticamente con el JSON Schema oficial (TT-002).</span>
+      {% endif %}
+    </form>
+    {% endif %}
+  </div>
+
+  <!-- Listado de Documentos -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+      <h2 style="margin:0;">Colección: {{ coleccion }}</h2>
+      {% if coleccion == "turnos" %}
+      <!-- Filtro por Estado para Turnos -->
+      <form method="get" action="{{ base }}/" style="display:flex;gap:8px;align-items:center;">
+        <input type="hidden" name="coleccion" value="turnos">
+        <label for="filtro_estado" style="font-size:13px;font-weight:600;">Estado:</label>
+        <select id="filtro_estado" name="filtro_estado" onchange="this.form.submit()" style="width:auto;padding:6px 10px;">
+          <option value="">Todos los estados</option>
+          <option value="pendiente" {% if filtro_estado == "pendiente" %}selected{% endif %}>pendiente</option>
+          <option value="llamado" {% if filtro_estado == "llamado" %}selected{% endif %}>llamado</option>
+          <option value="en_atencion" {% if filtro_estado == "en_atencion" %}selected{% endif %}>en_atencion</option>
+          <option value="atendido" {% if filtro_estado == "atendido" %}selected{% endif %}>atendido</option>
+          <option value="abandonado" {% if filtro_estado == "abandonado" %}selected{% endif %}>abandonado</option>
+        </select>
+      </form>
+      {% endif %}
+    </div>
+
+    <p style="font-size:13px;color:#64748b;margin-top:0;">Mostrando hasta <strong>50 documentos</strong> ordenados por ID reciente.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:200px;">_id</th>
+          <th>Contenido del Documento</th>
+          <th style="width:130px;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in documentos %}
+        <tr>
+          <td class="codigo">{{ d.id }}</td>
+          <td>
+            {% if d.resumen_turno %}
+              <div style="margin-bottom:8px;">
+                <span class="codigo" style="font-size:14px;">{{ d.resumen_turno.codigo }}</span> &nbsp;
+                <span class="badge badge-{{ d.resumen_turno.prioridad }}">{{ d.resumen_turno.prioridad }}</span> &nbsp;
+                <span class="badge badge-{{ d.resumen_turno.estado }}">{{ d.resumen_turno.estado }}</span>
+                {% if d.resumen_turno.ventanilla %}
+                  &nbsp; Ventanilla: <strong>{{ d.resumen_turno.ventanilla }}</strong>
+                {% endif %}
+              </div>
+            {% endif %}
+            <pre>{{ d.json }}</pre>
+          </td>
+          <td class="acciones">
+            <a class="editar" href="{{ base }}/?coleccion={{ coleccion|urlencode }}&editar={{ d.id|urlencode }}">Editar</a>
+            <br><br>
+            <form method="post" action="{{ base }}/eliminar?coleccion={{ coleccion|urlencode }}" onsubmit="return confirm('¿Eliminar este documento definitivamente?');">
+              <input type="hidden" name="id" value="{{ d.id }}">
+              <button type="submit" class="borrar">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not documentos %}
+        <tr>
+          <td colspan="3" style="text-align:center;color:#64748b;padding:24px;">No existen documentos en esta colección.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </main>
 </div>
 </body>
