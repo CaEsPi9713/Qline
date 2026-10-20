@@ -40,8 +40,7 @@ QLine incluye un generador de turnos **100 % sintéticos**: solo códigos, prior
 
 - Documentos con el contrato de `turnos` (servicio `atencion_general`, prioridades `normal`/`preferencial`, ventanillas `V-01`/`V-02`/`V-03`, estados oficiales). Los campos que aún no aplican quedan en `null`.
 - Códigos `S-001`, `S-002`, ... La serie `S-` está separada a propósito de la serie `A-` de la operación real, para no colisionar con el contador de Redis ni con los turnos emitidos en vivo.
-- Con los parámetros por defecto: 3 días simulados y unos 550 turnos `atendido`, `abandonado` y unos pocos `pendiente`. **No deja turnos `llamado` ni `en_atencion`**: así no se confunden con la operación real (por ejemplo, en el panel de atención). Con `--con-activos` se obtiene la instantánea completa del corte, con los cinco estados.
-- Los `pendiente` sintéticos solo existen en MongoDB; no se encolan en Redis.
+- Con los parámetros por defecto: 3 días simulados y unos 550 turnos, todos terminados (`atendido` o `abandonado`). Son **historial**: no dejan turnos `pendiente`, `llamado` ni `en_atencion`, para que no se confundan con la operación real (panel de atención, dashboard) ni los reencole una rehidratación de Redis. Con `--con-activos` se obtiene la instantánea del corte, con turnos en espera y en curso (solo existen en MongoDB; no se encolan en Redis).
 
 ### Cómo ejecutarlo
 
@@ -73,4 +72,4 @@ Opciones útiles: `--semilla`, `--dias`, `--fecha-fin`, `--llegadas-por-hora`, `
 python -m unittest discover -s tests -t . -v
 ```
 
-Algunas pruebas de rutas HTTP requieren `httpx` y `fakeredis`; si no están instalados, se omiten.
+Las pruebas de rutas HTTP y de Redis requieren `httpx`/`httpx2` y `fakeredis`; si no están instalados, se omiten. Para ejecutarlas todas: `pip install -r requirements-dev.txt`.

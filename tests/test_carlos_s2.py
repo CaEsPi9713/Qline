@@ -117,11 +117,22 @@ class TestTurnosSchema(unittest.TestCase):
         self.assertIn("Estado inválido", str(ctx.exception))
 
     def test_rechazo_codigo_invalido(self):
-        """Códigos que no cumplan el formato A-### son rechazados."""
-        for codigo_invalido in ("B-001", "123", "A-1", "A-", "XYZ"):
+        """Códigos que no cumplan el formato X-### (una letra mayúscula) son rechazados."""
+        for codigo_invalido in ("123", "A-1", "A-", "XYZ", "a-001", "AA-001", "A-001\n", ""):
             self.doc_valido["codigo"] = codigo_invalido
             with self.assertRaises(TurnoValidationError):
                 validar_documento_turno(self.doc_valido)
+
+    def test_acepta_series_de_codigo_real_y_sintetica(self):
+        """Serie real (A-) y sintética (S-) son válidas: TT-005 debe poder cargarse con el validador activo."""
+        for codigo in ("A-001", "A-9999", "S-001", "S-554"):
+            self.doc_valido["codigo"] = codigo
+            self.assertTrue(validar_documento_turno(self.doc_valido))
+
+    def test_esquema_y_validador_comparten_el_patron(self):
+        from app.turnos_schema import PATRON_CODIGO, SCHEMA_TURNOS
+        patron = SCHEMA_TURNOS["$jsonSchema"]["properties"]["codigo"]["pattern"]
+        self.assertEqual(patron, PATRON_CODIGO)
 
     def test_rechazo_ventanilla_invalida(self):
         """Ventanillas fuera del catálogo acordado son rechazadas."""

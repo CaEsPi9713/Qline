@@ -1,135 +1,83 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QLine — Historial de Turnos (HU-010)</title>
-<link rel="stylesheet" href="{{ base }}/static/style.css">
-</head>
-<body>
-<header>
-  <h1>QLine · Historial y Auditoría</h1>
-  <nav>
-    <a href="{{ base }}/">Admin MongoDB</a>
-    <a href="{{ base }}/cola">Cola Redis</a>
-    <a href="{{ base }}/emitir">Emitir</a>
-    <a href="{{ base }}/consultar">Consultar</a>
-    <a href="{{ base }}/historial" class="activo">Historial</a>
-    <a href="{{ base }}/dashboard">Dashboard SLA</a>
-  </nav>
-</header>
-<div class="sub-header">
-  Supervisión operacional · Consulta persistente en MongoDB (conserva historial aunque no esté en Redis)
+{% extends "base.html" %}
+{% block titulo %}Historial y auditoría{% endblock %}
+{% block lead %}Consulta persistente en MongoDB: los turnos se conservan con sus tiempos aunque ya no estén en Redis.{% endblock %}
+{% block contenido %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <h2>Filtrar turnos</h2>
+  <form method="get" action="{{ base }}/historial" class="barra-filtros">
+    <div class="grupo">
+      <label for="codigo">Código</label>
+      <input type="text" id="codigo" name="codigo" value="{{ filtros.codigo or '' }}" placeholder="Ej. A-001">
+    </div>
+    <div class="grupo">
+      <label for="estado">Estado</label>
+      <select id="estado" name="estado">
+        <option value="">Todos los estados</option>
+        {% for est in estados_disponibles %}
+        <option value="{{ est }}" {% if filtros.estado == est %}selected{% endif %}>{{ est }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="grupo">
+      <label for="ventanilla">Ventanilla</label>
+      <select id="ventanilla" name="ventanilla">
+        <option value="">Todas</option>
+        {% for v in ventanillas_disponibles %}
+        <option value="{{ v }}" {% if filtros.ventanilla == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="grupo">
+      <label for="prioridad">Prioridad</label>
+      <select id="prioridad" name="prioridad">
+        <option value="">Todas</option>
+        {% for p in prioridades_disponibles %}
+        <option value="{{ p }}" {% if filtros.prioridad == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fila">
+      <button type="submit">Aplicar filtros</button>
+      <a href="{{ base }}/historial" class="btn btn-secundario">Limpiar</a>
+    </div>
+  </form>
 </div>
 
-<main style="padding: 24px; max-width: 1400px; margin: 0 auto;">
-  {% if error %}
-  <div class="error">{{ error }}</div>
-  {% endif %}
-
-  <!-- Barra de Filtros -->
-  <div class="card">
-    <h2>Filtrar turnos procesados</h2>
-    <form method="get" action="{{ base }}/historial" class="barra-filtros">
-      <div class="grupo">
-        <label for="codigo">Código:</label>
-        <input type="text" id="codigo" name="codigo" value="{{ filtros.codigo or '' }}" placeholder="Ej. A-001">
-      </div>
-      <div class="grupo">
-        <label for="estado">Estado:</label>
-        <select id="estado" name="estado">
-          <option value="">Todos los estados</option>
-          {% for est in estados_disponibles %}
-          <option value="{{ est }}" {% if filtros.estado == est %}selected{% endif %}>{{ est }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="grupo">
-        <label for="ventanilla">Ventanilla:</label>
-        <select id="ventanilla" name="ventanilla">
-          <option value="">Todas</option>
-          {% for v in ventanillas_disponibles %}
-          <option value="{{ v }}" {% if filtros.ventanilla == v %}selected{% endif %}>{{ v }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="grupo">
-        <label for="prioridad">Prioridad:</label>
-        <select id="prioridad" name="prioridad">
-          <option value="">Todas</option>
-          {% for p in prioridades_disponibles %}
-          <option value="{{ p }}" {% if filtros.prioridad == p %}selected{% endif %}>{{ p }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <button type="submit">Aplicar filtros</button>
-        <a href="{{ base }}/historial" class="btn btn-secundario" style="margin-left: 6px;">Limpiar</a>
-      </div>
-    </form>
+<div class="card">
+  <div class="card-cabecera">
+    <h2>Registros históricos ({{ total }} encontrados)</h2>
+    <a href="{{ base }}/api/historial?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" target="_blank" class="btn btn-secundario">Ver JSON</a>
   </div>
-
-  <!-- Tabla de Resultados -->
-  <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h2 style="margin: 0;">Registros históricos ({{ total }} encontrados)</h2>
-      <a href="{{ base }}/api/historial?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" target="_blank" style="font-size: 13px; color: #2563eb; text-decoration: none;">Ver API JSON &rarr;</a>
-    </div>
-
+  <div class="tabla-wrap">
     <table>
       <thead>
         <tr>
-          <th>Código</th>
-          <th>Prioridad</th>
-          <th>Estado</th>
-          <th>Ventanilla</th>
-          <th>Creado</th>
-          <th>Llamado</th>
-          <th>Finalizado</th>
-          <th>Espera</th>
-          <th>Atención</th>
+          <th>Código</th><th>Prioridad</th><th>Estado</th><th>Ventanilla</th>
+          <th>Creado</th><th>Llamado</th><th>Finalizado</th>
+          <th class="num">Espera</th><th class="num">Atención</th>
         </tr>
       </thead>
       <tbody>
         {% for t in turnos %}
         <tr>
           <td class="codigo">{{ t.codigo }}</td>
-          <td>
-            <span class="badge badge-{{ t.prioridad }}">{{ t.prioridad }}</span>
-          </td>
-          <td>
-            <span class="badge badge-{{ t.estado }}">{{ t.estado }}</span>
-          </td>
+          <td><span class="badge badge-{{ t.prioridad }}">{{ t.prioridad }}</span></td>
+          <td><span class="badge badge-{{ t.estado }}">{{ t.estado }}</span></td>
           <td>{{ t.ventanilla or '-' }}</td>
-          <td style="font-size: 13px; color: #64748b;">{{ t.timestamps.creado or '-' }}</td>
-          <td style="font-size: 13px; color: #64748b;">{{ t.timestamps.llamado or '-' }}</td>
-          <td style="font-size: 13px; color: #64748b;">{{ t.timestamps.finalizado or t.timestamps.abandonado or '-' }}</td>
-          <td>
-            {% if t.metricas.espera_seg is not none %}
-              <strong>{{ t.metricas.espera_seg }}</strong> s
-            {% else %}
-              <span style="color:#94a3b8;">-</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if t.metricas.atencion_seg is not none %}
-              <strong>{{ t.metricas.atencion_seg }}</strong> s
-            {% else %}
-              <span style="color:#94a3b8;">-</span>
-            {% endif %}
-          </td>
+          <td class="nota">{{ t.timestamps.creado or '-' }}</td>
+          <td class="nota">{{ t.timestamps.llamado or '-' }}</td>
+          <td class="nota">{{ t.timestamps.finalizado or t.timestamps.abandonado or '-' }}</td>
+          <td class="num">{% if t.metricas.espera_seg is not none %}<strong>{{ t.metricas.espera_seg }}</strong> s{% else %}<span class="texto-tenue">-</span>{% endif %}</td>
+          <td class="num">{% if t.metricas.atencion_seg is not none %}<strong>{{ t.metricas.atencion_seg }}</strong> s{% else %}<span class="texto-tenue">-</span>{% endif %}</td>
         </tr>
         {% endfor %}
         {% if not turnos %}
-        <tr>
-          <td colspan="9" style="text-align: center; color: #64748b; padding: 30px;">
-            No se encontraron turnos con los filtros especificados.
-          </td>
-        </tr>
+        <tr><td colspan="9" class="vacio">No se encontraron turnos con los filtros especificados.</td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
-</main>
-</body>
-</html>
+</div>
+{% endblock %}

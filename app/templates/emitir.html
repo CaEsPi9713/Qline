@@ -1,56 +1,35 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QLine · Emitir turno</title>
-<link rel="stylesheet" href="{{ base }}/static/style.css">
-<style>
-.prioridad-opciones{display:flex;flex-direction:column;gap:12px;margin:16px 0}
-.prioridad-card{border:1px solid #ddd;border-radius:6px;padding:14px;cursor:pointer;transition:border-color .2s,background .2s}
-.prioridad-card:hover{background:#f9f9f9;border-color:#263238}
-.prioridad-card input[type=radio]{margin-right:10px}
-.prioridad-titulo{font-weight:bold;font-size:15px}
-.prioridad-desc{font-size:13px;color:#555;margin-top:4px;margin-left:24px}
-.btn-emitir{background:#263238;color:#fff;border:none;padding:12px 24px;font-size:15px;border-radius:4px;font-weight:bold;cursor:pointer}
-.btn-emitir:hover{background:#37474f}
-</style>
-</head>
-<body>
-<header>
-<h1>QLine · Emisión de turnos</h1>
-<div>Servicio: <strong>{{ servicio }}</strong> &nbsp; | &nbsp; <a href="{{ base }}/cola" style="color:inherit">Ver cola en espera</a></div>
-</header>
-<main class="contenido" style="padding:20px;max-width:650px;margin:0 auto">
-{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% extends "base.html" %}
+{% set ancho = "estrecha" %}
+{% block titulo %}Emitir turno{% endblock %}
+{% block lead %}Elija el tipo de atención para ingresar a la fila de {{ servicio }}. El turno queda registrado en MongoDB y entra a la cola de Redis.{% endblock %}
+{% block contenido %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 
 <div class="card">
-<h2>Solicitar un turno</h2>
-<p>Seleccione el tipo de atención que requiere para ingresar a la fila del servicio <strong>{{ servicio }}</strong>:</p>
-
-<form method="post" action="{{ base }}/emitir">
-<div class="prioridad-opciones">
-  <label class="prioridad-card">
-    <input type="radio" name="prioridad" value="normal" {% if prioridad_seleccionada != 'preferencial' %}checked{% endif %}>
-    <span class="prioridad-titulo">Atención Regular (Normal)</span>
-    <div class="prioridad-desc">Para todo público y trámites generales.</div>
-  </label>
-  <label class="prioridad-card">
-    <input type="radio" name="prioridad" value="preferencial" {% if prioridad_seleccionada == 'preferencial' %}checked{% endif %}>
-    <span class="prioridad-titulo">Atención Preferencial</span>
-    <div class="prioridad-desc">Adultos mayores, personas embarazadas o con discapacidad.</div>
-  </label>
+  <h2>Solicitar un turno</h2>
+  <p class="sub">Servicio: <strong>{{ servicio }}</strong></p>
+  <form method="post" action="{{ base }}/emitir">
+    <div class="opciones">
+      <label class="opcion">
+        <input type="radio" name="prioridad" value="normal" {% if prioridad_seleccionada != 'preferencial' %}checked{% endif %}>
+        <span>
+          <span class="opcion-titulo">Atención Regular (Normal)</span>
+          <span class="opcion-desc">Para todo público y trámites generales.</span>
+        </span>
+      </label>
+      <label class="opcion">
+        <input type="radio" name="prioridad" value="preferencial" {% if prioridad_seleccionada == 'preferencial' %}checked{% endif %}>
+        <span>
+          <span class="opcion-titulo">Atención Preferencial</span>
+          <span class="opcion-desc">Adultos mayores, personas embarazadas o con discapacidad.</span>
+        </span>
+      </label>
+    </div>
+    <button type="submit" class="btn-grande btn-bloque">Emitir mi turno</button>
+  </form>
 </div>
 
-<div style="margin-top:20px">
-  <button type="submit" class="btn-emitir">Emitir mi turno</button>
+<div class="info">
+  <strong>Nota operativa:</strong> los turnos preferenciales se atienden con prioridad en las ventanillas activas, respetando el orden de llegada dentro de cada grupo.
 </div>
-</form>
-</div>
-
-<div class="card" style="font-size:13px;color:#666">
-  <p><strong>Nota operativa:</strong> Los turnos preferenciales son atendidos con prioridad en las ventanillas activas respetando el orden de llegada.</p>
-</div>
-</main>
-</body>
-</html>
+{% endblock %}

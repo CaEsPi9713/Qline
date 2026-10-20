@@ -1,0 +1,80 @@
+{#- Plantilla base de QLine: cabecera, navegación por rol/orden de demo y pie.
+    Las páginas la extienden y definen: titulo, h1, lead, contenido (y opcionalmente
+    scripts). Variable opcional `ancho`: 'estrecha' | 'media' (por defecto, ancho completo).
+    El paso activo se deduce de la ruta, por lo que las rutas no necesitan pasar nada. -#}
+{%- set pasos = [
+  {"n": 1, "rol": "Cliente", "nombre": "Emitir turno", "ruta": "/emitir", "prefijos": ["/emitir"]},
+  {"n": 2, "rol": "Cliente", "nombre": "Consultar turno", "ruta": "/consultar", "prefijos": ["/consultar", "/turno/"]},
+  {"n": 3, "rol": "Operador", "nombre": "Cola activa", "ruta": "/cola", "prefijos": ["/cola"]},
+  {"n": 4, "rol": "Operador", "nombre": "Panel de atención", "ruta": "/panel", "prefijos": ["/panel"]},
+  {"n": 5, "rol": "Supervisor", "nombre": "Historial", "ruta": "/historial", "prefijos": ["/historial"]},
+  {"n": 6, "rol": "Supervisor", "nombre": "Dashboard SLA", "ruta": "/dashboard", "prefijos": ["/dashboard"]},
+  {"n": 7, "rol": "Administración", "nombre": "CRUD MongoDB", "ruta": "/", "prefijos": ["/insertar", "/actualizar", "/eliminar", "/crear_coleccion"], "exacta": "/"}
+] -%}
+{%- set ruta_actual = request.url.path -%}
+{%- set ns = namespace(actual=none) -%}
+{%- for p in pasos -%}
+  {%- if ns.actual is none -%}
+    {%- if p.exacta and ruta_actual == p.exacta -%}{%- set ns.actual = p -%}
+    {%- else -%}{%- for pref in p.prefijos -%}{%- if ns.actual is none and ruta_actual.startswith(pref) -%}{%- set ns.actual = p -%}{%- endif -%}{%- endfor -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- set actual = ns.actual -%}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}QLine{% endblock %} · QLine</title>
+<link rel="stylesheet" href="{{ base }}/static/style.css?v={{ css_version }}">
+</head>
+<body>
+<header class="app-header">
+  <div class="app-header-inner">
+    <a class="brand" href="{{ base }}/demo">
+      <span class="brand-logo">Q</span>
+      <span>QLine<small>Gestión de filas y turnos</small></span>
+    </a>
+    <nav class="nav" aria-label="Navegación principal">
+      <div class="nav-grupo">
+        <a href="{{ base }}/demo" class="{{ 'activo' if ruta_actual == '/demo' else '' }}">Guía de demo</a>
+      </div>
+      {%- for rol in ["Cliente", "Operador", "Supervisor", "Administración"] %}
+      <div class="nav-grupo">
+        <span class="nav-etiqueta">{{ rol }}</span>
+        {%- for p in pasos if p.rol == rol %}
+        <a href="{{ base }}{{ p.ruta }}" class="{{ 'activo' if actual and actual.n == p.n else '' }}"{% if actual and actual.n == p.n %} aria-current="page"{% endif %}>
+          <span class="num">{{ p.n }}</span>{{ p.nombre }}
+        </a>
+        {%- endfor %}
+      </div>
+      {%- endfor %}
+    </nav>
+  </div>
+</header>
+
+<main class="pagina {{ ancho or '' }}">
+  <div class="page-head">
+    {% if actual %}<div class="paso-pill">Paso {{ actual.n }} de {{ pasos|length }} · {{ actual.rol }}</div>
+    {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 2 · Guía de demostración</div>{% endif %}
+    <h1>{% block h1 %}{{ self.titulo() }}{% endblock %}</h1>
+    {% block lead_bloque %}<p class="lead">{% block lead %}{% endblock %}</p>{% endblock %}
+  </div>
+
+  {% block contenido %}{% endblock %}
+
+  {% if actual %}
+  {%- set anterior = pasos[actual.n - 2] if actual.n > 1 else none -%}
+  {%- set siguiente = pasos[actual.n] if actual.n < pasos|length else none -%}
+  <div class="paginacion-pasos">
+    {% if anterior %}<a class="btn btn-secundario" href="{{ base }}{{ anterior.ruta }}">&larr; {{ anterior.n }}. {{ anterior.nombre }}</a>{% else %}<a class="btn btn-secundario" href="{{ base }}/demo">&larr; Guía de demo</a>{% endif %}
+    {% if siguiente %}<a class="btn" href="{{ base }}{{ siguiente.ruta }}">{{ siguiente.n }}. {{ siguiente.nombre }} &rarr;</a>{% else %}<a class="btn" href="{{ base }}/demo">Volver a la guía de demo &rarr;</a>{% endif %}
+  </div>
+  {% endif %}
+</main>
+
+<footer class="footer">QLine · Grupo 2 / Query Logic · Tópicos Avanzados de Bases de Datos · MongoDB conserva lo que ocurrió, Redis controla lo que ocurre ahora</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

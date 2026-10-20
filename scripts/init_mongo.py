@@ -7,7 +7,18 @@ Objetivo:
   - Configurar los índices requeridos (código único, estado+creado, ventanilla, creado_desc).
   - Comprobar que MongoDB rechace documentos inválidos (prioridades no autorizadas, estados inexistentes).
   - Ser completamente reproducible e idempotente.
+
+Uso:
+  python scripts/init_mongo.py                      # crea/actualiza validador e índices
+  python scripts/init_mongo.py --recrear --confirmar
+
+Si el usuario de MongoDB no tiene permiso para `collMod` (caso del servidor del
+curso), el validador NO se puede cambiar en una colección existente. Entonces
+`--recrear --confirmar` elimina `turnos` y la crea de nuevo ya con el validador
+y los índices. Borra TODOS los documentos de `turnos`: después hay que volver a
+cargar los datos sintéticos (scripts/generar_datos_sinteticos.py --cargar).
 """
+import argparse
 import os
 import sys
 from datetime import datetime, timezone
@@ -60,19 +71,36 @@ def obtener_cliente_mongo():
     return cliente
 
 
-def inicializar_coleccion_turnos(db) -> None:
-    """Aplica el validador JSON Schema e índices en la colección `turnos`."""
-    validador = obtener_validador_turnos()
-    colecciones = db.list_collection_names()
+def _crear_coleccion_con_validador(db) -> None:
+    db.create_collection(
+        COLECCION_TURNOS,
+        validator=obtener_validador_turnos(),
+        validationLevel="strict",
+        validationAction="error",
+    )
 
-    if COLECCION_TURNOS not in colecciones:
+
+def _aplicar_indices(db) -> None:
+    print(f"[+] Aplicando índices en '{COLECCION_TURNOS}'...")
+    col = db[COLECCION_TURNOS]
+    for idx in INDICES_TURNOS:
+        nombre = idx["options"].get("name", "idx")
+        col.create_index(idx["keys"], **idx["options"])
+        print(f"    - Índice '{nombre}' configurado.")
+
+
+def inicializar_coleccion_turnos(db) -> bool:
+    """
+    Aplica el validador JSON Schema e índices en la colección `turnos`.
+    Devuelve True si el validador quedó aplicado; False si el motor no lo permitió
+    (por ejemplo, el usuario no tiene el permiso `collMod`).
+    """
+    validador = obtener_validador_turnos()
+    validador_aplicado = True
+
+    if COLECCION_TURNOS not in db.list_collection_names():
         print(f"[+] Creando colección '{COLECCION_TURNOS}' con validador JSON Schema estricto...")
-        db.create_collection(
-            COLECCION_TURNOS,
-            validator=validador,
-            validationLevel="strict",
-            validationAction="error",
-        )
+        _crear_coleccion_con_validador(db)
         print("    Colección creada exitosamente.")
     else:
         print(f"[*] Colección '{COLECCION_TURNOS}' ya existe. Actualizando validador con collMod...")
@@ -85,15 +113,34 @@ def inicializar_coleccion_turnos(db) -> None:
             })
             print("    Validador JSON Schema actualizado exitosamente.")
         except OperationFailure as e:
-            print(f"    [!] Advertencia al ejecutar collMod: {e}")
+            validador_aplicado = False
+            if getattr(e, "code", None) == 13:
+                print("    [!] El usuario de MongoDB no tiene permiso para collMod (Unauthorized).")
+                print("        El validador NO se aplicó a la colección existente. Opciones:")
+                print("          - python scripts/init_mongo.py --recrear --confirmar  (borra 'turnos' y la recrea)")
+                print("          - pedir a un administrador que ejecute collMod con el validador")
+            else:
+                print(f"    [!] Advertencia al ejecutar collMod: {e}")
 
-    # Crear índices
-    print(f"[+] Aplicando índices en '{COLECCION_TURNOS}'...")
-    col = db[COLECCION_TURNOS]
-    for idx in INDICES_TURNOS:
-        nombre = idx["options"].get("name", "idx")
-        col.create_index(idx["keys"], **idx["options"])
-        print(f"    - Índice '{nombre}' configurado.")
+    _aplicar_indices(db)
+    return validador_aplicado
+
+
+def recrear_coleccion_turnos(db) -> None:
+    """
+    Elimina la colección `turnos` y la crea de nuevo con el validador y los índices.
+    DESTRUCTIVO: borra todos los documentos de `turnos`.
+    """
+    if COLECCION_TURNOS in db.list_collection_names():
+        total = db[COLECCION_TURNOS].count_documents({})
+        print(f"[!] Eliminando la colección '{COLECCION_TURNOS}' ({total} documentos)...")
+        db.drop_collection(COLECCION_TURNOS)
+    print(f"[+] Creando colección '{COLECCION_TURNOS}' con validador JSON Schema estricto...")
+    _crear_coleccion_con_validador(db)
+    print("    Colección creada exitosamente.")
+    _aplicar_indices(db)
+    print("[i] Recuerde volver a cargar los datos sintéticos:")
+    print("      python scripts/generar_datos_sinteticos.py --cargar")
 
 
 def verificar_validador_estricto(db) -> bool:
@@ -176,7 +223,16 @@ def verificar_validador_estricto(db) -> bool:
     return todo_ok
 
 
-def main():
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Inicialización de la colección `turnos` (TT-004).")
+    parser.add_argument("--recrear", action="store_true",
+                        help="elimina `turnos` y la crea de nuevo con validador e índices (DESTRUCTIVO)")
+    parser.add_argument("--confirmar", action="store_true", help="requerido para --recrear")
+    args = parser.parse_args(argv)
+    if args.recrear and not args.confirmar:
+        print("--recrear borra todos los documentos de `turnos`: agregue --confirmar.", file=sys.stderr)
+        return 2
+
     print("=" * 60)
     print(" QLine — Inicialización de MongoDB (TT-001, TT-002, TT-004)")
     print("=" * 60)
@@ -185,18 +241,28 @@ def main():
         db = cliente[MONGO_DB]
         print(f"[+] Conectado a MongoDB: {MONGO_HOST}:{MONGO_PORT} / Base de datos: '{MONGO_DB}'\n")
 
-        inicializar_coleccion_turnos(db)
-        verificar_validador_estricto(db)
+        if args.recrear:
+            recrear_coleccion_turnos(db)
+            validador_aplicado = True
+        else:
+            validador_aplicado = inicializar_coleccion_turnos(db)
+        verificacion_ok = verificar_validador_estricto(db)
 
         print("\n[+] Colecciones actuales en la base de datos:")
         for col_name in db.list_collection_names():
             total = db[col_name].count_documents({})
             print(f"    • {col_name}: {total} documentos")
-        print("\nInicialización completada con éxito.")
     except Exception as e:
         print(f"\n[ERROR FATAL] No se pudo inicializar MongoDB: {e}")
-        sys.exit(1)
+        return 1
+
+    if validador_aplicado and verificacion_ok:
+        print("\nInicialización completada con éxito.")
+        return 0
+    print("\nInicialización INCOMPLETA: el JSON Schema no está activo en el motor "
+          "(los índices sí se aplicaron). Ver las opciones indicadas arriba.")
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

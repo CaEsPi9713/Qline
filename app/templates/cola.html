@@ -1,41 +1,40 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QLine · Cola activa</title>
-<link rel="stylesheet" href="{{ base }}/static/style.css">
-</head>
-<body>
-<header>
-<h1>QLine · Cola activa</h1>
-<div>Servicio: <strong>{{ servicio }}</strong> &nbsp; | &nbsp; <a href="{{ base }}/" style="color:inherit">Administración MongoDB</a></div>
-</header>
-<main class="contenido" style="padding:20px">
-{% if mensaje %}<div class="ok">{{ mensaje }}</div>{% endif %}
-{% if error %}<div class="error">{{ error }}</div>{% endif %}
-<div class="card">
-<h2>Llamar siguiente turno</h2>
-<form method="post" action="{{ base }}/cola/llamar">
-<select name="ventanilla">{% for v in ventanillas %}<option>{{ v }}</option>{% endfor %}</select>
-<button type="submit">Llamar siguiente</button>
-</form>
+{% extends "base.html" %}
+{% block titulo %}Cola activa{% endblock %}
+{% block lead %}Turnos en espera en Redis, en orden de atención: primero los preferenciales y, dentro de cada grupo, por llegada. Consultar esta vista no remueve turnos.{% endblock %}
+{% block contenido %}
+{% if mensaje %}<div class="ok" role="status">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Llamar siguiente turno</h2>
+    <p class="sub">Elija la ventanilla que atiende. Redis entrega el siguiente turno de forma atómica: dos ventanillas nunca reciben el mismo.</p>
+    <form method="post" action="{{ base }}/cola/llamar" class="fila">
+      <select name="ventanilla" class="select-auto" aria-label="Ventanilla">{% for v in ventanillas %}<option>{{ v }}</option>{% endfor %}</select>
+      <button type="submit">Llamar siguiente</button>
+    </form>
+    <p class="nota" style="margin:14px 0 0">Después de llamar, continúe en el <a href="{{ base }}/panel">panel de atención</a>.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-cabecera">
+      <h2>Turnos en espera: {{ turnos|length }}</h2>
+      <a href="{{ base }}/cola" class="btn btn-secundario">Actualizar</a>
+    </div>
+    {% if turnos %}
+    <div class="tabla-wrap">
+      <table>
+        <thead><tr><th>Posición</th><th>Código</th><th>Prioridad</th></tr></thead>
+        <tbody>
+        {% for t in turnos %}
+          <tr><td>{{ t.posicion }}</td><td class="codigo">{{ t.codigo }}</td><td><span class="badge badge-{{ t.prioridad }}">{{ t.prioridad }}</span></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% elif not error %}
+    <p class="texto-suave" style="margin:0">No hay turnos en espera.</p>
+    {% endif %}
+  </div>
 </div>
-<div class="card">
-<h2>Turnos en espera: {{ turnos|length }}</h2>
-<p>Orden de atención: primero preferenciales, luego normales, y por llegada dentro de cada grupo. Consultar esta vista no remueve turnos.</p>
-<p><a href="{{ base }}/cola">Actualizar</a></p>
-{% if turnos %}
-<table>
-<tr><th>Posición</th><th>Código</th><th>Prioridad</th></tr>
-{% for t in turnos %}
-<tr><td>{{ t.posicion }}</td><td>{{ t.codigo }}</td><td>{{ t.prioridad }}</td></tr>
-{% endfor %}
-</table>
-{% elif not error %}
-<p>No hay turnos en espera.</p>
-{% endif %}
-</div>
-</main>
-</body>
-</html>
+{% endblock %}

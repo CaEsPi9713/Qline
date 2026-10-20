@@ -48,8 +48,8 @@ def construir_parser() -> argparse.ArgumentParser:
                    help="letra del código sintético (default: %(default)s da S-001). Distinto de 'A' para no "
                         "colisionar con los turnos de la operación real")
     g.add_argument("--con-activos", action="store_true",
-                   help="deja turnos 'llamado'/'en_atencion' al corte (por defecto se cierran para no "
-                        "confundirse con la operación real)")
+                   help="instantánea del corte: deja turnos 'pendiente', 'llamado' y 'en_atencion' "
+                        "(por defecto todos se cierran para no confundirse con la operación real)")
     a = p.add_argument_group("acciones (sin ninguna, solo vista previa)")
     a.add_argument("--salida", type=Path, help="escribe los turnos en JSON Lines (Extended JSON)")
     a.add_argument("--cargar", action="store_true", help="upsert en MongoDB (no duplica)")

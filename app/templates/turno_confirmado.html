@@ -1,69 +1,29 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QLine · Turno confirmado: {{ turno.codigo }}</title>
-<link rel="stylesheet" href="{{ base }}/static/style.css">
-<style>
-.ticket{border:2px dashed #90a4ae;border-radius:8px;padding:24px;text-align:center;background:#fff;margin:20px 0}
-.codigo-ticket{font-size:56px;font-weight:900;letter-spacing:2px;color:#1e88e5;margin:12px 0;font-family:Consolas,Monaco,monospace}
-.prioridad-badge{display:inline-block;padding:6px 14px;border-radius:20px;font-size:14px;font-weight:bold;text-transform:uppercase}
-.badge-normal{background:#e3f2fd;color:#1565c0}
-.badge-preferencial{background:#fce4ec;color:#c2185b}
-.detalles-tabla{width:100%;max-width:400px;margin:20px auto;text-align:left}
-.detalles-tabla td{padding:8px;border:none;border-bottom:1px solid #eee}
-.btn-volver{display:inline-block;background:#263238;color:#fff;text-decoration:none;padding:10px 20px;border-radius:4px;font-weight:bold;margin-top:15px}
-.btn-volver:hover{background:#37474f}
-.btn-cola{display:inline-block;background:#eceff1;color:#37474f;text-decoration:none;padding:10px 20px;border-radius:4px;font-weight:bold;margin-top:15px;margin-left:10px}
-.btn-cola:hover{background:#cfd8dc}
-</style>
-</head>
-<body>
-<header>
-<h1>QLine · Confirmación de turno</h1>
-<div>Servicio: <strong>{{ servicio }}</strong></div>
-</header>
-<main class="contenido" style="padding:20px;max-width:650px;margin:0 auto">
-<div class="ok" style="font-size:15px;text-align:center">
-  ¡Su turno ha sido generado e ingresado a la cola exitosamente!
-</div>
+{% extends "base.html" %}
+{% set ancho = "estrecha" %}
+{% block titulo %}Turno {{ turno.codigo }}{% endblock %}
+{% block h1 %}Turno generado{% endblock %}
+{% block lead %}Su turno fue registrado en MongoDB e ingresado a la cola de Redis.{% endblock %}
+{% block contenido %}
+<div class="ok">¡Su turno ha sido generado e ingresado a la cola exitosamente!</div>
 
 <div class="ticket">
-  <div style="font-size:14px;color:#78909c;text-transform:uppercase;letter-spacing:1px">Su número de turno es</div>
-  <div class="codigo-ticket">{{ turno.codigo }}</div>
-  <div>
-    {% if turno.prioridad == 'preferencial' %}
-      <span class="prioridad-badge badge-preferencial">Prioridad Preferencial</span>
-    {% else %}
-      <span class="prioridad-badge badge-normal">Prioridad Normal</span>
-    {% endif %}
-  </div>
-
-  <table class="detalles-tabla">
-    <tr>
-      <td style="color:#666">Servicio:</td>
-      <td><strong>{{ servicio }}</strong></td>
-    </tr>
-    <tr>
-      <td style="color:#666">Estado inicial:</td>
-      <td><span style="color:#2e7d32;font-weight:bold">En espera</span></td>
-    </tr>
-    <tr>
-      <td style="color:#666">Fecha / Hora:</td>
-      <td style="font-size:13px">{{ turno.creado }}</td>
-    </tr>
-  </table>
-
-  <p style="font-size:14px;color:#555;margin-top:16px">
-    Por favor tome asiento en la sala de espera y permanezca atento a las pantallas y al llamado por ventanilla.
-  </p>
-
-  <div style="margin-top:20px">
-    <a href="{{ base }}/emitir" class="btn-volver">Solicitar otro turno</a>
-    <a href="{{ base }}/cola" class="btn-cola">Ver cola activa</a>
+  <div class="ticket-etiqueta">Su número de turno es</div>
+  <div class="ticket-codigo">{{ turno.codigo }}</div>
+  {% if turno.prioridad == 'preferencial' %}
+    <span class="badge badge-preferencial">Prioridad Preferencial</span>
+  {% else %}
+    <span class="badge badge-normal">Prioridad Normal</span>
+  {% endif %}
+  <dl class="datos">
+    <dt>Servicio</dt><dd>{{ servicio }}</dd>
+    <dt>Estado inicial</dt><dd><span class="badge badge-pendiente">En espera</span></dd>
+    <dt>Fecha / hora</dt><dd>{{ turno.creado[:19]|replace('T', ' ') }} UTC</dd>
+  </dl>
+  <p class="texto-suave">Tome asiento en la sala de espera y permanezca atento al llamado por ventanilla.</p>
+  <div class="fila" style="justify-content:center">
+    <a href="{{ base }}/turno/{{ turno.codigo }}" class="btn">Consultar este turno</a>
+    <a href="{{ base }}/emitir" class="btn btn-secundario">Solicitar otro turno</a>
+    <a href="{{ base }}/cola" class="btn btn-secundario">Ver cola activa</a>
   </div>
 </div>
-</main>
-</body>
-</html>
+{% endblock %}

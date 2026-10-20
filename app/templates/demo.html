@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block titulo %}Guía de demo{% endblock %}
+{% block lead %}Recorrido paso a paso del flujo completo de QLine. Cada paso abre la pantalla correspondiente y dice qué debe verse; marque los pasos a medida que los comprueba.{% endblock %}
+{% block contenido %}
+
+<div class="estado-sistema" aria-label="Estado del sistema">
+  <span class="chip {{ 'ok-chip' if redis.ok else 'mal-chip' }}">Redis {% if redis.ok %}{{ redis.version }}{% else %}sin conexión{% endif %}</span>
+  <span class="chip {{ 'ok-chip' if mongo.ok else 'mal-chip' }}">MongoDB {% if mongo.ok %}· {{ mongo.turnos }} turnos{% else %}sin conexión{% endif %}</span>
+  <span class="chip {{ 'ok-chip' if cola_tam is not none else 'mal-chip' }}">Cola Redis {% if cola_tam is not none %}· {{ cola_tam }} en espera{% else %}no disponible{% endif %}</span>
+  <a class="btn btn-secundario" href="{{ base }}/demo">Actualizar estado</a>
+</div>
+{% if not redis.ok %}<div class="error">Redis no responde: {{ redis.error }}</div>{% endif %}
+{% if not mongo.ok %}<div class="error">MongoDB no responde: {{ mongo.error }}</div>{% endif %}
+
+<div class="card">
+  <div class="card-cabecera">
+    <h2>Antes de empezar (en el servidor)</h2>
+  </div>
+  <p class="sub">Deje el entorno en cero para que el primer turno sea <code>A-001</code>. Solo se tocan las claves <code>grupo2:qline:</code>; nunca <code>FLUSHALL</code>.</p>
+  <div class="terminal" data-copiar>python scripts/init_mongo.py --recrear --confirmar</div>
+  <div class="terminal" data-copiar>python scripts/generar_datos_sinteticos.py --cargar</div>
+  <div class="terminal" data-copiar>redis-cli del grupo2:qline:contador:atencion_general grupo2:qline:cola:atencion_general grupo2:qline:ventanilla:V-01:actual grupo2:qline:ventanilla:V-02:actual grupo2:qline:ventanilla:V-03:actual</div>
+  <p class="nota" style="margin:8px 0 0">El primer comando borra y recrea la colección <code>turnos</code> con su JSON Schema; el segundo carga el historial sintético (serie <code>S-</code>).</p>
+</div>
+
+<div class="card-cabecera" style="margin-top:28px">
+  <h2 style="margin:0">Recorrido</h2>
+  <span class="nota"><span id="avance-texto">0 de 10 pasos</span></span>
+</div>
+<div class="progreso" aria-hidden="true"><span id="avance-barra"></span></div>
+
+<ol class="pasos" id="pasos" style="margin-top:14px">
+  <li class="paso" data-paso="1">
+    <div>
+      <div class="rol">Cliente · MongoDB + Redis</div>
+      <h3>Emitir un turno normal</h3>
+      <p>Elija <strong>Atención Regular</strong> y pulse <em>Emitir mi turno</em>.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el ticket con el código <code>A-001</code>, prioridad normal y estado «En espera».</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/emitir">Abrir Emitir</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="2">
+    <div>
+      <div class="rol">Cliente · MongoDB + Redis</div>
+      <h3>Emitir un turno preferencial</h3>
+      <p>Vuelva a emitir, esta vez con <strong>Atención Preferencial</strong>.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el ticket con <code>A-002</code> y la insignia «Prioridad Preferencial».</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/emitir">Abrir Emitir</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="3">
+    <div>
+      <div class="rol">Cliente · MongoDB + Redis</div>
+      <h3>Consultar la posición de A-001</h3>
+      <p>Mongo aporta el estado del turno y Redis su posición en la fila.</p>
+      <div class="esperado"><strong>Debe verse:</strong> estado Pendiente, <strong>1 turno por delante</strong> y posición 2, aunque llegó primero.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/consultar?codigo=A-001">Consultar A-001</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="4">
+    <div>
+      <div class="rol">Operador · Redis</div>
+      <h3>Revisar la cola activa</h3>
+      <p>La cola es un <em>sorted set</em>: la prioridad pesa más que la hora de llegada.</p>
+      <div class="esperado"><strong>Debe verse:</strong> <code>A-002</code> (preferencial) en la posición 1 y <code>A-001</code> en la 2.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="5">
+    <div>
+      <div class="rol">Operador · Redis atómico</div>
+      <h3>Llamar al siguiente desde V-01</h3>
+      <p>En la cola, elija <strong>V-01</strong> y pulse <em>Llamar siguiente</em>. La extracción es atómica: dos ventanillas nunca reciben el mismo turno.</p>
+      <div class="esperado"><strong>Debe verse:</strong> «V-01 llamó al turno A-002 (preferencial)» y la cola con un solo turno.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="6">
+    <div>
+      <div class="rol">Operador · MongoDB</div>
+      <h3>Iniciar la atención</h3>
+      <p>En el panel, la tarjeta de V-01 muestra <code>A-002</code> como «llamado».</p>
+      <div class="esperado"><strong>Debe verse:</strong> botón <em>Iniciar atención</em>; al pulsarlo el estado pasa a «en atención» y aparece <em>Finalizar atención</em>.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/panel">Abrir Panel</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="7">
+    <div>
+      <div class="rol">Operador · MongoDB + Redis</div>
+      <h3>Finalizar la atención</h3>
+      <p>Pulse <em>Finalizar atención</em>. Mongo registra el cierre y Redis libera la ventanilla.</p>
+      <div class="esperado"><strong>Debe verse:</strong> mensaje con los segundos de atención y V-01 «Sin turno asignado». Si pulsa el botón otra vez desde una pestaña vieja, el error es controlado.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/panel">Abrir Panel</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="8">
+    <div>
+      <div class="rol">Supervisor · MongoDB</div>
+      <h3>Ver el turno en el historial</h3>
+      <p>El registro de <code>A-002</code> permanece aunque ya salió de Redis.</p>
+      <div class="esperado"><strong>Debe verse:</strong> estado atendido, ventanilla V-01, las marcas de tiempo y los segundos de espera y de atención.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/historial?codigo=A-002">Buscar A-002</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="9">
+    <div>
+      <div class="rol">Supervisor · MongoDB (aggregation)</div>
+      <h3>Revisar el dashboard y el SLA</h3>
+      <p>Cambie la espera máxima (120, 300, 600 s) y observe el cumplimiento.</p>
+      <div class="esperado"><strong>Debe verse:</strong> turnos esperando (1), atendidos, promedios de espera y atención, ocupación por ventanilla y el % de SLA cambiando con el umbral.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/dashboard">Abrir Dashboard</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="10">
+    <div>
+      <div class="rol">Administración · JSON Schema</div>
+      <h3>CRUD de turnos y validación del esquema</h3>
+      <p>Abra la colección <code>turnos</code>, intente insertar un documento con <code>"prioridad": "urgente"</code> y luego uno válido.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el documento inválido es rechazado con un mensaje de validación; el válido se inserta y se puede editar y eliminar (bórrelo al terminar).</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/?coleccion=turnos">Abrir CRUD turnos</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+</ol>
+
+<div class="info" style="margin-top:24px">
+  <strong>Mensaje técnico:</strong> MongoDB conserva el registro de lo que ocurrió; Redis administra la cola activa; y la llamada del siguiente turno es atómica.
+  <div style="margin-top:10px"><button type="button" id="reiniciar" class="btn-secundario">Reiniciar marcas del recorrido</button></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var CLAVE = "qline-demo-s2", pasos = document.querySelectorAll(".paso");
+  function leer() { try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch (e) { return {}; } }
+  function guardar(m) { try { localStorage.setItem(CLAVE, JSON.stringify(m)); } catch (e) {} }
+  function pintar() {
+    var marcas = leer(), hechos = 0;
+    pasos.forEach(function (p) {
+      var ok = !!marcas[p.dataset.paso];
+      p.classList.toggle("hecho", ok);
+      p.querySelector("input[type=checkbox]").checked = ok;
+      if (ok) hechos++;
+    });
+    document.getElementById("avance-texto").textContent = hechos + " de " + pasos.length + " pasos";
+    document.getElementById("avance-barra").style.width = (100 * hechos / pasos.length) + "%";
+  }
+  pasos.forEach(function (p) {
+    p.querySelector("input[type=checkbox]").addEventListener("change", function (e) {
+      var m = leer(); m[p.dataset.paso] = e.target.checked; guardar(m); pintar();
+    });
+  });
+  document.getElementById("reiniciar").addEventListener("click", function () { guardar({}); pintar(); });
+  document.querySelectorAll("[data-copiar]").forEach(function (t) {
+    var texto = t.textContent.trim();
+    var b = document.createElement("button"); b.type = "button"; b.textContent = "Copiar";
+    b.addEventListener("click", function () {
+      if (navigator.clipboard) navigator.clipboard.writeText(texto).then(function () { b.textContent = "Copiado"; setTimeout(function () { b.textContent = "Copiar"; }, 1500); });
+    });
+    t.appendChild(b);
+  });
+  pintar();
+})();
+</script>
+{% endblock %}

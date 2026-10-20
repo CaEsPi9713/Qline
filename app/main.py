@@ -5,6 +5,7 @@ Equivalente a la versión PHP: listar/crear colecciones y CRUD de documentos.
 import json
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -60,6 +61,17 @@ app = FastAPI(title="MongoDB Web Admin")
 app.mount("/static", StaticFiles(directory=BASE_DIR.parent / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
+
+def _version_css() -> int:
+    """Fecha de modificación de style.css: cambia el enlace y obliga al navegador a recargarlo."""
+    try:
+        return int((BASE_DIR.parent / "static" / "style.css").stat().st_mtime)
+    except OSError:
+        return 0
+
+
+templates.env.globals["css_version"] = _version_css()
+
 _client = None
 
 
@@ -106,8 +118,6 @@ def ir(coleccion: str, **params) -> RedirectResponse:
     extra = "".join(f"&{k}={quote_plus(v)}" for k, v in params.items())
     return RedirectResponse(f"{BASE}/?coleccion={quote_plus(coleccion)}{extra}", status_code=303)
 
-
-from datetime import datetime, timezone
 
 
 def _parsear_iso_o_fecha(valor):
@@ -200,6 +210,27 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
         contexto["error"] = contexto["error"] or f"Error de MongoDB: {e}"
     return templates.TemplateResponse(request, "index.html", contexto)
 
+
+
+@app.get("/demo", response_class=HTMLResponse)
+def guia_demo(request: Request):
+    """Guía ordenada para recorrer el flujo completo del Seguimiento 2."""
+    redis_estado = verificar_redis()
+    mongo_estado = {"ok": False, "turnos": 0, "error": ""}
+    try:
+        mongo_estado.update(ok=True, turnos=get_db()["turnos"].count_documents({}))
+    except Exception as e:
+        mongo_estado["error"] = str(e)[:150]
+    cola_tam = None
+    if redis_estado.get("ok"):
+        try:
+            cola_tam = cola_redis.tamano_cola()
+        except RedisError:
+            cola_tam = None
+    return templates.TemplateResponse(
+        request, "demo.html",
+        {"base": BASE, "redis": redis_estado, "mongo": mongo_estado, "cola_tam": cola_tam},
+    )
 
 
 @app.get("/redis/estado")

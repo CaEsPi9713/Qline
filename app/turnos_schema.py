@@ -15,6 +15,11 @@ from app.constantes import (
 
 COLECCION_TURNOS = "turnos"
 
+# Formato del código: una letra mayúscula, guion y consecutivo (A-001, A-015).
+# La serie real de la operación es "A-"; la serie "S-" es de los datos sintéticos
+# (TT-005), que deben poder convivir con la validación del motor.
+PATRON_CODIGO = r"^[A-Z]-\d{3,}$"
+
 # Definición formal de $jsonSchema de MongoDB
 SCHEMA_TURNOS = {
     "$jsonSchema": {
@@ -28,8 +33,8 @@ SCHEMA_TURNOS = {
             },
             "codigo": {
                 "bsonType": "string",
-                "pattern": r"^A-\d{3,}$",
-                "description": "Código único y consecutivo del turno (ej. A-001, A-015)",
+                "pattern": PATRON_CODIGO,
+                "description": "Código único y consecutivo del turno (ej. A-001, A-015; S-001 en datos sintéticos)",
             },
             "servicio": {
                 "bsonType": "string",
@@ -143,8 +148,8 @@ def validar_documento_turno(doc: dict) -> bool:
             raise TurnoValidationError(f"Campo obligatorio faltante: '{campo}'")
 
     import re
-    if not isinstance(doc["codigo"], str) or not re.fullmatch(r"^A-\d{3,}$", doc["codigo"]):
-        raise TurnoValidationError(f"Código inválido: {doc.get('codigo')!r}. Debe coincidir con '^A-\\d{{3,}}$'.")
+    if not isinstance(doc["codigo"], str) or not re.fullmatch(PATRON_CODIGO, doc["codigo"]):
+        raise TurnoValidationError(f"Código inválido: {doc.get('codigo')!r}. Debe coincidir con '{PATRON_CODIGO}'.")
 
     if doc["servicio"] != SERVICIO_ID:
         raise TurnoValidationError(f"Servicio inválido: {doc.get('servicio')!r}. Debe ser '{SERVICIO_ID}'.")

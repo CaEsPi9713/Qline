@@ -1,27 +1,7 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MongoDB Web Admin · QLine</title>
-<link rel="stylesheet" href="{{ base }}/static/style.css">
-</head>
-<body>
-<header>
-  <h1>QLine · MongoDB Web Admin</h1>
-  <nav>
-    <a href="{{ base }}/" class="activo">Admin MongoDB</a>
-    <a href="{{ base }}/cola">Cola Redis</a>
-    <a href="{{ base }}/emitir">Emitir</a>
-    <a href="{{ base }}/consultar">Consultar</a>
-    <a href="{{ base }}/historial">Historial</a>
-    <a href="{{ base }}/dashboard">Dashboard SLA</a>
-  </nav>
-</header>
-<div class="sub-header">
-  Usuario: <strong>{{ usuario }}</strong> &nbsp;|&nbsp; Base de datos: <strong>{{ base_datos }}</strong>
-</div>
-
+{% extends "base.html" %}
+{% block titulo %}CRUD MongoDB{% endblock %}
+{% block lead %}Administración técnica de la base <strong>{{ base_datos }}</strong> (usuario <strong>{{ usuario }}</strong>). El CRUD de <code>turnos</code> valida contra el JSON Schema; no es el flujo operativo normal.{% endblock %}
+{% block contenido %}
 <div class="contenedor">
 <aside class="sidebar">
   <h3>Colecciones</h3>
@@ -30,16 +10,16 @@
     {{ nombre }} {% if nombre == "turnos" %}&#9733;{% endif %}
   </a>
   {% endfor %}
-  {% if not colecciones %}<p style="color:#64748b;">No existen colecciones.</p>{% endif %}
-  <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">
+  {% if not colecciones %}<p class="nota">No existen colecciones.</p>{% endif %}
+  <hr class="separador">
   <h4>Nueva colección</h4>
   <form method="post" action="{{ base }}/crear_coleccion">
     <input type="text" name="nombre_coleccion" placeholder="Nombre de colección" required>
-    <br><br><button type="submit" class="btn btn-secundario" style="width:100%;">Crear</button>
+    <button type="submit" class="btn-secundario btn-bloque" style="margin-top:10px">Crear</button>
   </form>
 </aside>
 
-<main class="contenido">
+<div class="contenido">
   {% if mensaje %}<div class="ok">{{ mensaje }}</div>{% endif %}
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
@@ -71,7 +51,7 @@
       <br><br>
       <button type="submit">Insertar documento</button>
       {% if coleccion == "turnos" %}
-      <span style="font-size:12px;color:#64748b;margin-left:12px;">* Se valida automáticamente con el JSON Schema oficial (TT-002).</span>
+      <span class="nota" style="margin-left:12px">* Se valida con el JSON Schema oficial (TT-002) antes de insertar.</span>
       {% endif %}
     </form>
     {% endif %}
@@ -79,14 +59,14 @@
 
   <!-- Listado de Documentos -->
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
-      <h2 style="margin:0;">Colección: {{ coleccion }}</h2>
+    <div class="card-cabecera">
+      <h2>Colección: {{ coleccion }}</h2>
       {% if coleccion == "turnos" %}
       <!-- Filtro por Estado para Turnos -->
-      <form method="get" action="{{ base }}/" style="display:flex;gap:8px;align-items:center;">
+      <form method="get" action="{{ base }}/" class="fila">
         <input type="hidden" name="coleccion" value="turnos">
-        <label for="filtro_estado" style="font-size:13px;font-weight:600;">Estado:</label>
-        <select id="filtro_estado" name="filtro_estado" onchange="this.form.submit()" style="width:auto;padding:6px 10px;">
+        <label for="filtro_estado" style="margin:0">Estado</label>
+        <select id="filtro_estado" name="filtro_estado" onchange="this.form.submit()" class="select-auto">
           <option value="">Todos los estados</option>
           <option value="pendiente" {% if filtro_estado == "pendiente" %}selected{% endif %}>pendiente</option>
           <option value="llamado" {% if filtro_estado == "llamado" %}selected{% endif %}>llamado</option>
@@ -98,14 +78,15 @@
       {% endif %}
     </div>
 
-    <p style="font-size:13px;color:#64748b;margin-top:0;">Mostrando hasta <strong>50 documentos</strong> ordenados por ID reciente.</p>
+    <p class="nota" style="margin-top:0">Mostrando hasta <strong>50 documentos</strong> ordenados por ID reciente.</p>
 
+    <div class="tabla-wrap">
     <table>
       <thead>
         <tr>
-          <th style="width:200px;">_id</th>
+          <th>_id</th>
           <th>Contenido del Documento</th>
-          <th style="width:130px;">Acciones</th>
+          <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -114,8 +95,8 @@
           <td class="codigo">{{ d.id }}</td>
           <td>
             {% if d.resumen_turno %}
-              <div style="margin-bottom:8px;">
-                <span class="codigo" style="font-size:14px;">{{ d.resumen_turno.codigo }}</span> &nbsp;
+              <div style="margin-bottom:8px">
+                <span class="codigo">{{ d.resumen_turno.codigo }}</span> &nbsp;
                 <span class="badge badge-{{ d.resumen_turno.prioridad }}">{{ d.resumen_turno.prioridad }}</span> &nbsp;
                 <span class="badge badge-{{ d.resumen_turno.estado }}">{{ d.resumen_turno.estado }}</span>
                 {% if d.resumen_turno.ventanilla %}
@@ -137,14 +118,14 @@
         {% endfor %}
         {% if not documentos %}
         <tr>
-          <td colspan="3" style="text-align:center;color:#64748b;padding:24px;">No existen documentos en esta colección.</td>
+          <td colspan="3" class="vacio">No existen documentos en esta colección.</td>
         </tr>
         {% endif %}
       </tbody>
     </table>
+    </div>
   </div>
   {% endif %}
-</main>
 </div>
-</body>
-</html>
+</div>
+{% endblock %}

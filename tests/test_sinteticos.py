@@ -47,18 +47,21 @@ class PruebasGenerador(unittest.TestCase):
         docs = generar_turnos()
         self.assertEqual(validar_conjunto(docs), [])
 
-    def test_por_defecto_no_deja_turnos_activos(self):
-        estados = {d["estado"] for d in generar_turnos()}
-        self.assertFalse(estados & {"llamado", "en_atencion"})
-        self.assertEqual(estados, {"pendiente", "atendido", "abandonado"})
+    def test_por_defecto_es_historial_sin_turnos_activos_ni_pendientes(self):
+        docs = generar_turnos()
+        self.assertEqual({d["estado"] for d in docs}, {"atendido", "abandonado"})
+        self.assertTrue(all(d["ventanilla"] for d in docs))
 
-    def test_con_activos_deja_llamado_y_en_atencion_y_sigue_valido(self):
+    def test_por_defecto_conserva_la_misma_cantidad_de_turnos_que_la_instantanea(self):
+        self.assertEqual(len(generar_turnos()), len(generar_turnos(Parametros(dejar_turnos_activos=True))))
+
+    def test_con_activos_deja_pendiente_llamado_y_en_atencion_y_sigue_valido(self):
         docs = generar_turnos(Parametros(dejar_turnos_activos=True))
         self.assertEqual({d["estado"] for d in docs}, set(ESTADOS))
         self.assertEqual(validar_conjunto(docs), [])
 
     def test_pendientes_no_tienen_ventanilla_y_el_resto_si(self):
-        for d in generar_turnos():
+        for d in generar_turnos(Parametros(dejar_turnos_activos=True)):
             self.assertEqual(d["ventanilla"] is None, d["estado"] == "pendiente")
 
     def test_incluye_estados_y_valores_oficiales(self):
@@ -74,7 +77,7 @@ class PruebasGenerador(unittest.TestCase):
         self.assertTrue(all(c.startswith("S-") for c in codigos))   # la serie real es A-NNN
 
     def test_campos_pendientes_son_null(self):
-        for d in generar_turnos():
+        for d in generar_turnos(Parametros(dejar_turnos_activos=True)):
             if d["estado"] == "pendiente":
                 self.assertIsNone(d["ventanilla"])
                 self.assertIsNone(d["timestamps"]["llamado"])

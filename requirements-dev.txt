@@ -1,0 +1,12 @@
+# Dependencias solo para ejecutar las pruebas:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   python -m unittest discover -s tests -t . -v
+# Sin ellas la suite corre igual, pero se omiten las pruebas de rutas HTTP y de Redis.
+
+# Cliente de pruebas de FastAPI/Starlette: las versiones recientes usan httpx2 y las
+# anteriores httpx; se instalan ambos para que funcione con cualquiera.
+httpx
+httpx2
+
+# Redis simulado en memoria (las pruebas no tocan el Redis real)
+fakeredis

@@ -54,10 +54,11 @@ class Parametros:
     # Instante "ahora" simulado dentro del último día (hora UTC, decimal: 18.5 = 18:30).
     hora_corte_utc: float = 18.5
     prefijo_codigo: str = PREFIJO_POR_DEFECTO
-    # False (por defecto): los turnos que al corte estarían 'llamado' o 'en_atencion'
-    # se cierran (atendido/abandonado). Así los datos sintéticos no dejan turnos
-    # "activos" que se confundan con la operación real (p. ej. en el panel de
-    # atención). Los 'pendiente' sí se conservan. True: instantánea fiel del corte.
+    # False (por defecto): todos los turnos se muestran terminados (atendido o
+    # abandonado). Los datos sintéticos son historial: no dejan turnos
+    # 'pendiente', 'llamado' ni 'en_atencion' que se confundan con la operación
+    # real (panel, dashboard) ni que una rehidratación de Redis reencole.
+    # True: instantánea fiel del corte, con turnos en espera y en curso.
     dejar_turnos_activos: bool = False
 
     def validar(self) -> None:
@@ -217,7 +218,7 @@ def generar_turnos(parametros: Parametros | None = None) -> list[dict]:
     ancho = max(3, len(str(len(simulados))))
     documentos = []
     for numero, (sim, corte) in enumerate(simulados, start=1):
-        if corte is not None and not p.dejar_turnos_activos and sim["llamado"] <= corte:
-            corte = None  # ya estaba en curso al corte: se muestra terminado
+        if not p.dejar_turnos_activos:
+            corte = None  # se muestra el turno ya terminado
         documentos.append(_a_documento(sim, f"{p.prefijo_codigo}-{numero:0{ancho}d}", corte))
     return documentos
