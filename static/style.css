@@ -187,6 +187,9 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-size: 12px;
 .turno-grande { font-family: var(--mono); font-size: 44px; font-weight: 800; letter-spacing: 1px; line-height: 1.1; margin: 0 0 10px; }
 .sin-turno { color: var(--c-texto-tenue); text-align: center; padding: 18px 0; }
 .sin-turno strong { display: block; font-size: 26px; margin-bottom: 4px; }
+.ventanilla-extras { border-top: 1px dashed var(--c-borde-fuerte); background: #fffbeb; padding: 12px 20px 14px; }
+.ventanilla-extras .extra { justify-content: space-between; margin-top: 8px; }
+.ventanilla-extras .extra form { margin: 0; }
 
 /* ---------- Ticket / confirmación ---------------------------------------- */
 .ticket { background: #fff; border: 2px dashed var(--c-borde-fuerte); border-radius: 14px; padding: 32px 24px; text-align: center; margin: 24px 0; box-shadow: var(--sombra); }
@@ -235,6 +238,99 @@ dl.datos dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .sidebar a:hover { background: #f1f5f9; color: var(--c-texto); }
 .sidebar a.activa { background: var(--c-nav); color: #fff; font-weight: 600; }
 .contenido { flex: 1; min-width: 0; }
+
+/* ---------- Vista pública del cliente (consulta por QR, celular) ---------- */
+body.publico { background: #eef2f7; min-height: 100vh; display: flex; flex-direction: column; }
+.publico-cab { background: var(--c-nav); color: #fff; display: flex; align-items: center; gap: 12px; padding: 14px 20px; padding-top: max(14px, env(safe-area-inset-top)); }
+.publico-marca { font-weight: 700; font-size: 18px; line-height: 1.1; }
+.publico-marca small { display: block; font-size: 11px; font-weight: 500; color: #94a3b8; }
+.publico-cuerpo { flex: 1; width: 100%; max-width: 520px; margin: 0 auto; padding: 24px 16px 8px; }
+.estado-tarjeta { background: #fff; border: 1px solid var(--c-borde); border-radius: 16px; padding: 28px 20px; text-align: center; box-shadow: var(--sombra-lg); border-top: 6px solid var(--c-borde-fuerte); }
+.estado-tarjeta[data-estado="pendiente"] { border-top-color: #f59e0b; }
+.estado-tarjeta[data-estado="llamado"] { border-top-color: #6366f1; background: #f5f6ff; }
+.estado-tarjeta[data-estado="en_atencion"] { border-top-color: #0ea5e9; }
+.estado-tarjeta[data-estado="atendido"] { border-top-color: #10b981; }
+.estado-tarjeta[data-estado="abandonado"] { border-top-color: #ef4444; }
+.estado-etiqueta { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--c-texto-tenue); }
+.estado-codigo { font-family: var(--mono); font-size: 64px; font-weight: 800; letter-spacing: 2px; line-height: 1.1; margin: 4px 0 12px; }
+.estado-mensaje { font-size: 20px; font-weight: 600; margin: 14px 0 6px; }
+.estado-datos { max-width: 320px; margin: 16px auto 0; text-align: left; font-size: 17px; }
+.estado-tarjeta .aviso { text-align: left; margin: 16px 0 0; }
+.estado-error h1 { font-size: 22px; margin: 8px 0; }
+.estado-error p { color: var(--c-texto-suave); }
+.estado-error { border-top-color: var(--c-error); }
+.estado-icono { width: 52px; height: 52px; border-radius: 50%; background: var(--c-error-fondo); color: var(--c-error); font-size: 28px; font-weight: 800; display: grid; place-items: center; margin: 0 auto 8px; }
+.indicador { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--c-texto-suave); margin: 14px 0 4px; }
+.indicador .punto { width: 9px; height: 9px; border-radius: 50%; background: var(--c-texto-tenue); }
+.indicador.vivo .punto { background: var(--c-ok); box-shadow: 0 0 0 4px rgba(5, 150, 105, .18); }
+.indicador.respaldo .punto { background: #f59e0b; }
+.indicador.mal .punto { background: var(--c-error); }
+@media (max-width: 380px) { .estado-codigo { font-size: 52px; } }
+
+/* Tarjeta principal del turno (consulta por QR) */
+.turno-hero { --acento: #94a3b8; --acento-2: #cbd5e1; --acento-suave: #f1f5f9; background: #fff; border-radius: 20px; overflow: hidden; box-shadow: var(--sombra-lg); border: 1px solid var(--c-borde); }
+.turno-hero[data-estado="pendiente"] { --acento: #d97706; --acento-2: #f59e0b; --acento-suave: #fffbeb; }
+.turno-hero[data-estado="llamado"] { --acento: #4f46e5; --acento-2: #6366f1; --acento-suave: #eef2ff; }
+.turno-hero[data-estado="en_atencion"] { --acento: #0284c7; --acento-2: #0ea5e9; --acento-suave: #f0f9ff; }
+.turno-hero[data-estado="atendido"] { --acento: #059669; --acento-2: #10b981; --acento-suave: #ecfdf5; }
+.turno-hero[data-estado="abandonado"] { --acento: #dc2626; --acento-2: #ef4444; --acento-suave: #fef2f2; }
+.turno-banda { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 16px; color: #fff; font-size: 17px; font-weight: 800; letter-spacing: .3px; background: linear-gradient(135deg, var(--acento), var(--acento-2)); }
+.turno-banda-icono { font-size: 20px; line-height: 1; }
+.turno-hero[data-estado="llamado"] .turno-banda { animation: latido-banda 1.6s ease-in-out infinite; }
+.turno-cuerpo { padding: 22px 20px 24px; text-align: center; background: linear-gradient(180deg, var(--acento-suave), #fff 140px); }
+.turno-hero .estado-codigo { font-size: 68px; margin: 2px 0 10px; color: var(--c-texto); }
+.turno-hero .estado-mensaje { font-size: 19px; line-height: 1.35; margin: 18px 0 6px; }
+.turno-hero .estado-datos { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--c-borde); }
+.turno-hero .estado-datos:empty { display: none; }
+.turno-hero.cambio { animation: aparecer .45s ease; }
+.turno-pie { margin-top: 6px; }
+@keyframes aparecer { from { transform: scale(.97); opacity: .6; } to { transform: scale(1); opacity: 1; } }
+@keyframes latido-banda { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
+
+/* Avance del turno: En espera -> Llamado -> En atención -> Atendido */
+.progreso-estados { list-style: none; display: flex; justify-content: space-between; margin: 20px 0 6px; padding: 0; position: relative; }
+.progreso-estados[hidden] { display: none; }
+.progreso-estados::before { content: ""; position: absolute; left: 12%; right: 12%; top: 15px; height: 3px; background: var(--c-borde); }
+.progreso-estados li { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--c-texto-tenue); }
+.paso-punto { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 3px solid var(--c-borde); font-size: 13px; font-weight: 800; position: relative; z-index: 1; transition: all .3s; }
+.progreso-estados li.hecho { color: var(--c-ok); }
+.progreso-estados li.hecho .paso-punto { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+.progreso-estados li.actual { color: var(--c-texto); }
+.progreso-estados li.actual .paso-punto { background: var(--acento); border-color: var(--acento); color: #fff; box-shadow: 0 0 0 5px var(--acento-suave); }
+.turno-hero[data-estado="llamado"] li.actual .paso-punto { animation: pulso-punto 1.4s ease-out infinite; }
+@keyframes pulso-punto { 0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, .5); } 100% { box-shadow: 0 0 0 14px rgba(99, 102, 241, 0); } }
+
+/* Elementos visuales por estado */
+.turno-visual { margin: 14px 0 0; min-height: 4px; }
+.visual-numero { display: flex; flex-direction: column; align-items: center; margin: 4px 0 8px; }
+.visual-numero-valor { font-size: 84px; font-weight: 900; line-height: 1; color: var(--acento); letter-spacing: -2px; }
+.visual-numero-leyenda { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--c-texto-suave); }
+.visual-fila { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.punto-fila { width: 14px; height: 14px; border-radius: 50%; background: var(--c-borde-fuerte); }
+.punto-fila.usted { width: auto; height: auto; border-radius: 999px; padding: 4px 12px; background: var(--acento); color: #fff; font-size: 12px; font-weight: 800; }
+.punto-mas { font-weight: 800; color: var(--c-texto-tenue); }
+.visual-ventanilla { display: inline-block; font-family: var(--mono); font-size: 40px; font-weight: 900; padding: 6px 26px; border-radius: 14px; background: var(--acento); color: #fff; letter-spacing: 2px; }
+.visual-llamado { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.visual-ayuda { margin: 0; font-size: 14px; color: var(--c-texto-suave); }
+.anillo { position: relative; width: 150px; height: 150px; }
+.anillo svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.anillo circle { fill: none; stroke-width: 9; }
+.anillo-fondo { stroke: var(--c-borde); }
+.anillo-progreso { stroke: var(--acento-2); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke .3s; }
+.anillo-progreso.urgente { stroke: var(--c-error); }
+.anillo-centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.anillo-seg { font-size: 40px; font-weight: 900; line-height: 1; }
+.anillo-leyenda { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--c-texto-tenue); }
+.visual-final { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.visual-marca { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; font-size: 44px; font-weight: 900; color: #fff; background: var(--acento); }
+.pulso { width: 14px; height: 14px; border-radius: 50%; background: var(--acento-2); animation: pulso-punto 1.6s ease-out infinite; }
+.turno-pie .nota { margin: 4px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .turno-hero.cambio, .turno-hero[data-estado="llamado"] .turno-banda, .turno-hero[data-estado="llamado"] li.actual .paso-punto, .pulso { animation: none; }
+  .anillo-progreso { transition: none; }
+}
+@media (max-width: 380px) { .turno-hero .estado-codigo { font-size: 56px; } .visual-numero-valor { font-size: 70px; } .paso-nombre { font-size: 10px; } }
 
 /* ---------- Responsive ---------------------------------------------------- */
 @media (max-width: 960px) {

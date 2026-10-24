@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set ancho = "media" %}
+{% block titulo %}Prueba de tiempo real{% endblock %}
+{% block lead %}Comprueba si el WebSocket atraviesa el proxy del servidor y si los eventos de Redis llegan al navegador. Si algún paso falla, las pantallas se actualizan con consultas periódicas.{% endblock %}
+{% block contenido %}
+<div class="card">
+  <div class="card-cabecera">
+    <h2>Verificación del canal en vivo</h2>
+    <button type="button" id="ejecutar">Ejecutar la prueba</button>
+  </div>
+  <p class="sub">Dirección de la página: <code id="origen"></code></p>
+  <div class="tabla-wrap">
+    <table>
+      <thead><tr><th>Paso</th><th>Resultado</th><th>Detalle</th></tr></thead>
+      <tbody id="pasos">
+        <tr data-id="ping"><td>1. WebSocket <code>/ws/ping</code> (bienvenida y latido enviados por el servidor)</td><td class="r">—</td><td class="d nota"></td></tr>
+        <tr data-id="eco"><td>2. Mensaje del navegador y eco del servidor</td><td class="r">—</td><td class="d nota"></td></tr>
+        <tr data-id="canal"><td>3. WebSocket <code>/ws/eventos</code> y suscripción a Redis Pub/Sub</td><td class="r">—</td><td class="d nota"></td></tr>
+        <tr data-id="evento"><td>4. Evento publicado en Redis recibido por el navegador</td><td class="r">—</td><td class="d nota"></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="veredicto" style="margin-top:16px"></div>
+</div>
+
+<div class="card">
+  <h2>Cómo leer el resultado</h2>
+  <ul class="texto-suave" style="margin:0;padding-left:20px">
+    <li><strong>Todos en verde:</strong> el WebSocket funciona por el proxy; las pantallas en vivo lo usarán.</li>
+    <li><strong>Falla el paso 1 pero <code>python scripts/probar_websocket.py</code> pasa en el servidor:</strong> la app está bien y el bloqueo es el proxy de Apache (falta el módulo de WebSocket).</li>
+    <li><strong>Falla el paso 4:</strong> el WebSocket funciona pero el canal de Redis no entrega (revisar el estado del receptor).</li>
+  </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var BASE = {{ base|tojson }};
+  var esquema = location.protocol === "https:" ? "wss://" : "ws://";
+  var URL_WS = esquema + location.host + BASE;
+  document.getElementById("origen").textContent = location.origin + BASE;
+
+  function fila(id) { return document.querySelector('tr[data-id="' + id + '"]'); }
+  function marcar(id, ok, detalle) {
+    var f = fila(id);
+    var r = f.querySelector(".r");
+    r.innerHTML = ok === null ? "…" : '<span class="badge ' + (ok ? "badge-atendido" : "badge-abandonado") + '">' + (ok ? "OK" : "Falla") + "</span>";
+    f.querySelector(".d").textContent = detalle || "";
+  }
+  function esperar(ws, tipo, ms) {
+    return new Promise(function (resolver, rechazar) {
+      var t = setTimeout(function () { cerrar(); rechazar(new Error("Sin respuesta en " + ms / 1000 + " s")); }, ms);
+      function alMensaje(e) {
+        var d; try { d = JSON.parse(e.data); } catch (x) { return; }
+        if (d.tipo === tipo) { cerrar(); resolver(d); }
+      }
+      function cerrar() { clearTimeout(t); ws.removeEventListener("message", alMensaje); }
+      ws.addEventListener("message", alMensaje);
+    });
+  }
+  function abrir(ruta) {
+    return new Promise(function (resolver, rechazar) {
+      var ws;
+      try { ws = new WebSocket(URL_WS + ruta); } catch (e) { return rechazar(e); }
+      var t = setTimeout(function () { try { ws.close(); } catch (e) {} rechazar(new Error("No se pudo abrir la conexión (tiempo agotado)")); }, 6000);
+      ws.addEventListener("open", function () { clearTimeout(t); resolver(ws); });
+      ws.addEventListener("error", function () { clearTimeout(t); rechazar(new Error("La conexión fue rechazada o bloqueada")); });
+    });
+  }
+
+  async function ejecutar() {
+    ["ping", "eco", "canal", "evento"].forEach(function (id) { marcar(id, null, ""); });
+    var veredicto = document.getElementById("veredicto");
+    veredicto.innerHTML = "";
+    var todoOk = true, ping = null, canal = null;
+    try {
+      ping = await abrir("/ws/ping");
+      var b = await esperar(ping, "bienvenida", 4000);
+      var l = await esperar(ping, "latido", 4000);
+      marcar("ping", true, "Bienvenida " + b.hora + " y latido recibidos");
+    } catch (e) { todoOk = false; marcar("ping", false, e.message); }
+    if (ping && todoOk) {
+      try { ping.send("hola"); var eco = await esperar(ping, "eco", 4000); marcar("eco", true, "Eco: " + eco.mensaje); }
+      catch (e) { todoOk = false; marcar("eco", false, e.message); }
+    } else { marcar("eco", false, "No se probó: falló el paso 1"); }
+    if (ping) { try { ping.close(); } catch (e) {} }
+    try {
+      canal = await abrir("/ws/eventos?codigo=TEST-WS");
+      var c = await esperar(canal, "conectado", 4000);
+      marcar("canal", c.suscrito === true || c.suscrito === false, c.suscrito ? "Suscrito a Redis Pub/Sub" : "Conectado; la suscripción a Redis todavía no estaba lista");
+    } catch (e) { todoOk = false; marcar("canal", false, e.message); }
+    if (canal) {
+      try {
+        await new Promise(function (r) { setTimeout(r, 700); });   // deja que el receptor se suscriba
+        var pendiente = esperar(canal, "prueba", 5000);
+        var resp = await fetch(BASE + "/api/eventos/prueba", { method: "POST" });
+        var datos = await resp.json();
+        if (!resp.ok) throw new Error(datos.error || ("HTTP " + resp.status));
+        var ev = await pendiente;
+        marcar("evento", true, "Evento «" + ev.tipo + "» recibido (" + datos.receptores + " receptor(es) en Redis)");
+      } catch (e) { todoOk = false; marcar("evento", false, e.message); }
+      try { canal.close(); } catch (e) {}
+    } else { marcar("evento", false, "No se probó: falló el paso 3"); }
+    veredicto.innerHTML = todoOk
+      ? '<div class="ok"><strong>El WebSocket funciona.</strong> Las pantallas en vivo se actualizarán por WebSocket.</div>'
+      : '<div class="aviso"><strong>El WebSocket no está disponible por este camino.</strong> Las pantallas seguirán actualizándose con consultas periódicas.</div>';
+  }
+  document.getElementById("ejecutar").addEventListener("click", ejecutar);
+})();
+</script>
+{% endblock %}

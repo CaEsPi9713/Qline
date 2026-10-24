@@ -1,0 +1,275 @@
+{% extends "base_publico.html" %}
+{% block titulo %}{% if turno %}Turno {{ turno.codigo }}{% else %}Consulta de turno{% endif %}{% endblock %}
+{% block contenido %}
+{% if error %}
+<section class="estado-tarjeta estado-error" role="alert">
+  <div class="estado-icono" aria-hidden="true">!</div>
+  <h1>{{ error_titulo }}</h1>
+  <p>{{ error }}</p>
+  {% if reintentar %}<p class="nota" id="reintento">Se reintentará automáticamente.</p>{% endif %}
+</section>
+{% else %}
+{% set orden = ["pendiente", "llamado", "en_atencion", "atendido"] %}
+{% set posicion_actual = orden.index(turno.estado) if turno.estado in orden else -1 %}
+{% set etiquetas = {"pendiente": "En espera", "llamado": "¡Es su turno!", "en_atencion": "En atención", "atendido": "Atendido", "abandonado": "Turno cancelado"} %}
+<section class="turno-hero" id="tarjeta" data-estado="{{ turno.estado }}" aria-live="polite">
+  <div class="turno-banda">
+    <span class="turno-banda-icono" id="banda-icono" aria-hidden="true"></span>
+    <span id="banda-texto">{{ etiquetas.get(turno.estado, turno.estado) }}</span>
+  </div>
+  <div class="turno-cuerpo">
+    <div class="estado-etiqueta">Su turno</div>
+    <div class="estado-codigo" id="codigo">{{ turno.codigo }}</div>
+    <div class="fila" style="justify-content:center">
+      <span class="badge badge-{{ turno.estado }}" id="estado-badge">{{ "en atención" if turno.estado == "en_atencion" else turno.estado }}</span>
+      <span class="badge badge-{{ turno.prioridad }}" id="prioridad-badge">{{ turno.prioridad }}</span>
+    </div>
+
+    <ol class="progreso-estados" id="progreso-estados" {% if turno.estado == "abandonado" %}hidden{% endif %} aria-label="Avance de su turno">
+      {% for clave, nombre in [("pendiente", "En espera"), ("llamado", "Llamado"), ("en_atencion", "En atención"), ("atendido", "Atendido")] %}
+      <li data-paso="{{ loop.index0 }}" class="{% if loop.index0 < posicion_actual %}hecho{% elif loop.index0 == posicion_actual %}actual{% endif %}"><span class="paso-punto">{% if loop.index0 < posicion_actual %}&#10003;{% else %}{{ loop.index }}{% endif %}</span><span class="paso-nombre">{{ nombre }}</span></li>
+      {% endfor %}
+    </ol>
+
+    <div class="turno-visual" id="visual"></div>
+
+    <p class="estado-mensaje" id="mensaje">{% if turno.estado == "pendiente" %}Su turno está en espera.{% if turno.posicion is none %} Pronto sabremos su posición.{% endif %}{% elif turno.estado == "llamado" %}¡Es su turno! Diríjase a la ventanilla {{ turno.ventanilla or "indicada" }}.{% elif turno.estado == "en_atencion" %}Está siendo atendido{% if turno.ventanilla %} en la ventanilla {{ turno.ventanilla }}{% endif %}.{% elif turno.estado == "atendido" %}Su atención finalizó. ¡Gracias por su visita!{% elif turno.estado == "abandonado" %}Este turno se canceló porque no se presentó a tiempo. Puede solicitar uno nuevo.{% endif %}</p>
+
+    <dl class="datos estado-datos" id="datos">
+      {% if turno.estado == "pendiente" and turno.posicion is not none %}
+      <dt>Turnos por delante</dt><dd>{{ turno.turnos_antes }}</dd>
+      {% endif %}
+      {% if turno.ventanilla and turno.estado in ("llamado", "en_atencion") %}<dt>Ventanilla</dt><dd>{{ turno.ventanilla }}</dd>{% endif %}
+      {% if turno.estado == "llamado" and turno.segundos_restantes is not none %}<dt>Tiempo para presentarse</dt><dd id="restante">{{ turno.segundos_restantes }} s</dd>{% endif %}
+    </dl>
+    <p class="aviso" id="aviso"{% if not turno.aviso %} style="display:none"{% endif %}>{{ turno.aviso or "" }}</p>
+  </div>
+</section>
+
+<div class="turno-pie">
+  <p class="indicador" id="indicador"><span class="punto"></span><span id="indicador-texto">Conectando…</span></p>
+  <p class="nota centro" id="actualizado"></p>
+  <p class="nota centro">{{ servicio_nombre }}. Esta página se actualiza sola; no necesita recargarla.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var BASE = {{ base|tojson }};
+  var TOKEN = {{ token|tojson }};
+  var INICIAL = {{ turno|default(none)|tojson }};
+  var REINTENTAR = {{ reintentar|default(false)|tojson }};
+  var esquema = location.protocol === "https:" ? "wss://" : "ws://";
+  var URL_API = BASE + "/api/turnos/qr/" + encodeURIComponent(TOKEN);
+  var URL_WS = esquema + location.host + BASE + "/ws/turno/qr/" + encodeURIComponent(TOKEN);
+
+  var PERIODO_RESPALDO_MS = 3000, ESPERA_WS_MS = 5000, REINTENTO_WS_MS = 15000, PERIODO_SEGURIDAD_MS = 30000;
+  var TOTAL_VENTANA_SEG = 180, MAX_PUNTOS = 8, CIRCUNFERENCIA = 2 * Math.PI * 52;
+  var ws = null, temporizador = null, respaldo = null, cargando = false, pendiente = false, ultimoPedido = 0;
+  var restante = null, restanteDesde = 0, estadoAnterior = null;
+  var ORDEN = ["pendiente", "llamado", "en_atencion", "atendido"];
+  var BANDA = { pendiente: "En espera", llamado: "¡Es su turno!", en_atencion: "En atención", atendido: "Atendido", abandonado: "Turno cancelado" };
+  var ICONO = { pendiente: "⏳", llamado: "🔔", en_atencion: "👤", atendido: "✓", abandonado: "✕" };
+  var TITULO_BASE = document.title;
+
+  function $(id) { return document.getElementById(id); }
+  function texto(e, valor) { if (e) e.textContent = valor; }
+  function nodo(tag, clase, contenido) { var e = document.createElement(tag); if (clase) e.className = clase; if (contenido != null) e.textContent = contenido; return e; }
+
+  function mensajeDe(t) {
+    switch (t.estado) {
+      case "pendiente": return t.posicion != null ? "Su turno está en espera." : "Su turno está en espera. Pronto sabremos su posición.";
+      case "llamado": return "¡Es su turno! Diríjase a la ventanilla " + (t.ventanilla || "indicada") + ".";
+      case "en_atencion": return "Está siendo atendido" + (t.ventanilla ? " en la ventanilla " + t.ventanilla : "") + ".";
+      case "atendido": return "Su atención finalizó. ¡Gracias por su visita!";
+      case "abandonado": return "Este turno se canceló porque no se presentó a tiempo. Puede solicitar uno nuevo.";
+      default: return "";
+    }
+  }
+
+  function datos(t) {
+    var filas = [];
+    if (t.estado === "pendiente" && t.posicion != null) {
+      filas.push(["Turnos por delante", t.turnos_antes]);
+    }
+    if (t.ventanilla && (t.estado === "llamado" || t.estado === "en_atencion")) filas.push(["Ventanilla", t.ventanilla]);
+    if (t.estado === "llamado" && t.segundos_restantes != null) filas.push(["Tiempo para presentarse", t.segundos_restantes + " s", "restante"]);
+    return filas;
+  }
+
+  // --- Elementos visuales que acompañan a cada estado -----------------------
+  function visualEspera(t) {
+    var cont = nodo("div", "visual-espera");
+    if (t.posicion == null) return cont;
+    var grande = nodo("div", "visual-numero");
+    grande.appendChild(nodo("span", "visual-numero-valor", String(t.posicion)));
+    grande.appendChild(nodo("span", "visual-numero-leyenda", t.posicion === 1 ? "es el siguiente" : "posición en la fila"));
+    cont.appendChild(grande);
+    var fila = nodo("div", "visual-fila"); fila.setAttribute("aria-hidden", "true");
+    var delante = Math.min(t.turnos_antes || 0, MAX_PUNTOS);
+    for (var i = 0; i < delante; i++) fila.appendChild(nodo("span", "punto-fila"));
+    if ((t.turnos_antes || 0) > MAX_PUNTOS) fila.appendChild(nodo("span", "punto-mas", "…"));
+    fila.appendChild(nodo("span", "punto-fila usted", "Usted"));
+    cont.appendChild(fila);
+    return cont;
+  }
+
+  function visualLlamado(t) {
+    var cont = nodo("div", "visual-llamado");
+    cont.appendChild(nodo("div", "visual-ventanilla", t.ventanilla || "—"));
+    if (t.segundos_restantes != null) {
+      var NS = "http://www.w3.org/2000/svg";
+      var anillo = nodo("div", "anillo"); anillo.setAttribute("role", "timer");
+      var svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 120 120");
+      var fondo = document.createElementNS(NS, "circle"); fondo.setAttribute("class", "anillo-fondo");
+      var prog = document.createElementNS(NS, "circle"); prog.setAttribute("class", "anillo-progreso"); prog.setAttribute("id", "anillo-progreso");
+      [fondo, prog].forEach(function (c) { c.setAttribute("cx", "60"); c.setAttribute("cy", "60"); c.setAttribute("r", "52"); svg.appendChild(c); });
+      prog.style.strokeDasharray = CIRCUNFERENCIA; anillo.appendChild(svg);
+      var centro = nodo("div", "anillo-centro");
+      var seg = nodo("span", "anillo-seg", String(t.segundos_restantes)); seg.id = "anillo-seg";
+      centro.appendChild(seg); centro.appendChild(nodo("span", "anillo-leyenda", "segundos")); anillo.appendChild(centro);
+      cont.appendChild(anillo);
+      cont.appendChild(nodo("p", "visual-ayuda", "Preséntese antes de que termine el tiempo."));
+    }
+    return cont;
+  }
+
+  function visualFinal(t) {
+    var cont = nodo("div", "visual-final " + t.estado);
+    if (t.estado === "en_atencion") { cont.appendChild(nodo("div", "visual-ventanilla", t.ventanilla || "—")); cont.appendChild(nodo("div", "pulso")); }
+    else if (t.estado === "atendido") cont.appendChild(nodo("div", "visual-marca", "✓"));
+    else if (t.estado === "abandonado") cont.appendChild(nodo("div", "visual-marca", "✕"));
+    return cont;
+  }
+
+  function pintarVisual(t) {
+    var v = $("visual"); if (!v) return;
+    v.innerHTML = "";
+    v.appendChild(t.estado === "pendiente" ? visualEspera(t) : t.estado === "llamado" ? visualLlamado(t) : visualFinal(t));
+  }
+
+  function pintarPasos(estado) {
+    var lista = $("progreso-estados"); if (!lista) return;
+    var actual = ORDEN.indexOf(estado);
+    lista.hidden = actual < 0;
+    Array.prototype.forEach.call(lista.children, function (li, i) {
+      li.className = i < actual ? "hecho" : (i === actual ? "actual" : "");
+      li.querySelector(".paso-punto").textContent = i < actual ? "✓" : String(i + 1);
+    });
+  }
+
+  function avisarLlamado() {
+    document.title = "¡Es su turno! · QLine";
+    try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (e) {}
+  }
+
+  function pintar(t) {
+    var tarjeta = $("tarjeta");
+    if (!tarjeta) return;
+    var cambio = estadoAnterior !== null && estadoAnterior !== t.estado;
+    tarjeta.setAttribute("data-estado", t.estado);
+    texto($("codigo"), t.codigo);
+    texto($("banda-texto"), BANDA[t.estado] || t.estado);
+    texto($("banda-icono"), ICONO[t.estado] || "");
+    var b = $("estado-badge"); b.textContent = t.estado === "en_atencion" ? "en atención" : t.estado; b.className = "badge badge-" + t.estado;
+    var p = $("prioridad-badge"); p.textContent = t.prioridad; p.className = "badge badge-" + t.prioridad;
+    texto($("mensaje"), mensajeDe(t));
+    pintarPasos(t.estado);
+    pintarVisual(t);
+    var dl = $("datos"); dl.innerHTML = "";
+    datos(t).forEach(function (f) {
+      var dt = document.createElement("dt"), dd = document.createElement("dd");
+      dt.textContent = f[0]; dd.textContent = f[1]; if (f[2]) dd.id = f[2]; dl.appendChild(dt); dl.appendChild(dd);
+    });
+    restante = (t.estado === "llamado" && t.segundos_restantes != null) ? t.segundos_restantes : null;
+    restanteDesde = Date.now();
+    actualizarAnillo(restante);
+    var aviso = $("aviso");
+    if (t.aviso) { aviso.textContent = t.aviso; aviso.style.display = ""; } else { aviso.style.display = "none"; }
+    if (t.estado === "llamado") { if (cambio) avisarLlamado(); else document.title = "¡Es su turno! · QLine"; }
+    else document.title = TITULO_BASE;
+    if (cambio) { tarjeta.classList.remove("cambio"); void tarjeta.offsetWidth; tarjeta.classList.add("cambio"); }
+    estadoAnterior = t.estado;
+    texto($("actualizado"), "Actualizado a las " + new Date().toLocaleTimeString("es"));
+  }
+
+  function actualizarAnillo(faltan) {
+    var prog = $("anillo-progreso"), seg = $("anillo-seg");
+    if (faltan == null || !prog) return;
+    var fraccion = Math.max(0, Math.min(1, faltan / TOTAL_VENTANA_SEG));
+    prog.style.strokeDashoffset = CIRCUNFERENCIA * (1 - fraccion);
+    if (seg) seg.textContent = faltan;
+    prog.classList.toggle("urgente", faltan <= 30);
+  }
+
+  function indicador(estado, textoIndicador) {
+    var e = $("indicador");
+    if (!e) return;
+    e.className = "indicador " + estado;
+    texto($("indicador-texto"), textoIndicador);
+  }
+
+  function consultar() {
+    if (cargando) { pendiente = true; return; }
+    cargando = true;
+    fetch(URL_API, { cache: "no-store" })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, datos: d }; }); })
+      .then(function (r) {
+        if (r.ok && r.datos.turno) { pintar(r.datos.turno); }
+        else { indicador("mal", r.datos.error || "No se pudo actualizar."); }
+      })
+      .catch(function () { indicador("mal", "Sin conexión. Reintentando…"); })
+      .then(function () { cargando = false; if (pendiente) { pendiente = false; consultar(); } });
+  }
+
+  function iniciarRespaldo() {
+    if (respaldo) return;
+    respaldo = setInterval(consultar, PERIODO_RESPALDO_MS);
+    indicador("respaldo", "Actualizando cada " + PERIODO_RESPALDO_MS / 1000 + " s");
+  }
+  function detenerRespaldo() { if (respaldo) { clearInterval(respaldo); respaldo = null; } }
+
+  function conectar() {
+    var abierto = false;
+    try { ws = new WebSocket(URL_WS); } catch (e) { iniciarRespaldo(); setTimeout(conectar, REINTENTO_WS_MS); return; }
+    temporizador = setTimeout(function () { if (!abierto) { try { ws.close(); } catch (e) {} } }, ESPERA_WS_MS);
+    ws.onopen = function () { abierto = true; clearTimeout(temporizador); detenerRespaldo(); indicador("vivo", "En vivo"); consultar(); };
+    ws.onmessage = function (e) {
+      var d; try { d = JSON.parse(e.data); } catch (x) { return; }
+      if (d.tipo === "actualizar") {
+        var ahora = Date.now();
+        if (ahora - ultimoPedido > 700) { ultimoPedido = ahora; consultar(); } else { pendiente = true; }
+      } else if (d.tipo === "error") { indicador("mal", d.error); }
+    };
+    ws.onclose = function () {
+      clearTimeout(temporizador);
+      iniciarRespaldo();                                  // sigue actualizando mientras no haya WebSocket
+      setTimeout(conectar, REINTENTO_WS_MS);
+    };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  }
+
+  // Cuenta regresiva local del tiempo para presentarse; al llegar a 0 se vuelve a consultar.
+  setInterval(function () {
+    if (restante == null) return;
+    var faltan = Math.max(0, restante - Math.floor((Date.now() - restanteDesde) / 1000));
+    var dd = $("restante"); if (dd) dd.textContent = faltan + " s";
+    actualizarAnillo(faltan);
+    if (faltan === 0 && Date.now() - ultimoPedido > 2000) { ultimoPedido = Date.now(); consultar(); }
+  }, 1000);
+
+  if (INICIAL) {
+    pintar(INICIAL);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) consultar(); });
+    // Consulta de seguridad: aunque el WebSocket esté en vivo, se verifica cada 30 s por si algún evento no llegó.
+    setInterval(consultar, PERIODO_SEGURIDAD_MS);
+    conectar();
+  } else if (REINTENTAR) {
+    iniciarRespaldo();
+    setTimeout(function () { location.reload(); }, 10000);
+  }
+})();
+</script>
+{% endblock %}

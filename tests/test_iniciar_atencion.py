@@ -98,14 +98,16 @@ class PruebasIniciarAtencion(unittest.TestCase):
 
 
 try:
+    import fakeredis
     from fastapi.testclient import TestClient
     import app.main as main
+    import app.redis_client as redis_client
     HAY_CLIENTE = True
-except Exception:  # starlette exige httpx para TestClient
+except Exception:  # starlette exige httpx para TestClient; fakeredis aísla Redis
     HAY_CLIENTE = False
 
 
-@unittest.skipUnless(HAY_CLIENTE, "TestClient no disponible (pip install httpx)")
+@unittest.skipUnless(HAY_CLIENTE, "faltan httpx o fakeredis (pip install -r requirements-dev.txt)")
 class PruebasRutaIniciar(unittest.TestCase):
     """La ruta traduce cada error controlado a su código HTTP, nunca a 500."""
 
@@ -117,10 +119,14 @@ class PruebasRutaIniciar(unittest.TestCase):
         ])
         self._orig = main.get_db
         main.get_db = lambda: {"turnos": self.col}
+        # Iniciar la atención toca Redis (confirmar presencia): se aísla con un Redis simulado.
+        self._cliente_orig = redis_client._client
+        redis_client._client = fakeredis.FakeRedis(decode_responses=True)
         self.c = TestClient(main.app)
 
     def tearDown(self):
         main.get_db = self._orig
+        redis_client._client = self._cliente_orig
 
     def post(self, codigo, ventanilla):
         return self.c.post("/api/atencion/iniciar", data={"codigo": codigo, "ventanilla": ventanilla})

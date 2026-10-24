@@ -4,5 +4,8 @@ AuthUserFile /home/grupo2/public_html/.auth/.htpasswd_clientes3
 Require valid-user
 
 RewriteEngine On
+# WebSocket (tiempo real, TT-013): debe ir antes de las reglas HTTP
+RewriteCond %{HTTP:Upgrade} =websocket [NC]
+RewriteRule ^(.*)$ ws://127.0.0.1:18002/$1 [P,L]
 RewriteRule ^index\.php$ http://127.0.0.1:18002/ [P,L]
 RewriteRule ^(.*)$ http://127.0.0.1:18002/$1 [P,L]

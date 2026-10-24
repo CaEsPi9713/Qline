@@ -78,11 +78,14 @@ class PruebasRutaFinalizar(unittest.TestCase):
             raise ConnectionError("Redis caído (simulado)")
 
         import app.redis_atencion as ra
+        import app.eventos as ev
         ra.get_redis = roto
+        ev_orig, ev.get_redis = ev.get_redis, roto      # el aviso en vivo también falla, sin romper nada
         try:
             r = self.post("A-030", "V-01")
         finally:
             ra.get_redis = orig
+            ev.get_redis = ev_orig
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.json()["redis_liberado"])
         self.assertEqual(self.col.docs["A-030"]["estado"], "atendido")

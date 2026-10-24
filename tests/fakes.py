@@ -1,6 +1,6 @@
 """Colección MongoDB falsa en memoria para pruebas unitarias del ciclo de atención.
 
-Implementa solo lo que usa app.atencion: update_one con filtro de igualdad (rutas con punto) y
+Implementa solo lo que usan app.atencion y el panel: find, find_one y update_one con filtro de igualdad (rutas con punto, y $in) y
 $set con rutas con punto, find_one, y una bandera `falla` para simular una
 caída de MongoDB. Las operaciones son atómicas (candado), como lo es
 update_one sobre un documento en MongoDB.
@@ -62,7 +62,17 @@ class ColeccionFalsa:
                 actual = actual.get(parte) if isinstance(actual, dict) else None
             return actual
 
-        return all(valor(k) == v for k, v in filtro.items())
+        def cumple(k, esperado):
+            if isinstance(esperado, dict) and "$in" in esperado:
+                return valor(k) in esperado["$in"]
+            return valor(k) == esperado
+
+        return all(cumple(k, v) for k, v in filtro.items())
+
+    def find(self, filtro):
+        with self._candado:
+            self._revisar()
+            return [copy.deepcopy(d) for d in self.docs.values() if self._coincide(d, filtro)]
 
     def find_one(self, filtro):
         with self._candado:

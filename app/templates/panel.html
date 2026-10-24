@@ -22,6 +22,7 @@
     <div class="ventanilla-cuerpo">
       <div class="turno-grande">{{ v.turno.codigo }}</div>
       <span class="badge badge-{{ v.turno.prioridad }}">{{ v.turno.prioridad }}</span>
+      {% if v.turno.segundos_restantes is not none %}<p class="nota" style="margin:12px 0 0">Si no se presenta, se marcará como abandonado en <strong>{{ v.turno.segundos_restantes }} s</strong>.</p>{% endif %}
     </div>
     <div class="ventanilla-pie">
       {% if v.turno.puede_iniciar %}
@@ -41,6 +42,30 @@
     {% else %}
     <div class="ventanilla-cuerpo">
       <div class="sin-turno"><strong>&mdash;</strong>Sin turno asignado</div>
+    </div>
+    {% endif %}
+    {% if v.extras %}
+    <div class="ventanilla-extras">
+      <div class="nota"><strong>Otros turnos asignados a {{ v.id }}</strong></div>
+      {% for t in v.extras %}
+      <div class="fila extra">
+        <span class="codigo">{{ t.codigo }}</span>
+        <span class="badge badge-{{ t.estado }}">{{ t.estado|replace('_', ' ') }}</span>
+        {% if t.puede_iniciar %}
+        <form method="post" action="{{ base }}/panel/iniciar">
+          <input type="hidden" name="codigo" value="{{ t.codigo }}">
+          <input type="hidden" name="ventanilla" value="{{ v.id }}">
+          <button type="submit" class="btn-secundario">Iniciar atención</button>
+        </form>
+        {% elif t.puede_finalizar %}
+        <form method="post" action="{{ base }}/panel/finalizar">
+          <input type="hidden" name="codigo" value="{{ t.codigo }}">
+          <input type="hidden" name="ventanilla" value="{{ v.id }}">
+          <button type="submit" class="btn-ok">Finalizar atención</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
     </div>
     {% endif %}
   </section>

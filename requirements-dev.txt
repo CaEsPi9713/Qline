@@ -10,3 +10,6 @@ httpx2
 
 # Redis simulado en memoria (las pruebas no tocan el Redis real)
 fakeredis
+
+# MongoDB simulado en memoria (pruebas de llamado y de ventanilla única)
+mongomock

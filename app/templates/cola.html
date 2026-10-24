@@ -8,11 +8,17 @@
 <div class="grid grid-2">
   <div class="card">
     <h2>Llamar siguiente turno</h2>
-    <p class="sub">Elija la ventanilla que atiende. Redis entrega el siguiente turno de forma atómica: dos ventanillas nunca reciben el mismo.</p>
+    <p class="sub">Elija una ventanilla libre. Redis entrega el siguiente turno de forma atómica: dos ventanillas nunca reciben el mismo, y cada ventanilla atiende un turno a la vez.</p>
+    {% set libres = ventanillas|reject('in', ocupadas)|list %}
     <form method="post" action="{{ base }}/cola/llamar" class="fila">
-      <select name="ventanilla" class="select-auto" aria-label="Ventanilla">{% for v in ventanillas %}<option>{{ v }}</option>{% endfor %}</select>
-      <button type="submit">Llamar siguiente</button>
+      <select name="ventanilla" class="select-auto" aria-label="Ventanilla">
+        {% for v in ventanillas %}
+        {% if v in ocupadas %}<option value="{{ v }}" disabled>{{ v }} · ocupada ({{ ocupadas[v] }})</option>{% else %}<option value="{{ v }}">{{ v }}</option>{% endif %}
+        {% endfor %}
+      </select>
+      <button type="submit" {% if not libres %}disabled{% endif %}>Llamar siguiente</button>
     </form>
+    {% if not libres %}<p class="nota" style="margin:12px 0 0">Todas las ventanillas tienen un turno en curso. Finalícelo en el <a href="{{ base }}/panel">panel de atención</a> para llamar otro.</p>{% endif %}
     <p class="nota" style="margin:14px 0 0">Después de llamar, continúe en el <a href="{{ base }}/panel">panel de atención</a>.</p>
   </div>
 

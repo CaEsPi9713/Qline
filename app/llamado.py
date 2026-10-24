@@ -4,16 +4,24 @@ Llamar al siguiente turno (HU-005).
 Redis decide quién es el siguiente (ZPOPMIN atómico) y MongoDB registra el
 cambio de estado. Si MongoDB falla después de extraer el turno, se devuelve a
 la cola para no perderlo ni dejar estados parciales.
+
+Regla: una ventanilla atiende un turno a la vez. Si ya tiene uno `llamado` o
+`en_atencion` no se le asigna otro (409). Hay dos defensas: una comprobación
+previa contra MongoDB (que además repara una clave de Redis obsoleta) y la
+reserva atómica de Redis (que cubre dos solicitudes simultáneas).
 """
 from datetime import datetime, timezone
 
 from pymongo import ReturnDocument
 from pymongo.errors import PyMongoError
+from redis.exceptions import RedisError
 
-from app import cola
-from app.constantes import ESTADO_LLAMADO, ESTADO_PENDIENTE
+from app import cola, eventos
+from app.constantes import ESTADO_EN_ATENCION, ESTADO_LLAMADO, ESTADO_PENDIENTE, VENTANILLAS
 
 COLECCION = "turnos"
+ESTADOS_ACTIVOS = [ESTADO_LLAMADO, ESTADO_EN_ATENCION]
+TEXTO_ESTADO = {ESTADO_LLAMADO: "llamado", ESTADO_EN_ATENCION: "en atención"}
 
 
 class LlamadoError(Exception):
@@ -24,12 +32,49 @@ class LlamadoError(Exception):
         self.status = status
 
 
+def _turno_activo_de(db, ventanilla: str):
+    """
+    Turno `llamado` o `en_atencion` de la ventanilla según MongoDB, o None.
+    Si la clave de Redis apunta a un turno que ya terminó (o que no existe), la
+    libera: es un estado obsoleto y no debe bloquear la ventanilla.
+    """
+    col = db[COLECCION]
+    codigo = cola.turno_actual(ventanilla)
+    if codigo:
+        doc = col.find_one({"codigo": codigo})
+        if doc and doc.get("estado") in ESTADOS_ACTIVOS and doc.get("ventanilla") == ventanilla:
+            return doc
+        cola.liberar_ventanilla_si(ventanilla, codigo)
+    return col.find_one({"ventanilla": ventanilla, "estado": {"$in": ESTADOS_ACTIVOS}})
+
+
+def _ocupada(ventanilla: str, codigo: str, estado: str = None) -> LlamadoError:
+    detalle = f" ({TEXTO_ESTADO[estado]})" if estado in TEXTO_ESTADO else ""
+    return LlamadoError(
+        f"{ventanilla} ya tiene el turno {codigo}{detalle}. "
+        "Inícielo o finalícelo en el panel de atención antes de llamar otro.", 409)
+
+
 def llamar_siguiente_turno(db, ventanilla: str) -> dict:
     """
     Devuelve {"codigo": None, ...} si no hay turnos; si no, los datos del turno
     llamado. Lanza LlamadoError / ColaError / RedisError en los fallos.
     """
-    res = cola.extraer_siguiente(ventanilla)  # ColaError si la ventanilla es inválida
+    if ventanilla not in VENTANILLAS:
+        raise cola.ColaError(f"Ventanilla inválida: {ventanilla!r}")
+    try:
+        activo = _turno_activo_de(db, ventanilla)
+    except PyMongoError as e:
+        raise LlamadoError(f"MongoDB no disponible: {e}", 503)
+    if activo:
+        raise _ocupada(ventanilla, activo["codigo"], activo.get("estado"))
+
+    try:
+        res = cola.reservar_y_extraer(ventanilla)
+    except cola.VentanillaOcupada as e:
+        if e.codigo:
+            raise _ocupada(ventanilla, e.codigo)
+        raise LlamadoError(f"{ventanilla} está recibiendo un turno en este momento; intente de nuevo.", 409)
     if res is None:
         return {"codigo": None, "mensaje": "No hay turnos en espera."}
     codigo, score = res
@@ -65,9 +110,20 @@ def llamar_siguiente_turno(db, ventanilla: str) -> dict:
             f"El turno {codigo} estaba en la cola pero no figura como 'pendiente' en MongoDB; "
             "se descartó de la cola.", 409)
 
-    return {
+    prioridad = doc.get("prioridad") or cola.prioridad_de_score(score)
+    resultado = {
         "codigo": codigo,
         "ventanilla": ventanilla,
-        "prioridad": doc.get("prioridad") or cola.prioridad_de_score(score),
+        "prioridad": prioridad,
         "estado": ESTADO_LLAMADO,
     }
+    try:
+        cola.confirmar_asignacion(ventanilla, codigo, prioridad=prioridad)
+    except RedisError:
+        # MongoDB ya registró la llamada: no se deshace. La ventanilla sigue ocupada
+        # por MongoDB y el panel muestra el turno; solo falta el estado temporal.
+        resultado["aviso"] = "El turno se llamó, pero no se pudo registrar su estado temporal en Redis."
+    # Aviso en vivo (pantalla pública, consulta por QR); de mejor esfuerzo: nunca deshace la llamada.
+    eventos.publicar(eventos.TURNO_LLAMADO, codigo=codigo, estado=ESTADO_LLAMADO,
+                     ventanilla=ventanilla, prioridad=prioridad)
+    return resultado

@@ -22,9 +22,12 @@ from redis.exceptions import RedisError
 
 from app import atencion
 from app import cola as cola_redis
+from app import eventos
 from app.excepciones import ErrorAtencion
 from app.panel_atencion import estado_ventanillas
 from app.redis_atencion import liberar_turno
+from app.consulta_qr import QRError, consultar_por_token
+from app.rutas_eventos import registrar as registrar_rutas_eventos
 from app.schemas import TurnoEnAtencion, TurnoFinalizado
 from app.emitir import EmisionError, emitir_turno
 from app.consultar import ConsultaError, consultar_turno
@@ -71,6 +74,14 @@ def _version_css() -> int:
 
 
 templates.env.globals["css_version"] = _version_css()
+
+registrar_rutas_eventos(app, get_db=lambda: get_db())
+
+
+@app.get("/ws-prueba", response_class=HTMLResponse)
+def prueba_tiempo_real(request: Request):
+    """Verifica en el navegador si el WebSocket y los eventos de Redis funcionan por el proxy."""
+    return templates.TemplateResponse(request, "ws_prueba.html", {"base": BASE})
 
 _client = None
 
@@ -290,6 +301,7 @@ async def api_emitir_turno(request: Request):
 
     try:
         resultado = emitir_turno(get_db(), prioridad)
+        _publicar_evento(eventos.TURNO_EMITIDO, resultado["codigo"], "pendiente", prioridad=resultado.get("prioridad"))
         return {"ok": True, "turno": resultado}
     except EmisionError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=e.status)
@@ -319,6 +331,7 @@ def accion_emitir(request: Request, prioridad: str = Form("")):
     """Procesar emisión de turno desde formulario web (HU-001)."""
     try:
         turno = emitir_turno(get_db(), prioridad)
+        _publicar_evento(eventos.TURNO_EMITIDO, turno["codigo"], "pendiente", prioridad=turno.get("prioridad"))
         return templates.TemplateResponse(
             request,
             "turno_confirmado.html",
@@ -405,6 +418,40 @@ def vista_consultar(request: Request, codigo: str = ""):
     return _mostrar_consulta(request, codigo)
 
 
+# --- HU-013: consulta del turno desde el QR (solo lectura) ---------------------
+
+_SIN_CACHE = {"Cache-Control": "no-store"}
+_TITULO_QR = {
+    400: "Código QR no válido",
+    404: "Turno no encontrado",
+    503: "No podemos consultar su turno ahora",
+}
+
+
+@app.get("/api/turnos/qr/{token}")
+def api_turno_por_qr(token: str):
+    """Estado y posición del turno asociado a un QR (UUID v4). Solo lectura."""
+    try:
+        return JSONResponse({"ok": True, "turno": consultar_por_token(get_db(), token)}, headers=_SIN_CACHE)
+    except QRError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=e.status, headers=_SIN_CACHE)
+
+
+@app.get("/turno/qr/{token}", response_class=HTMLResponse)
+def vista_turno_por_qr(request: Request, token: str):
+    """Página móvil a la que lleva el QR del ticket: se actualiza sola, sin recargar."""
+    contexto = {"base": BASE, "token": token, "turno": None, "error": "", "reintentar": False,
+                "servicio_nombre": SERVICIO_NOMBRE}
+    status = 200
+    try:
+        contexto["turno"] = consultar_por_token(get_db(), token)
+    except QRError as e:
+        status = e.status
+        contexto.update(error=str(e), error_titulo=_TITULO_QR.get(e.status, "No se pudo mostrar el turno"),
+                        reintentar=e.status == 503)
+    return templates.TemplateResponse(request, "turno_qr.html", contexto, status_code=status, headers=_SIN_CACHE)
+
+
 @app.get("/turno/{codigo}", response_class=HTMLResponse)
 def vista_turno(request: Request, codigo: str):
     """Enlace directo a la consulta de un turno concreto."""
@@ -426,14 +473,23 @@ def cola_llamar(ventanilla: str = Form(...)):
 @app.get("/cola", response_class=HTMLResponse)
 def ver_cola(request: Request, msg: str = "", error: str = ""):
     turnos = []
+    redis_responde = True
     try:
         turnos = cola_redis.ver_cola()
     except RedisError as e:
+        redis_responde = False
         error = error or f"Redis no disponible: {e}"
+    # Ventanillas que ya tienen un turno: no se les puede llamar otro (una a la vez).
+    ocupadas = {}
+    try:
+        ventanillas_estado, _ = estado_ventanillas(get_db(), usar_redis=redis_responde)
+        ocupadas = {v["id"]: v["turno"]["codigo"] for v in ventanillas_estado if v["turno"]}
+    except Exception:
+        ocupadas = {}
     return templates.TemplateResponse(
         request, "cola.html",
         {"base": BASE, "servicio": SERVICIO_NOMBRE, "turnos": turnos, "error": error,
-         "mensaje": msg, "ventanillas": VENTANILLAS},
+         "mensaje": msg, "ventanillas": VENTANILLAS, "ocupadas": ocupadas},
     )
 
 
@@ -443,19 +499,40 @@ def _error_atencion(request: Request, exc: ErrorAtencion):
     return JSONResponse({"ok": False, "error": exc.mensaje}, status_code=exc.status_code)
 
 
+def _publicar_evento(tipo: str, codigo: str, estado: str, ventanilla: str = None, prioridad: str = None) -> None:
+    """Avisa en vivo un cambio de estado (TT-013). De mejor esfuerzo: nunca rompe ni deshace la operación."""
+    try:
+        eventos.publicar(tipo, codigo=codigo, estado=estado, ventanilla=ventanilla, prioridad=prioridad)
+    except Exception:
+        pass
+
+
+def _confirmar_presencia(codigo: str) -> None:
+    """El cliente se presentó: su Hash temporal deja de vencer. Si Redis falla, no se deshace la atención."""
+    try:
+        cola_redis.confirmar_presencia(codigo)
+    except RedisError:
+        pass
+
+
 @app.post("/api/atencion/iniciar", response_model=TurnoEnAtencion)
 def api_iniciar_atencion(codigo: str = Form(...), ventanilla: str = Form(...)):
     """Iniciar la atención de un turno llamado: llamado -> en_atencion (HU-006)."""
-    return atencion.iniciar_atencion(get_db()["turnos"], codigo, ventanilla)
+    resultado = atencion.iniciar_atencion(get_db()["turnos"], codigo, ventanilla)
+    _confirmar_presencia(resultado["codigo"])
+    _publicar_evento(eventos.ATENCION_INICIADA, resultado["codigo"], "en_atencion", resultado.get("ventanilla"))
+    return resultado
 
 
 @app.post("/api/atencion/finalizar", response_model=TurnoFinalizado)
 def api_finalizar_atencion(codigo: str = Form(...), ventanilla: str = Form(...)):
     """Finalizar la atención: en_atencion -> atendido y liberar Redis (HU-007)."""
-    return atencion.finalizar_atencion(
+    resultado = atencion.finalizar_atencion(
         get_db()["turnos"], codigo, ventanilla,
         al_finalizar=lambda c: liberar_turno(c, ventanilla.strip()),
     )
+    _publicar_evento(eventos.ATENCION_FINALIZADA, resultado["codigo"], "atendido", resultado.get("ventanilla"))
+    return resultado
 
 
 def _redirigir_panel(**params) -> RedirectResponse:
@@ -484,6 +561,8 @@ def panel_iniciar(codigo: str = Form(...), ventanilla: str = Form(...)):
         r = atencion.iniciar_atencion(get_db()["turnos"], codigo, ventanilla)
     except ErrorAtencion as e:
         return _redirigir_panel(error=e.mensaje)
+    _confirmar_presencia(r["codigo"])
+    _publicar_evento(eventos.ATENCION_INICIADA, r["codigo"], "en_atencion", r.get("ventanilla"))
     return _redirigir_panel(msg=f"{r['ventanilla']}: atención iniciada para {r['codigo']}.")
 
 
@@ -496,6 +575,7 @@ def panel_finalizar(codigo: str = Form(...), ventanilla: str = Form(...)):
         )
     except ErrorAtencion as e:
         return _redirigir_panel(error=e.mensaje)
+    _publicar_evento(eventos.ATENCION_FINALIZADA, r["codigo"], "atendido", r.get("ventanilla"))
     msg = f"{r['ventanilla']}: atención de {r['codigo']} finalizada ({r['atencion_seg']} s)."
     if r["redis_liberado"] is False:
         msg += " Aviso: no se pudo limpiar el estado en Redis."

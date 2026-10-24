@@ -10,7 +10,9 @@ from pathlib import Path
 
 import redis
 from dotenv import load_dotenv
+from redis.backoff import NoBackoff
 from redis.exceptions import RedisError
+from redis.retry import Retry
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -35,6 +37,10 @@ def get_redis() -> redis.Redis:
             decode_responses=True,
             socket_connect_timeout=3,
             socket_timeout=3,
+            # Redis está en la misma máquina: si no responde, se falla rápido (y cada
+            # operación lo trata como "Redis no disponible") en lugar de reintentar
+            # varias veces y dejar esperando al usuario.
+            retry=Retry(NoBackoff(), 0),
         )
     return _client
 

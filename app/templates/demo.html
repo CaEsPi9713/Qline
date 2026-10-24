@@ -25,7 +25,7 @@
 
 <div class="card-cabecera" style="margin-top:28px">
   <h2 style="margin:0">Recorrido</h2>
-  <span class="nota"><span id="avance-texto">0 de 10 pasos</span></span>
+  <span class="nota"><span id="avance-texto">0 de 15 pasos</span></span>
 </div>
 <div class="progreso" aria-hidden="true"><span id="avance-barra"></span></div>
 
@@ -147,6 +147,68 @@
     </div>
     <div class="paso-acciones">
       <a class="btn" href="{{ base }}/?coleccion=turnos">Abrir CRUD turnos</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="11">
+    <div>
+      <div class="rol">Seguimiento 3 · Operador · Redis (Hash con TTL)</div>
+      <h3>Estado temporal del turno llamado</h3>
+      <p>Al llamar a un turno, Redis guarda su estado en un Hash que caduca a los 180 s si el cliente no se presenta. Llame a un turno desde la cola y, en el servidor, mire la clave (reemplace <code>A-001</code> por el turno llamado):</p>
+      <div class="terminal" data-copiar>redis-cli ttl grupo2:qline:turno:A-001</div>
+      <div class="esperado"><strong>Debe verse:</strong> un número cercano a 180 que baja. Al pulsar <em>Iniciar atención</em> en el panel, la clave desaparece (<code>-2</code>).</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="12">
+    <div>
+      <div class="rol">Seguimiento 3 · Cliente · Consulta por QR</div>
+      <h3>Seguir el turno desde el celular</h3>
+      <p>Cree dos turnos con enlace de QR y abra uno de los enlaces en el celular:</p>
+      <div class="terminal" data-copiar>python scripts/crear_turnos_qr_demo.py --cantidad 2</div>
+      <div class="esperado"><strong>Debe verse:</strong> la página del turno con su posición y el indicador «En vivo». Al llamar al siguiente en la cola, la posición cambia sola, sin recargar; al llamar a ese turno aparece «¡Es su turno!» con la ventanilla y la cuenta regresiva.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="13">
+    <div>
+      <div class="rol">Seguimiento 3 · Redis Pub/Sub + WebSocket</div>
+      <h3>Verificar el tiempo real</h3>
+      <p>Comprueba que el WebSocket atraviesa el servidor y que un evento publicado en Redis llega al navegador.</p>
+      <div class="esperado"><strong>Debe verse:</strong> los cuatro pasos en «OK» y el aviso «El WebSocket funciona».</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/ws-prueba">Abrir la prueba</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="14">
+    <div>
+      <div class="rol">Seguimiento 3 · Concurrencia (TT-016)</div>
+      <h3>Prueba formal: 10 solicitudes simultáneas, 0 duplicados</h3>
+      <p>Con la cola vacía y las ventanillas libres, en el servidor:</p>
+      <div class="terminal" data-copiar>python scripts/prueba_concurrencia.py --http --informe docs/evidencia/concurrencia.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> <code>Todo OK · turnos duplicados: 0</code>. La prueba elimina sus turnos; reinicie después el contador (primer bloque de esta página).</div>
+    </div>
+    <div class="paso-acciones">
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="15">
+    <div>
+      <div class="rol">Seguimiento 3 · Mediciones y fallos (TT-018, TT-019)</div>
+      <h3>Rendimiento de Redis y comportamiento cuando Redis no responde</h3>
+      <div class="terminal" data-copiar>python scripts/medir_rendimiento.py --informe docs/evidencia/rendimiento.md</div>
+      <div class="terminal" data-copiar>python scripts/probar_fallos_redis.py --informe docs/evidencia/fallos.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> las medianas de Redis y MongoDB con su mínimo y máximo, contrastadas con las hipótesis de S1; y todos los casos de datos inválidos y de Redis caído respondiendo de forma controlada, sin errores 500.</div>
+    </div>
+    <div class="paso-acciones">
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
