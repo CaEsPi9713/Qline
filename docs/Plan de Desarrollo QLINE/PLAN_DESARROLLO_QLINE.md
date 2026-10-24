@@ -117,10 +117,11 @@ Turnos asignados duplicados = 0
 QLine debe llegar a ofrecer:
 
 - emisión web de turnos;
+- interfaz de emisión tipo quiosco para clientes, sin navegación de administración, operación o supervisión dentro de esa vista;
 - prioridad `normal` y `preferencial`;
 - código único de turno;
 - consulta de estado y posición;
-- acceso al turno mediante QR en el MVP final;
+- acceso al turno mediante QR con UUID v4 independiente del código visible, validación del enlace y consulta actualizada automáticamente en el MVP final;
 - cola activa en Redis;
 - atención desde múltiples ventanillas;
 - selección atómica del siguiente turno;
@@ -128,7 +129,9 @@ QLine debe llegar a ofrecer:
 - abandono de un turno llamado después de 180 segundos sin respuesta;
 - pantalla pública de turnos llamados;
 - historial persistente en MongoDB;
+- descarga JSON del historial completo según filtros aplicados;
 - dashboard básico;
+- descarga JSON de los indicadores del dashboard según el SLA seleccionado;
 - métricas de espera, atención y SLA;
 - recuperación de la cola después de una pérdida de Redis;
 - CRUD administrativo de la entidad central `turnos` para cumplir el requisito académico;
@@ -197,6 +200,7 @@ MongoDB es la fuente persistente de QLine.
 Debe conservar como mínimo:
 
 - turnos;
+- identificador `qr_token` (UUID v4) de los turnos emitidos desde la ampliación S3;
 - estado persistente;
 - servicio;
 - prioridad;
@@ -346,6 +350,7 @@ Modelo objetivo:
 {
   "_id": "ObjectId",
   "codigo": "A-015",
+  "qr_token": "UUID-v4 (string)",
   "servicio": "atencion_general",
   "prioridad": "preferencial",
   "estado": "pendiente",
@@ -381,6 +386,16 @@ Modelo objetivo:
 - `metricas.atencion_seg` debe poder calcularse a partir de `inicio_atencion` y `finalizado`.
 
 > El JSON Schema real de MongoDB debe reflejar estas reglas sin impedir que campos que todavía no aplican permanezcan `null`.
+
+### Ampliación S3 del contrato: identificador de consulta QR
+
+- `codigo` (`A-001`, etc.) permanece como identificador visible y operacional. El contador y la cola de Redis **no cambian**.
+- Los turnos operacionales **nuevos** generan un `qr_token` UUID v4 en formato de cadena, separado de `codigo`, que se persiste en el mismo documento MongoDB.
+- `qr_token` es **opcional** en el esquema para mantener compatibles los turnos anteriores y los datos sintéticos que no lo contengan. Un valor presente debe tener formato UUID v4 válido.
+- Se requiere unicidad de los `qr_token` presentes mediante índice único parcial que incluya exclusivamente valores de tipo cadena; la estrategia concreta y su validación corresponden a Carlos (TT-001/TT-002).
+- No se debe reconstruir ni eliminar la colección como parte de la actualización documental. La aplicación del validador/índice requiere plan técnico de migración y acuerdo del equipo: en S2 se documentó la limitación de permisos de `collMod` del usuario MongoDB del curso.
+- El token se utiliza únicamente para resolver la consulta del turno mediante HU-013; no se almacena en Redis ni altera los estados, prioridades o métricas.
+- El QR contiene una URL pública del sistema que respeta `BASE_PATH` y dirige a `/turno/qr/{uuid}`; debe utilizar el dominio accesible desde el celular, no `localhost`.
 
 ---
 
@@ -517,6 +532,14 @@ No debe presentarse como comportamiento normal del operador.
 - Se muestra una confirmación al cliente.
 - Un fallo no debe dejar silenciosamente un turno duplicado o parcialmente confirmado.
 
+### Ampliación S3: interfaz tipo quiosco (retroalimentación S2)
+
+- Ofrece una vista sencilla de emisión para el cliente, apta para tablet o dispositivo similar.
+- Dentro del modo quiosco solo aparecen los controles necesarios para seleccionar `normal` o `preferencial`, emitir y obtener la confirmación del turno.
+- La vista de quiosco no muestra enlaces de operador, supervisor ni administración; esos módulos permanecen disponibles desde la navegación general del sistema.
+- Reutiliza el backend ya implementado de HU-001 sin crear otro flujo de emisión, otra prioridad o un rol de autenticación complejo.
+- Permite comprobar por separado el recorrido del cliente y el acceso a la navegación técnica/administrativa.
+
 ### Dependencias
 
 - Contrato `turnos`.
@@ -528,7 +551,7 @@ No debe presentarse como comportamiento normal del operador.
 | Seguimiento | Expectativa |
 |---|---|
 | **S2** | **REQUIRED.** Emisión funcional con MongoDB + Redis reales. |
-| **S3** | Validar errores, consistencia, concurrencia indirecta y fallos de motor. |
+| **S3** | Validar errores, consistencia, concurrencia indirecta y fallos de motor; integrar la presentación tipo quiosco del cliente sin alterar la operación existente. |
 | **S4** | Instalación reproducible y documentación final. |
 | **Final** | Parte del flujo de demo principal. |
 
@@ -588,6 +611,18 @@ Además:
 - No expone credenciales ni información sensible.
 - Un QR inválido produce respuesta controlada.
 - El destino utiliza la misma fuente funcional que HU-002.
+- Cada turno operacional nuevo tiene un `qr_token` UUID v4 persistido, único e independiente del código consecutivo visible.
+- El ticket de confirmación presenta el código visible y un QR legible que enlaza al turno desde otro dispositivo.
+- El enlace usa la URL pública de QLine, respeta `BASE_PATH` y no utiliza `localhost`.
+- Los turnos históricos sin `qr_token` permanecen consultables por el código existente de HU-002.
+- Los fallos de generación o persistencia del token se gestionan de forma controlada, sin confirmar un turno incompleto silenciosamente.
+- Incluye pruebas automáticas para UUID, persistencia, URL y compatibilidad con turnos previos.
+
+### Dependencias
+
+- **Funcional:** HU-001 para emitir y asociar el identificador a un turno; contrato compartido `turnos` (TT-001/TT-002).
+- **De integración:** HU-013 consume el enlace y token generados; ambas historias pueden desarrollarse en paralelo una vez acordado el contrato de `qr_token` y la ruta de consulta.
+- **Coordinación de contrato:** Carlos mantiene el diseño y los índices de MongoDB. La modificación del esquema requiere el acuerdo establecido en la sección 26.
 
 ### Evolución
 
@@ -805,6 +840,15 @@ Debe poder derivarse:
 
 Los datos permanecen aunque el turno ya no esté en Redis.
 
+### Ampliación S3: descargar historial en JSON
+
+- El supervisor puede descargar un archivo `.json` desde el historial, sin sustituir la vista ni la API existentes.
+- El archivo incluye **todos los registros que coincidan con los filtros aplicados**, no solamente la página o los primeros resultados visibles.
+- Conserva los campos de auditoría y las métricas derivadas ya contempladas en HU-010; evita credenciales o información sensible no requerida.
+- La descarga reutiliza el filtrado y la lógica de consulta existentes; no cambia los estados ni datos persistidos.
+- Se prueban exportaciones con y sin registros y el manejo controlado de errores de consulta.
+- No se requiere exportación CSV.
+
 ### Evolución
 
 | Seguimiento | Expectativa |
@@ -833,6 +877,14 @@ Los datos permanecen aunque el turno ya no esté en Redis.
 - tiempo promedio de atención;
 - ventanillas activas o con turno actual;
 - cumplimiento/incumplimiento de un objetivo SLA definido.
+
+### Ampliación S3: descargar indicadores en JSON
+
+- El supervisor puede descargar un archivo `.json` con los indicadores del dashboard.
+- El archivo conserva el **objetivo SLA seleccionado** y los valores calculados por los aggregation pipelines existentes.
+- La descarga reutiliza HU-011 sin recalcular indicadores con una lógica paralela ni alterar datos persistidos.
+- Se prueban la descarga, el SLA seleccionado, la ausencia de datos y los errores controlados.
+- No se requiere exportación CSV.
 
 ### Evolución
 
@@ -871,6 +923,50 @@ Los datos permanecen aunque el turno ya no esté en Redis.
 | **S2** | Diseñar compatibilidad; no es requisito principal de demo. |
 | **S3** | **REQUIRED/TARGET.** Manejo de falla + evidencia de recuperación. |
 | **Final** | Documentado y reproducible. |
+
+---
+
+## HU-013 · Validar QR y consultar el turno con actualización automática
+
+**Épica:** EP-02  
+**Responsable principal:** Alessandro Cambronero · `acambronero`  
+**Prioridad:** SHOULD · Ampliación acordada tras la retroalimentación de S2
+
+**Como** cliente  
+**Quiero** escanear el QR y consultar automáticamente el estado actualizado de mi turno  
+**Para** conocer mi posición o la ventanilla asignada sin introducir manualmente el código.
+
+### Criterios de aceptación
+
+- El QR abre una página web de QLine adaptada al navegador móvil, sin requerir una aplicación nativa.
+- La ruta pública acordada es `/turno/qr/{uuid}`, integrada con `BASE_PATH` y el dominio del despliegue.
+- La ruta valida el formato de UUID v4 y verifica que exista un documento `turnos` asociado a ese `qr_token`.
+- La página muestra código, servicio, prioridad, estado y ventanilla cuando corresponda; para turnos `pendiente` muestra posición y cantidad de turnos por delante, si están disponibles.
+- Obtiene el estado persistente desde MongoDB y reutiliza la lógica de HU-002 para consultar la posición en Redis, sin crear una segunda semántica de consulta.
+- La información se **actualiza automáticamente sin recarga manual** cuando cambia el turno; la integración en tiempo real se coordina con TT-013 (Pub/Sub + WebSocket, según la arquitectura aprobada).
+- Un UUID de formato inválido o inexistente genera una respuesta controlada; una falla MongoDB y una falla Redis se distinguen, y una falla Redis no oculta el estado disponible desde MongoDB.
+- La consulta es de solo lectura: no modifica el turno, su orden en la cola ni las claves Redis.
+- No se muestran datos personales ni credenciales, y el enlace no modifica permisos o roles.
+- Existen pruebas automatizadas de consulta válida, UUID incorrecto, turno inexistente, actualización de estado, error Redis y navegación móvil.
+
+### Dependencias
+
+- **Funcional:** HU-003 genera el `qr_token` que permite resolver el enlace; HU-002 define el contrato de estado y posición; `turnos` (TT-001/TT-002) contiene el vínculo UUID → turno.
+- **De integración:** TT-013 provee el mecanismo de notificación en vivo. Alessandro puede construir y probar la vista con UUID/documentos simulados mientras se completa HU-003 y la integración Pub/Sub.
+- El acoplamiento entre HU-003 y HU-013 queda limitado al campo `qr_token`, el formato UUID v4 y la ruta `/turno/qr/{uuid}`; no modifica el contrato operacional Redis.
+
+### Evidencia esperada
+
+- Escaneo desde otro dispositivo, página de turno visible y actualización automática demostrable.
+- Casos UUID inválido/inexistente y falla Redis documentados, más pruebas automáticas y PR independiente.
+
+### Evolución
+
+| Seguimiento | Expectativa |
+|---|---|
+| **S2** | No formaba parte del núcleo requerido; se identifica a partir del feedback posterior al seguimiento. |
+| **S3** | TARGET: validación del QR, consulta móvil y actualización automática integrada con TT-013. |
+| **S4/Final** | Integrado, probado y demostrable junto con HU-003. |
 
 ---
 
@@ -978,6 +1074,20 @@ Nunca incluir valores secretos reales.
 | **TT-018** | Mediciones: 3 operaciones, >=3 ejecuciones, mediana | Equipo, consolidación por responsables | rúbrica S3 |
 | **TT-019** | Casos normal, conexión fallida y datos inválidos | Cada dueño de módulo | evidencia S3 |
 | **TT-020** | `docs/decisiones.md` | Equipo | decisiones y alternativas |
+
+### Ampliaciones funcionales derivadas del feedback S2
+
+Estas ampliaciones **no sustituyen** las tareas técnicas oficiales de S3 ni se declaran completadas:
+
+| HU | Trabajo adicional | Responsable | Integración principal |
+|---|---|---|---|
+| **HU-001** | Vista simplificada de emisión en modo quiosco | Aaron | Backend existente de emisión y navegación general separada |
+| **HU-003** | UUID v4 persistente y QR del ticket | Aaron | Contrato `qr_token` revisado con Carlos |
+| **HU-013 (nueva)** | Escaneo, validación y consulta móvil con actualización automática | Alessandro | HU-002 + HU-003 + TT-013 |
+| **HU-010** | Descarga JSON de todos los registros filtrados del historial | Carlos | Consultas existentes de HU-010 |
+| **HU-011** | Descarga JSON de indicadores con el SLA seleccionado | Carlos | Aggregation pipelines existentes de HU-011 |
+
+La ampliación de `turnos` exige revisión de esquema e índices por Carlos (TT-001/TT-002), sin autorizar aquí ninguna migración, recreación de colección ni operación sobre el servidor.
 
 ### Nota sobre rendimiento
 
@@ -1101,6 +1211,17 @@ Debe demostrar:
 - [ ] tag `v0.3.0`;
 - [ ] bitácora `S3.md`.
 
+### Ampliaciones acordadas después del seguimiento S2
+
+Las siguientes metas de producto se añaden a la planificación de S3; no reemplazan los requisitos académicos anteriores ni constituyen evidencia de implementación:
+
+- [ ] HU-001: comprobar modo quiosco de emisión sin mostrar opciones internas de otros roles.
+- [ ] HU-003: generar UUID v4 y QR en nuevos turnos, manteniendo el código `A-NNN` y la compatibilidad histórica.
+- [ ] HU-013: demostrar escaneo, validación y consulta móvil con actualización automática de estado/posición, integrada con TT-013.
+- [ ] HU-010: descargar todos los registros del historial que cumplan los filtros en JSON.
+- [ ] HU-011: descargar métricas del dashboard en JSON respetando el SLA seleccionado.
+- [ ] Validar con el equipo la evolución del campo/índice `qr_token` antes de ejecutar cambios de esquema o migraciones.
+
 ---
 
 ## 10.4 Seguimiento 4 / Release candidate
@@ -1178,14 +1299,16 @@ La llamada del siguiente turno es atómica.
 
 ### Desarrollo paralelo / posterior
 
-- HU-003 · QR.
+- HU-001 · ampliación de interfaz cliente tipo quiosco.
+- HU-003 · UUID v4 persistente y QR del ticket (contrato `qr_token`).
 - HU-009 · Pantalla pública.
-- Parte visual de actualizaciones en vivo durante S3.
+- Parte visual de actualizaciones en vivo durante S3 (TT-013).
 
 ### Dependencias de integración
 
 - modelo `turnos` de Carlos;
-- cola Redis de Alessandro.
+- cola Redis de Alessandro;
+- revisión con Carlos del campo UUID y su índice; contrato acordado con Alessandro para `/turno/qr/{uuid}` (HU-013).
 
 ### Regla contra bloqueo
 
@@ -1226,8 +1349,9 @@ La integración real debe reemplazar los mocks antes de cerrar S2.
 
 ### Desarrollo paralelo / posterior
 
-- HU-010 · Historial.
-- HU-011 · Dashboard/SLA.
+- HU-010 · Historial y descarga JSON de todos los registros filtrados.
+- HU-011 · Dashboard/SLA y descarga JSON según el umbral seleccionado.
+- Revisión TT-001/TT-002: validación y unicidad parcial del `qr_token` opcional, sin ejecutarse una migración destructiva sin acuerdo.
 - TT-014 · Índices + explain.
 - TT-015 · Aggregation pipeline.
 - TT-028 · Script de carga MongoDB final.
@@ -1266,6 +1390,7 @@ Los demás pueden trabajar con el contrato antes de que todo su bloque esté ter
 - TT-011 · Tres estructuras Redis.
 - soporte Redis para TT-012 TTL.
 - soporte Pub/Sub para TT-013.
+- HU-013 · consulta por UUID y QR en navegador móvil con actualización automática, reutilizando HU-002 y TT-013.
 - TT-016 · Prueba formal de concurrencia.
 - TT-027 · Mapa de claves.
 
@@ -1281,7 +1406,7 @@ Puede precargar Redis usando turnos sintéticos y no necesita esperar la interfa
 
 ### No le corresponde como dueño
 
-- UI cliente;
+- UI de **emisión** y **generación** de QR del cliente (HU-001/HU-003); se exceptúa la vista de **consulta QR** HU-013, que sí le corresponde;
 - JSON Schema MongoDB;
 - historial/dashboard;
 - implementación principal del ciclo iniciar/finalizar.
@@ -1380,6 +1505,20 @@ pero puede desarrollarse con datos controlados.
 ### Regla obligatoria
 
 > Una dependencia de integración **NO es una justificación para detener el desarrollo** cuando el contrato ya está definido.
+
+## 13.3 Dependencias de las ampliaciones posteriores a S2
+
+| Entregable | Dependencia funcional | Dependencia de integración / estrategia sin bloqueo |
+|---|---|---|
+| HU-001, modo quiosco (Aaron) | Emisión funcional HU-001 | Se desarrolla como presentación independiente, reutilizando el backend e impidiendo navegación interna solo en la vista quiosco. |
+| HU-003, UUID/QR (Aaron) | HU-001 y contrato `turnos` | Carlos revisa campo e índice `qr_token`; HU-013 consume el enlace. Los tests pueden usar mocks del modelo y URL. |
+| HU-013, consulta QR (Alessandro) | HU-003 como productor del token; HU-002 para estado y posición | TT-013 proporciona los eventos en vivo; Alessandro puede usar UUID/documentos simulados hasta la integración. |
+| HU-010, descarga JSON (Carlos) | Historial HU-010 | Reutiliza filtros, campos y métricas; sin dependencia de HU-003 ni Redis adicional. |
+| HU-011, descarga JSON (Carlos) | Dashboard HU-011 | Reutiliza aggregation pipelines y el SLA seleccionado; sin dependencia de HU-003 ni Redis adicional. |
+
+**Contrato mínimo común HU-003 ↔ HU-013:** `qr_token` (UUID v4 en MongoDB), URL `/turno/qr/{uuid}` construida con dominio público + `BASE_PATH`, consulta de solo lectura mediante HU-002 y manejo diferenciado de token inválido, no encontrado, Redis/MongoDB no disponibles. La actualización automática se integra mediante TT-013.
+
+La adaptación del esquema compartido se decide con el equipo conforme a la sección 26; esta documentación no representa autorización para recrear colecciones ni ejecutar migraciones. La dependencia funcional describe el orden lógico del flujo completo, **no** impide implementar cada HU por separado con contratos y mocks compatibles.
 
 ---
 
@@ -1798,6 +1937,19 @@ Cada integrante debe entender:
 | No CRUD de ventanillas para S2 | Cerrada |
 | FastAPI / PyMongo / redis-py / Jinja2 | Cerrada desde S1 |
 
+### Ampliaciones de alcance acordadas en la planificación posterior a S2
+
+Las siguientes decisiones recogen la retroalimentación de S2 y la distribución definida para la próxima iteración. **No significan trabajo implementado ni sustituyen la revisión colegiada del contrato MongoDB.**
+
+| Decisión de planificación | Responsable / condición |
+|---|---|
+| Conservar `A-NNN` visible y añadir UUID v4 `qr_token` en turnos nuevos | Aaron, HU-003; esquema e índice revisados por Carlos |
+| Mostrar QR en el ticket para abrir una URL pública de consulta | Aaron, HU-003 |
+| Validar el UUID y mostrar estado/posición con actualización automática | Alessandro, HU-013; integra TT-013 |
+| Interfaz sencilla tipo quiosco para emisión, sin navegación administrativa | Aaron, ampliación HU-001 |
+| Descargar historial completo filtrado en JSON y dashboard JSON según SLA | Carlos, ampliación HU-010/HU-011 |
+| No incorporar CSV, predicción de espera, push móvil ni cambios al flujo Redis por estos ajustes | Control de alcance |
+
 ---
 
 # 26. Decisiones que requieren acuerdo si aparecen durante desarrollo
@@ -1815,15 +1967,17 @@ No deben resolverse unilateralmente:
 - cambiar el flujo de branches;
 - ampliar el alcance del MVP.
 
+**Aplicación de esta regla a S3:** antes de modificar el esquema/índices del motor MongoDB para `qr_token`, Carlos y el equipo deben revisar y acordar la compatibilidad con documentos existentes, la unicidad parcial y una migración no destructiva. La bitácora S2 registra que la cuenta del curso no puede utilizar `collMod` sobre una colección existente. La documentación por sí sola no habilita ejecutar `--recrear`, borrar datos ni desplegar cambios.
+
 ---
 
 # 27. Resumen ejecutivo de responsabilidades
 
 | Integrante | Branch | S2 principal | Después de S2 |
 |---|---|---|---|
-| **Aaron Benavides** | `abenavides` | Emitir, consultar, `.env.example` | QR, pantalla pública |
-| **Carlos Espinoza** | `cespinoza` | Modelo Mongo, JSON Schema, CRUD, init DB | Historial, dashboard, índices/aggregation |
-| **Alessandro Cambronero** | `acambronero` | Redis, cola, llamar siguiente | concurrencia, estructuras Redis, Pub/Sub |
+| **Aaron Benavides** | `abenavides` | Emitir, consultar, `.env.example` | Quiosco HU-001, UUID/QR HU-003, pantalla pública HU-009 |
+| **Carlos Espinoza** | `cespinoza` | Modelo Mongo, JSON Schema, CRUD, init DB | Historial y dashboard con descarga JSON, revisión índice/esquema `qr_token`, índices/aggregation |
+| **Alessandro Cambronero** | `acambronero` | Redis, cola, llamar siguiente | HU-013 consulta QR automática, concurrencia, estructuras Redis, Pub/Sub TT-013 |
 | **Abigail Urbina** | `aurbina` | Iniciar, finalizar, datos sintéticos | abandono/TTL, recuperación |
 
 ---
