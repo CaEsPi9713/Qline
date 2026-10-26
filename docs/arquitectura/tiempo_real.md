@@ -40,7 +40,7 @@ JSON pequeño, **sin datos personales**. Los campos sin valor se omiten.
 
 Además, el servidor envía por el WebSocket: `conectado` (al abrir) y `latido` (cada 25 s, para mantener viva la conexión a través de proxies).
 
-> **Estado:** los cuatro eventos del flujo principal ya se publican (Fase 4). Falta solo `turno_abandonado`, que debe publicar el barrido de abandono de Abigail (HU-008).
+> **Estado:** los cinco eventos del flujo ya se publican. `turno_abandonado` lo publica el barrido de abandono (HU-008) después de confirmar el cambio en MongoDB; si Redis falla en ese momento el abandono se conserva y el resultado del barrido lo informa.
 
 ### Dónde se publica cada evento
 

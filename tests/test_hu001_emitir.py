@@ -212,7 +212,7 @@ class TestHU001EmitirTurno(unittest.IsolatedAsyncioTestCase):
         req_json.headers = {"content-type": "application/json"}
         req_json.json = AsyncMock(return_value={"prioridad": "normal"})
 
-        with patch("app.main.get_db"), patch("app.main.emitir_turno") as mock_emitir:
+        with patch("app.main.get_db"), patch("app.main.emitir_turno") as mock_emitir, patch("app.main._publicar_evento"):
             mock_emitir.return_value = {
                 "id": str(self.fake_id),
                 "codigo": "A-001",
@@ -232,7 +232,7 @@ class TestHU001EmitirTurno(unittest.IsolatedAsyncioTestCase):
         req_form.headers = {"content-type": "application/x-www-form-urlencoded"}
         req_form.form = AsyncMock(return_value={"prioridad": "preferencial"})
 
-        with patch("app.main.get_db"), patch("app.main.emitir_turno") as mock_emitir:
+        with patch("app.main.get_db"), patch("app.main.emitir_turno") as mock_emitir, patch("app.main._publicar_evento"):
             mock_emitir.return_value = {
                 "id": str(self.fake_id),
                 "codigo": "A-002",

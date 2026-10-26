@@ -2,81 +2,64 @@
 
 **Hito:** integración, pruebas y medición (tag objetivo `v0.3.0`)
 **Área:** ciclo de atención y continuidad operacional
-**Fuentes:** Plan Maestro (§8 HU, §9 tareas, §10.3, §12.4, §18) y bitácora S3 en elaboración.
+**Estado:** implementado e integrado; falta la revisión de Abigail y las verificaciones marcadas como pendientes.
+**Detalle y evidencia:** [`S3.md`](S3.md), sección 5 · decisiones D-12 a D-17 en [`../decisiones.md`](../decisiones.md).
 
-## 1. Qué te corresponde en S3
+> **Autoría.** El diseño de los módulos de dominio es de Abigail. Las piezas que faltaban en su entrega y la integración las implementó Alessandro Cambronero con asistencia de Claude Code (detalle en la nota de autoría de `S3.md`). Abigail debe revisar y hacer suyo este trabajo antes de la entrega.
 
-| ID | Entregable | Origen | Estado esperado S3 |
-|---|---|---|---|
-| HU-008 | Abandono de turno llamado a los 180 s | Plan §8 (S3: TARGET) | Integrado y probado |
-| HU-012 | Recuperación de la cola tras pérdida de Redis | Plan §8 (S3: REQUIRED/TARGET) | Integrado y con evidencia antes/después |
-| TT-012 | TTL / estado temporal — lado abandono (con Alessandro) | Plan §9 | Lado Redis ya hecho por Alessandro; falta el barrido |
-| TT-017 | Prueba de caída y rehidratación | Plan §9 | Evidencia en el servidor |
-| TT-018 | Mediciones de tu parte (recuperación, barrido), ≥ 3 ejecuciones, mediana | Plan §9 y §18.2 | Informe con mínimo, máximo y mediana |
-| TT-019 | Casos normal, conexión fallida y datos inválidos de tus módulos | Plan §9 | Evidencia |
-| TT-020 | Tus decisiones en `docs/decisiones.md` | Plan §9 | Sección completa |
-| — | Tu sección de `docs/seguimientos/S3.md` | Plan §10.3 | Con hechos reales |
+## 1. Qué corresponde a Abigail en S3
 
-### Pendientes de la bitácora que dependen de ti
-- HU-008: «el barrido de abandono debe pasar el turno a `abandonado`, liberar la ventanilla y publicar `turno_abandonado`» (acordado con Alessandro).
-- HU-012: el caso abierto de Alessandro — un turno extraído de la cola cuyo cambio de estado no llegó a MongoDB queda `pendiente` fuera de la cola; «la rehidratación lo recupera».
-- Requisito del seguimiento «Recuperación / rehidratación» y la parte de «mediciones de recuperación».
+| ID | Entregable | Estado |
+|---|---|---|
+| HU-008 | Abandono de turno llamado a los 180 s | Hecho; verificado en el servidor (flujo manual) |
+| HU-012 | Recuperación de la cola tras pérdida de Redis | Hecho; verificado en el servidor |
+| TT-012 | Estado temporal con TTL, lado abandono | Hecho: el barrido corre con la aplicación |
+| TT-017 | Prueba de caída y rehidratación | Hecho; [`recuperacion.md`](../evidencia/recuperacion.md) |
+| TT-018 | Mediciones (≥ 3 ejecuciones, mediana) | Hecho; [`rendimiento_recuperacion.md`](../evidencia/rendimiento_recuperacion.md) |
+| TT-019 | Casos normal, conexión fallida y datos inválidos | Hecho; [`fallos_recuperacion.md`](../evidencia/fallos_recuperacion.md) |
+| TT-020 | Decisiones técnicas | Hecho; D-12 a D-17 |
+| — | Sección propia de `S3.md` | Hecha; pendiente de revisión por Abigail |
 
-### Pendientes heredados de S2 (verificar en el servidor)
-- Concurrencia real de iniciar/finalizar (PR-11 / PF-11) contra MongoDB real.
-- Pruebas contra el JSON Schema real de Carlos.
+## 2. Contratos que se respetan
 
-## 2. Contratos que se respetan (no se modifican)
-- Estados y transiciones oficiales; `llamado → abandonado` es la única transición nueva que implementas.
-- Namespace `grupo2:qline:`; sin `FLUSHALL` / `FLUSHDB`.
+- Estados y transiciones oficiales; `llamado → abandonado` es la única transición nueva.
+- Namespace `grupo2:qline:`; sin `FLUSHALL` ni `FLUSHDB`.
 - TTL oficial de 180 s.
-- Cola, contador y eventos son de Alessandro: **se usan sus funciones**, no se reimplementan.
+- Cola, contador y eventos son de Alessandro: se usan sus funciones y su fórmula de puntaje, no se reimplementan.
 
-## 3. Fases
+## 3. Cómo se ejecuta (en el servidor, con el entorno virtual activo)
 
-### Fase 0 · Preparación
-- [ ] Sincronizar `aurbina` con `development` (con los aportes de Alessandro de S3).
-- [ ] Leer `docs/arquitectura/redis_claves.md` y `tiempo_real.md` (contratos del Hash, de la ventanilla y de los eventos).
-- [ ] Revisar `app/cola.py`, `app/llamado.py`, `app/eventos.py` y anotar nombres reales de funciones.
-- [ ] Copiar los archivos de esta carpeta al repositorio y correr `python -m unittest discover -s tests -t . -v`.
+```bash
+python -m scripts.barrer_abandonos                     # una pasada del barrido (en producción corre sola con la app)
+python -m scripts.rehidratar_cola                      # plan: no escribe nada
+python -m scripts.rehidratar_cola --aplicar            # reconstruye la cola desde MongoDB
+python -m scripts.probar_recuperacion --informe docs/evidencia/recuperacion.md
+python -m scripts.medir_recuperacion --informe docs/evidencia/rendimiento_recuperacion.md
+python -m scripts.probar_fallos_recuperacion --informe docs/evidencia/fallos_recuperacion.md
+```
 
-### Fase 1 · Enlace con Redis (el único trabajo de adaptación)
-- [ ] En `app/integracion_s3.py` enlazar `leer_cola`, `encolar`, `quitar` con las funciones de Alessandro.
-- [ ] Reemplazar `publicar_evento` por el publicador de `app/eventos.py` (contrato exacto del mensaje).
-- [ ] Confirmar con Alessandro: forma de la clave `ventanilla:{id}:actual` y si el contador usa la serie `A-`.
-- [ ] Si la app ya tiene un cliente Redis que «falla rápido» (decisión D-10), usarlo en `conectar_redis`.
+El índice del barrido (`idx_turnos_estado_llamado`) se crea con `python scripts/init_mongo.py --recrear --confirmar` o, sin borrar datos, con `create_index` sobre `{estado, timestamps.llamado}`.
 
-### Fase 2 · HU-008 / TT-012
-- [ ] Integrar `barrer_abandonos` en el arranque de la app (`BarridoPeriodico`).
-- [ ] Verificar en el servidor: llamar un turno, no iniciar, comprobar a los 180 s `redis-cli ttl` = -2 y estado `abandonado` en MongoDB.
-- [ ] Verificar que el panel y la pantalla pública reflejan el abandono (evento `turno_abandonado`).
-- [ ] Coordinar con Carlos un índice `{estado, timestamps.llamado}` para el barrido (TT-014).
+## 4. Pendiente
 
-### Fase 3 · HU-012 / TT-017
-- [ ] Ejecutar `python -m scripts.rehidratar_cola` (plan) y luego `--aplicar`.
-- [ ] Ejecutar `python -m scripts.probar_recuperacion --informe docs/evidencia/recuperacion.md`.
-- [ ] Capturas: cola antes/después, contador, MongoDB.
+- [ ] Verificar con un celular que el QR cambia a «Turno cancelado» y que la pantalla pública deja de listar el turno abandonado.
+- [ ] Comprobar el barrido con varios *workers* de Gunicorn.
+- [ ] Capturas de pantalla para la bitácora.
+- [ ] Revisión del código y de la sección 5 de `S3.md` por Abigail.
+- [ ] Abrir el PR hacia `development` y etiquetar `v0.3.0` cuando el equipo lo acuerde.
 
-### Fase 4 · TT-018 / TT-019
-- [ ] Coordinar el momento con el equipo y ejecutar `python -m scripts.medir_recuperacion --informe docs/evidencia/rendimiento_recuperacion.md`.
-- [ ] Completar la interpretación con los números reales (sin asumir cifras).
-- [ ] Ejecutar los casos de `03_PLAN_PRUEBAS_S3.md` en el servidor y registrar resultados.
+## 5. Archivos
 
-### Fase 5 · Cierre
-- [ ] Completar `04_DECISIONES_ABIGAIL.md` y pasarlo a `docs/decisiones.md`.
-- [ ] Abrir el PR (`05_PULL_REQUEST_S3.md`) hacia `development`.
-- [ ] Completar tu sección de `S3.md` (`06_BITACORA_S3_ABIGAIL.md`) con hechos reales.
+```
+app/       s3_comun, abandono, barrido, recuperacion, integracion_s3, datos_prueba, informe,
+           prueba_recuperacion, mediciones_s3, fallos_s3
+scripts/   barrer_abandonos, rehidratar_cola, probar_recuperacion, medir_recuperacion, probar_fallos_recuperacion
+tests/     test_s3_fundamentos, test_integracion_s3, test_barrido_abandono, test_recuperacion,
+           test_mediciones_s3, test_fallos_s3, test_e2e_abandono, test_demo
+```
 
-## 4. Convención de la bitácora S3
+## 6. Convención de la bitácora
+
 - **«Verificado en el servidor»:** ejecutado con MongoDB y Redis reales.
-- **«Prueba automática»:** cubierto por `tests/` con simulados en memoria; no sustituye a la prueba en el servidor.
-- Los informes generados con `--simulado` llevan el aviso **SIMULADO** y **no** deben presentarse como evidencia.
-
-## 5. Archivos de este paquete
-```
-app/                 s3_comun, abandono, barrido, recuperacion, prueba_recuperacion,
-                     mediciones_s3, datos_prueba, informe, simulacion, integracion_s3
-scripts/             barrer_abandonos, rehidratar_cola, probar_recuperacion, medir_recuperacion
-tests/               64 pruebas (63 ejecutan, 1 requiere servidor)
-docs/s3_abigail/     este plan, 6 issues, diseño, plan de pruebas, decisiones, PR, bitácora
-```
+- **«Prueba automática»:** cubierto por `tests/` con MongoDB y Redis simulados en memoria; no sustituye a la prueba en el servidor.
+- Los informes de `docs/evidencia/` los generan los scripts; no se escriben a mano.

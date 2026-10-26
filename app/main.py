@@ -66,7 +66,7 @@ MENSAJES = {
 
 @asynccontextmanager
 async def _lifespan(app_):
-    """Suscribe la pantalla pública al Hub de eventos (TT-013) para HU-009 al arrancar la app."""
+    """Al arrancar: suscribe la pantalla pública al Hub de eventos (TT-013, HU-009) e inicia el barrido de abandono (HU-008)."""
     from app.tiempo_real import hub
     import json as _json
     _orig_repartir = hub._repartir
@@ -81,8 +81,19 @@ async def _lifespan(app_):
             pass
 
     hub._repartir = _repartir_con_pantalla
-    yield
-    hub._repartir = _orig_repartir
+
+    # HU-008: barrido periódico que marca como abandonados los turnos llamados cuyo plazo venció.
+    from app.integracion_s3 import crear_barrido_abandono
+    barrido = crear_barrido_abandono()
+    app_.state.barrido = barrido
+    if barrido is not None:
+        barrido.iniciar()
+    try:
+        yield
+    finally:
+        if barrido is not None:
+            barrido.detener()
+        hub._repartir = _orig_repartir
 
 
 app = FastAPI(title="MongoDB Web Admin", lifespan=_lifespan)

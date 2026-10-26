@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 from .s3_comun import (
@@ -156,6 +156,7 @@ def reconciliar_cola(
     quitar_sobrantes: bool = False,
     restaurar_contador: bool = True,
     serie: str = "A",
+    solo_serie: bool = False,
 ) -> ReporteRecuperacion:
     """Reconstruye/reconcilia la cola de Redis desde MongoDB.
 
@@ -165,16 +166,24 @@ def reconciliar_cola(
             considera pendientes (estado inválido según §17). Por defecto solo los informa.
         restaurar_contador: sube el contador al mayor consecutivo de MongoDB si Redis lo perdió.
         serie: letra de la serie operativa de códigos (por defecto "A", como A-015).
+        solo_serie: limita la reconciliación a los códigos de esa serie (en MongoDB y en la cola).
+            Las pruebas la usan con la serie "R" para no tocar los turnos de la operación real.
 
     Raises:
         MongoNoDisponible / RedisNoDisponible: si falla la lectura inicial (no se modifica nada).
     """
     inicio = time.perf_counter()
     rep = ReporteRecuperacion(aplicado=aplicar)
+    filtro = {"servicio": SERVICIO_INICIAL, "estado": ESTADO_PENDIENTE}
+    leer_original = deps.leer_cola
+    if solo_serie:
+        prefijo = f"{serie}-"
+        filtro["codigo"] = {"$regex": f"^{re.escape(prefijo)}"}
+        deps = replace(deps, leer_cola=lambda: [c for c in leer_original() if c.startswith(prefijo)])
 
     # --- Lecturas (si fallan, no se ha tocado nada) ---------------------------------
     try:
-        pendientes = list(coleccion.find({"servicio": SERVICIO_INICIAL, "estado": ESTADO_PENDIENTE}))
+        pendientes = list(coleccion.find(filtro))
     except Exception as exc:
         raise MongoNoDisponible() from exc
     try:

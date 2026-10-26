@@ -2,7 +2,7 @@
 
 Registro de las decisiones tomadas durante el desarrollo, con las alternativas que se consideraron y por qué se descartaron. Cada integrante documenta las de su área. Este archivo no sustituye al Plan de Desarrollo: lo complementa con el *por qué*.
 
-**Estado:** sección de Redis, tiempo real y consulta por QR (Alessandro) completa. Quedan por añadir las secciones de MongoDB e historial (Carlos), ciclo de atención y recuperación (Abigail) y cliente (Aaron).
+**Estado:** secciones de Redis, tiempo real y consulta por QR (Alessandro) y de ciclo de atención y recuperación (Abigail) completas. Quedan por añadir las de MongoDB e historial (Carlos) y cliente (Aaron).
 
 ---
 
@@ -107,7 +107,61 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 ## Ciclo de atención y recuperación (Abigail)
 
-*Pendiente de completar por el integrante.*
+> Diseño de los módulos de Abigail; la integración y los módulos de soporte los implementó Alessandro con asistencia de Claude Code (ver la nota de autoría en `docs/seguimientos/S3.md`, sección 5).
+
+### D-12 · El abandono lo decide un barrido sobre MongoDB y el Hash, no un aviso de Redis
+
+| | |
+|---|---|
+| **Decisión** | Un barrido periódico busca los turnos `llamado` con `timestamps.llamado ≤ ahora − 180 s` y abandona los que ya no tienen su Hash `grupo2:qline:turno:{codigo}`. `timestamps.abandonado` se registra como `llamado + 180 s` (el instante en que venció el plazo), no como la hora en que corrió el barrido. |
+| **Por qué** | Redis no avisa cuando una clave expira (D-04). Pedir las dos condiciones evita abandonar por error: el plazo vencido por reloj no basta si el Hash sigue vivo (el cliente confirmó presencia), y la ausencia del Hash no basta si el plazo no venció (Redis pudo perder datos). Si Redis no responde, no se abandona: no se sabe si venció de verdad. |
+| **Alternativas** | *Notificaciones de expiración de Redis*: requieren `CONFIG SET`, no disponible. *Índice TTL de MongoDB*: borra documentos, y aquí el turno debe conservarse para el historial. *Un temporizador por turno en memoria*: se pierde al reiniciar la aplicación y no funciona con varios procesos. |
+| **Resultado** | Verificado en el servidor: `A-001` llamado a las 23:31:23,881 y abandonado con `abandonado = 23:34:23,881`. |
+
+### D-13 · El abandono es idempotente por una condición en el `update_one`
+
+| | |
+|---|---|
+| **Decisión** | La transición es `update_one({codigo, estado: "llamado"}) → abandonado`. Si el turno ya cambió (inició atención, otro proceso lo abandonó), no se modifica nada y se informa como `ya_cambiados`. Liberar la ventanilla solo ocurre si la clave sigue apuntando a ese turno; publicar el evento ocurre después de confirmar MongoDB y es de mejor esfuerzo. |
+| **Por qué** | Permite repetir el barrido, ejecutarlo en varios procesos a la vez y reintentar tras un fallo sin duplicar ni deshacer nada. Se probó con 4 barridos simultáneos sobre 20 turnos: 20 abandonados, 20 únicos, 20 eventos. |
+| **Alternativas** | *Lua o transacción entre MongoDB y Redis*: no existen transacciones entre ambos y no se verificó `EVAL` en el Redis compartido. *Revertir MongoDB si Redis falla*: dejaría un turno llamado sin Hash que el siguiente barrido volvería a procesar. |
+
+### D-14 · Un barrido por proceso de la aplicación, sin candado distribuido
+
+| | |
+|---|---|
+| **Decisión** | El barrido corre en un hilo daemon que se inicia y detiene con la aplicación (`_lifespan`), cada 10 s (`BARRIDO_INTERVALO_SEG`) y se apaga con `BARRIDO_ABANDONO=0`. Con varios *workers* de Gunicorn habrá uno por worker. Las pruebas lo apagan por defecto. |
+| **Por qué** | Es seguro gracias a D-13 y evita depender de un candado en Redis o de un proceso aparte. Un fallo de una pasada (MongoDB caído) se cuenta y la siguiente reintenta. La ventanilla única bloquea una ventanilla hasta que su turno se resuelve, por lo que el barrido es crítico para que no queden ventanillas retenidas. |
+| **Alternativas** | *Cron que ejecute el script*: no corre a menos de 1 minuto y se desacopla de la aplicación. *Candado `SET NX` para un solo barrido*: más piezas para ahorrar trabajo que ya es barato (consulta indexada). |
+| **Índice** | `idx_turnos_estado_llamado` `{estado, timestamps.llamado}` para la consulta del barrido. |
+
+### D-15 · La recuperación es una reconciliación, no un vaciado
+
+| | |
+|---|---|
+| **Decisión** | `reconciliar_cola` compara los pendientes de MongoDB con la cola de Redis y agrega solo los que faltan, con el mismo puntaje que la emisión (calculado con enteros, sin errores de coma flotante). Solo se recuperan `pendiente`. Lo que sobra se informa y solo se quita con `--quitar-sobrantes`. El contador de códigos solo sube. Sin `--aplicar` muestra el plan. Los pendientes con datos inválidos se informan y no se encolan. |
+| **Por qué** | Sirve igual para una pérdida total, una parcial y el caso abierto de S2 (turno extraído cuyo cambio no llegó a MongoDB). Repetirla no cambia nada. Bajar el contador repetiría códigos ya emitidos. |
+| **Alternativas** | *Vaciar y reconstruir toda la cola*: dejaría la cola vacía unos instantes y está prohibido `FLUSHALL`/`FLUSHDB`. *Reencolar también los llamados vencidos*: los cubre el barrido. |
+| **Resultado** | Verificado en el servidor: 12 pendientes recuperados en 0,0028 s, mismo orden, sin duplicados; contador restaurado de 0 a 20 (clave aislada). |
+
+### D-16 · La rehidratación no es atómica con las llamadas
+
+| | |
+|---|---|
+| **Decisión** | No se usa Lua ni bloqueo entre `rehidratar_cola` y `/api/llamar`. Se documenta que conviene ejecutarla con la atención detenida. |
+| **Por qué** | Si un turno se llama justo mientras se reencola, queda un código obsoleto en la cola; el siguiente llamado lo rechaza con el aviso de inconsistencia que ya existe y no se duplica ni se pierde ninguna atención. La rehidratación es un procedimiento de recuperación, poco frecuente. |
+| **Alternativas** | *Script Lua atómico*: `EVAL` no verificado en el Redis compartido. *Bloquear las llamadas durante la recuperación*: añadiría estado compartido nuevo. |
+
+### D-17 · Las pruebas usan datos y claves propios, y un reloj adelantado
+
+| | |
+|---|---|
+| **Decisión** | Las pruebas de recuperación, mediciones y fallos usan series propias (`R-*`, `M-*`, `F-*`), cola, contador, eventos y ventanillas aislados (`grupo2:qline:prueba:*`) y un reloj de prueba adelantado 6 minutos. «Caído» significa un cliente a un puerto sin servidor o una colección que lanza error; no se detiene ningún servicio. |
+| **Por qué** | Corren en el servidor compartido sin tocar turnos reales ni mostrar eventos de prueba al público. El reloj adelantado se agregó tras un incidente: el barrido automático de la aplicación abandonó, muy probablemente, parte de los turnos de prueba (vencidos a propósito) y una medición salió 4/5. Con el reloj adelantado esos turnos no vencen para el reloj real. |
+| **Alternativas** | *Datos simulados en memoria para la evidencia*: no probarían el servidor real (por eso se eliminó el modo `--simulado` de los scripts). *Apagar el barrido de la aplicación durante la medición*: requeriría reiniciar el servicio compartido. |
+| **Resultado** | Tras el cambio, 45 de 45 ejecuciones de medición correctas y 18 de 18 casos de fallo, en el servidor. |
+
+---
 
 ## Cliente (Aaron)
 

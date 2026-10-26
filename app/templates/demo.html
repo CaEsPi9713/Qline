@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block titulo %}Guía de demo{% endblock %}
-{% block lead %}Recorrido paso a paso del flujo completo de QLine. Cada paso abre la pantalla correspondiente y dice qué debe verse; marque los pasos a medida que los comprueba.{% endblock %}
+{% block lead %}Recorrido paso a paso del flujo completo de QLine (Seguimientos 2 y 3). Cada paso abre la pantalla correspondiente y dice qué debe verse; marque los pasos a medida que los comprueba.{% endblock %}
 {% block contenido %}
 
 <div class="estado-sistema" aria-label="Estado del sistema">
@@ -20,12 +20,13 @@
   <div class="terminal" data-copiar>python scripts/init_mongo.py --recrear --confirmar</div>
   <div class="terminal" data-copiar>python scripts/generar_datos_sinteticos.py --cargar</div>
   <div class="terminal" data-copiar>redis-cli del grupo2:qline:contador:atencion_general grupo2:qline:cola:atencion_general grupo2:qline:ventanilla:V-01:actual grupo2:qline:ventanilla:V-02:actual grupo2:qline:ventanilla:V-03:actual</div>
+  <p class="nota" style="margin:8px 0 0">La aplicación debe estar corriendo con <code>BARRIDO_ABANDONO=1</code> (valor por defecto) para el paso 18. Si es la primera vez que se usa el abandono, el primer comando también crea el índice del barrido.</p>
   <p class="nota" style="margin:8px 0 0">El primer comando borra y recrea la colección <code>turnos</code> con su JSON Schema; el segundo carga el historial sintético (serie <code>S-</code>).</p>
 </div>
 
 <div class="card-cabecera" style="margin-top:28px">
   <h2 style="margin:0">Recorrido</h2>
-  <span class="nota"><span id="avance-texto">0 de 15 pasos</span></span>
+  <span class="nota"><span id="avance-texto">0 de 20 pasos</span></span>
 </div>
 <div class="progreso" aria-hidden="true"><span id="avance-barra"></span></div>
 
@@ -207,6 +208,75 @@
       <div class="terminal" data-copiar>python scripts/medir_rendimiento.py --informe docs/evidencia/rendimiento.md</div>
       <div class="terminal" data-copiar>python scripts/probar_fallos_redis.py --informe docs/evidencia/fallos.md</div>
       <div class="esperado"><strong>Debe verse:</strong> las medianas de Redis y MongoDB con su mínimo y máximo, contrastadas con las hipótesis de S1; y todos los casos de datos inválidos y de Redis caído respondiendo de forma controlada, sin errores 500.</div>
+    </div>
+    <div class="paso-acciones">
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="16">
+    <div>
+      <div class="rol">Seguimiento 3 · Cliente · Quiosco con QR (HU-001, HU-003)</div>
+      <h3>Emitir desde el quiosco y escanear el QR</h3>
+      <p>Abra el quiosco, elija una prioridad y confirme. El ticket trae un código QR; escanéelo con el celular.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el ticket con el código del turno y un QR; al escanearlo, la página de seguimiento del turno con su posición y el indicador «En vivo».</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/quiosco">Abrir Quiosco</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="17">
+    <div>
+      <div class="rol">Seguimiento 3 · Sala de espera · Pantalla pública (HU-009)</div>
+      <h3>Ver los llamados en la pantalla</h3>
+      <p>Deje la pantalla abierta en otra pestaña y llame al siguiente turno desde la cola.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el turno llamado aparece con su ventanilla, solo código y ventanilla (sin datos personales). Al iniciar y finalizar su atención, o al abandonarse, desaparece de la lista.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/pantalla" target="_blank" rel="noopener">Abrir Pantalla</a>
+      <a class="btn btn-secundario" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="18">
+    <div>
+      <div class="rol">Seguimiento 3 · Operador · Abandono automático (HU-008)</div>
+      <h3>Un cliente que no se presenta a los 180 s</h3>
+      <p>Emita un turno, llámelo desde la cola y <strong>no inicie la atención</strong>. Mientras espera, confirme que Redis cuenta el plazo y que la ventanilla queda ocupada (no se puede llamar otro turno desde ella):</p>
+      <div class="terminal" data-copiar>redis-cli ttl grupo2:qline:turno:A-001</div>
+      <p>Al vencer el plazo el Hash desaparece y el barrido automático (cada 10 s) marca el turno como abandonado. Si lo desea, puede ejecutar el barrido a mano:</p>
+      <div class="terminal" data-copiar>python -m scripts.barrer_abandonos</div>
+      <div class="esperado"><strong>Debe verse:</strong> pasados unos 3 minutos, el turno en estado <em>abandonado</em> en el historial; en el panel la ventanilla queda «Sin turno asignado» y puede llamar al siguiente; la página del QR muestra «Turno cancelado» sola, sin recargar; y la pantalla pública ya no lo lista. Antes de los 180 s, el barrido no lo toca.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <a class="btn btn-secundario" href="{{ base }}/historial?estado=abandonado">Historial abandonados</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="19">
+    <div>
+      <div class="rol">Seguimiento 3 · Resiliencia · Recuperación de la cola (HU-012)</div>
+      <h3>Reconstruir la cola desde MongoDB</h3>
+      <p>Con varios turnos pendientes, simule que Redis perdió la cola (solo esa clave) y reconstrúyala. Primero el plan, que no escribe nada; después la aplicación:</p>
+      <div class="terminal" data-copiar>redis-cli del grupo2:qline:cola:atencion_general</div>
+      <div class="terminal" data-copiar>python -m scripts.rehidratar_cola</div>
+      <div class="terminal" data-copiar>python -m scripts.rehidratar_cola --aplicar</div>
+      <div class="esperado"><strong>Debe verse:</strong> el plan lista los pendientes faltantes; al aplicar, la cola vuelve con los mismos turnos y el mismo orden (preferenciales primero), sin duplicados y sin atendidos ni abandonados. Ejecutarlo de nuevo no cambia nada. Hágalo sin nadie llamando turnos.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="20">
+    <div>
+      <div class="rol">Seguimiento 3 · Evidencia (TT-017, TT-018, TT-019)</div>
+      <h3>Pruebas de recuperación, mediciones y fallos del abandono</h3>
+      <div class="terminal" data-copiar>python -m scripts.probar_recuperacion --informe docs/evidencia/recuperacion.md</div>
+      <div class="terminal" data-copiar>python -m scripts.medir_recuperacion --informe docs/evidencia/rendimiento_recuperacion.md</div>
+      <div class="terminal" data-copiar>python -m scripts.probar_fallos_recuperacion --informe docs/evidencia/fallos_recuperacion.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> la prueba de recuperación con todas sus verificaciones en «cumple» y resultado <em>CORRECTO</em>; las medianas de rehidratación, reconciliación y barrido con 3 o más ejecuciones; y todos los casos de fallo en «OK». Los tres usan datos de prueba propios (series R, M y F) y no tocan los turnos reales.</div>
     </div>
     <div class="paso-acciones">
       <label class="marcar"><input type="checkbox"> Hecho</label>

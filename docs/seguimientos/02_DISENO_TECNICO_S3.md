@@ -1,7 +1,7 @@
 # Diseño técnico · S3 · HU-008 y HU-012
 
 **Responsable:** Abigail Urbina / `aurbina`
-**Estado:** propuesta para revisión. Los nombres de funciones de Redis de Alessandro se enlazan en `app/integracion_s3.py`.
+**Estado:** implementado e integrado (ver `docs/seguimientos/S3.md`, sección 5, y `docs/decisiones.md`, D-12 a D-17). Este documento conserva el diseño original; donde difiere, manda `decisiones.md`.
 
 ## 1. Principio
 > MongoDB conserva lo que ocurrió. Redis controla lo que ocurre ahora.
@@ -132,15 +132,16 @@ Ventaja: se garantiza el mismo miembro y el mismo score que usa la emisión, sin
 ## 5. Archivos
 | Archivo | Responsabilidad |
 |---|---|
-| `app/s3_comun.py` | Constantes, claves, errores, utilidades |
+| `app/s3_comun.py` | Reexporta las constantes de `app/constantes.py`; errores y utilidades de fecha |
 | `app/abandono.py` | `barrer_abandonos` (HU-008) |
 | `app/barrido.py` | `BarridoPeriodico` (hilo) |
 | `app/recuperacion.py` | `reconciliar_cola`, `ReporteRecuperacion` (HU-012) |
 | `app/prueba_recuperacion.py` | Escenario de TT-017 |
 | `app/mediciones_s3.py` | Mediciones de TT-018 |
-| `app/integracion_s3.py` | Enlace con MongoDB/Redis reales (único a adaptar) |
-| `app/simulacion.py` | MongoDB/Redis simulados (solo pruebas) |
+| `app/integracion_s3.py` | Enlace con MongoDB/Redis reales y arranque del barrido |
+| `app/datos_prueba.py`, `app/informe.py` | Turnos de prueba coherentes y encabezado común de los informes |
+| `app/fallos_s3.py` | Casos de fallo de TT-019 |
 | `scripts/*.py` | `barrer_abandonos`, `rehidratar_cola`, `probar_recuperacion`, `medir_recuperacion` |
 
 ## 6. Decisiones abiertas
-Ver `04_DECISIONES_ABIGAIL.md` (sección «Pendientes de acuerdo»).
+Resueltas: ver `docs/decisiones.md` (D-12 a D-17).

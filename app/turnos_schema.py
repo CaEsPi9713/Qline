@@ -123,6 +123,11 @@ INDICES_TURNOS = [
         "keys": [("timestamps.creado", -1)],
         "options": {"name": "idx_turnos_creado_desc"},
     },
+    {
+        # HU-008: el barrido de abandono busca {estado: llamado, timestamps.llamado <= ahora - 180 s}
+        "keys": [("estado", 1), ("timestamps.llamado", 1)],
+        "options": {"name": "idx_turnos_estado_llamado"},
+    },
 ]
 
 
