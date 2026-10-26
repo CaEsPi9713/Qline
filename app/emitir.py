@@ -8,6 +8,7 @@ Implementa compensación segura, manejo diferenciado de fallos parciales y
 mensajes de error sanitizados que no exponen detalles internos ni credenciales.
 """
 from datetime import datetime, timezone
+import uuid
 
 from pymongo.errors import PyMongoError
 from redis.exceptions import ConnectionError, RedisError, ResponseError, TimeoutError
@@ -19,6 +20,7 @@ from app.constantes import (
     SERVICIO_ID,
     SERVICIO_NOMBRE,
 )
+from app.qr import construir_url_qr
 
 COLECCION = "turnos"
 
@@ -76,9 +78,10 @@ def emitir_turno(db, prioridad: str) -> dict:
     except RedisError:
         raise EmisionError("Redis no disponible para generar código de turno.", 503)
 
-    # 2. Preparación del documento conforme a Sección 4.5
+    # 2. Preparación del documento conforme a Sección 4.5 y contrato HU-003
     ahora = datetime.now(timezone.utc)
     llegada_ms = int(ahora.timestamp() * 1000)
+    qr_token = str(uuid.uuid4()).lower()
 
     documento = {
         "codigo": codigo,
@@ -87,6 +90,7 @@ def emitir_turno(db, prioridad: str) -> dict:
         "estado": ESTADO_PENDIENTE,
         "ventanilla": None,
         "operador": None,
+        "qr_token": qr_token,
         "timestamps": {
             "creado": ahora,
             "llamado": None,
@@ -140,6 +144,8 @@ def emitir_turno(db, prioridad: str) -> dict:
             503,
         )
 
+    qr_url = construir_url_qr(qr_token)
+
     return {
         "id": str(doc_id),
         "codigo": codigo,
@@ -148,4 +154,6 @@ def emitir_turno(db, prioridad: str) -> dict:
         "prioridad": prioridad,
         "estado": ESTADO_PENDIENTE,
         "creado": ahora.isoformat(),
+        "qr_token": qr_token,
+        "qr_url": qr_url,
     }

@@ -1,0 +1,67 @@
+{% extends "base_publico.html" %}
+{% block titulo %}Turno {{ turno.codigo }} - Quiosco{% endblock %}
+{% block contenido %}
+<div class="quiosco-confirmacion" style="max-width: 520px; margin: 0 auto; text-align: center;">
+  <div class="ok" style="margin-bottom: 20px;">¡Turno generado con éxito!</div>
+
+  <div class="ticket" style="margin-bottom: 24px;">
+    <div class="ticket-etiqueta">Su número de turno es</div>
+    <div class="ticket-codigo">{{ turno.codigo }}</div>
+    {% if turno.prioridad == 'preferencial' %}
+      <span class="badge badge-preferencial">Prioridad Preferencial</span>
+    {% else %}
+      <span class="badge badge-normal">Prioridad Normal</span>
+    {% endif %}
+
+    {% if qr_svg %}
+    <div class="ticket-qr-seccion" style="margin: 20px 0 16px;">
+      <div class="ticket-qr-marco" style="max-width: 180px; margin: 0 auto 10px; padding: 12px; background: #ffffff; border: 1px solid var(--c-borde, #e2e8f0); border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+        {{ qr_svg|safe }}
+      </div>
+      <p class="ticket-qr-instruccion" style="font-size: 13px; color: var(--c-texto-tenue, #64748b); margin: 0 0 4px; font-weight: 500;">
+        Escanee con su celular para seguir su turno en tiempo real
+      </p>
+      {% if qr_url %}
+      <p class="ticket-qr-url" style="font-size: 11px; word-break: break-all; margin: 0 0 10px;">
+        <a href="{{ qr_url }}" target="_blank" rel="noopener" style="color: var(--c-marca, #0284c7); text-decoration: none;">{{ qr_url }}</a>
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <dl class="datos" style="max-width: 320px; margin: 16px auto 0;">
+      <dt>Servicio</dt><dd>{{ servicio }}</dd>
+      <dt>Estado inicial</dt><dd><span class="badge badge-pendiente">En espera</span></dd>
+      <dt>Fecha / hora</dt><dd>{{ turno.creado[:19]|replace('T', ' ') }} UTC</dd>
+    </dl>
+
+    <p class="texto-suave" style="margin-top: 16px;">Tome asiento en la sala de espera y permanezca atento al llamado por pantalla.</p>
+  </div>
+
+  <div style="margin-top: 20px;">
+    <a href="{{ base }}/quiosco" class="btn btn-grande" style="display: block; width: 100%; box-sizing: border-box; font-size: 18px; padding: 14px;">
+      Solicitar otro turno
+    </a>
+    <p id="contador-retorno" style="font-size: 12px; color: var(--c-texto-tenue, #64748b); margin-top: 10px;">
+      Esta pantalla volverá al inicio en <span id="segundos">25</span> segundos.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var seg = 25;
+  var el = document.getElementById("segundos");
+  var t = setInterval(function() {
+    seg--;
+    if (el) el.textContent = seg;
+    if (seg <= 0) {
+      clearInterval(t);
+      window.location.href = "{{ base }}/quiosco";
+    }
+  }, 1000);
+})();
+</script>
+{% endblock %}

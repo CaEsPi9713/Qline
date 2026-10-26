@@ -21,7 +21,7 @@ from app.constantes import (
     SERVICIO_NOMBRE,
 )
 from app.emitir import EmisionError, emitir_turno
-from app.main import accion_emitir, api_emitir_turno, app, vista_emitir
+from app.main import accion_emitir, accion_quiosco, api_emitir_turno, app, vista_emitir, vista_quiosco
 
 
 class TestHU001EmitirTurno(unittest.IsolatedAsyncioTestCase):
@@ -45,6 +45,9 @@ class TestHU001EmitirTurno(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["servicio"], SERVICIO_ID)
         self.assertEqual(res["servicio_nombre"], SERVICIO_NOMBRE)
         self.assertEqual(res["id"], str(self.fake_id))
+        self.assertIn("qr_token", res)
+        self.assertIn("qr_url", res)
+        self.assertTrue(res["qr_url"].endswith(f"/turno/qr/{res['qr_token']}"))
 
     # 2. Successful issuance: preferential priority
     @patch("app.emitir.cola.siguiente_codigo", return_value="A-002")
@@ -75,13 +78,15 @@ class TestHU001EmitirTurno(unittest.IsolatedAsyncioTestCase):
         self.mock_collection.insert_one.assert_called_once()
         doc = self.mock_collection.insert_one.call_args[0][0]
 
-        # Validar campos canónicos de la Sección 4.5 del Plan Maestro
+        # Validar campos canónicos de la Sección 4.5 del Plan Maestro y HU-003
         self.assertEqual(doc["codigo"], "A-015")
         self.assertEqual(doc["servicio"], SERVICIO_ID)
         self.assertEqual(doc["prioridad"], PRIORIDAD_PREFERENCIAL)
         self.assertEqual(doc["estado"], ESTADO_PENDIENTE)
         self.assertIsNone(doc["ventanilla"])
         self.assertIsNone(doc["operador"])
+        self.assertIn("qr_token", doc)
+        self.assertIsInstance(doc["qr_token"], str)
 
         # Timestamps
         self.assertIn("timestamps", doc)
@@ -267,6 +272,62 @@ class TestHU001EmitirTurno(unittest.IsolatedAsyncioTestCase):
         rutas_registradas = {r.path for r in app.routes}
         for ruta in rutas_esperadas:
             self.assertIn(ruta, rutas_registradas, f"Regresión: la ruta preexistente {ruta} fue removida")
+        self.assertIn("/quiosco", rutas_registradas)
+
+    # 16. Kiosk mode: View without internal/administrative navigation (HU-001 S3)
+    def test_quiosco_view_renders_without_internal_navigation(self):
+        req = MagicMock()
+        resp = vista_quiosco(req)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.body.decode("utf-8")
+        self.assertIn("Quiosco", body)
+        self.assertIn("Atención Regular (Normal)", body)
+        self.assertIn("Atención Preferencial", body)
+
+        # La vista de quiosco NO debe contener enlaces a módulos internos u operativos
+        self.assertNotIn("/cola", body)
+        self.assertNotIn("/panel", body)
+        self.assertNotIn("/historial", body)
+        self.assertNotIn("/dashboard", body)
+        self.assertNotIn("CRUD MongoDB", body)
+
+    # 17. Kiosk mode: Successful emission and ticket confirmation
+    def test_quiosco_emission_success_and_confirmation(self):
+        req = MagicMock()
+        with patch("app.main.get_db"), patch("app.main.emitir_turno") as mock_emitir, patch("app.main._publicar_evento"):
+            fake_token = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+            mock_emitir.return_value = {
+                "id": str(self.fake_id),
+                "codigo": "A-025",
+                "servicio": SERVICIO_ID,
+                "servicio_nombre": SERVICIO_NOMBRE,
+                "prioridad": PRIORIDAD_NORMAL,
+                "estado": ESTADO_PENDIENTE,
+                "creado": "2026-10-25T19:00:00+00:00",
+                "qr_token": fake_token,
+                "qr_url": f"https://grupo2.crnube.net/turno/qr/{fake_token}",
+            }
+            resp = accion_quiosco(req, "normal")
+            self.assertEqual(resp.status_code, 200)
+            body = resp.body.decode("utf-8")
+            self.assertIn("A-025", body)
+            self.assertIn("qr-svg", body)
+            self.assertIn(fake_token, body)
+            self.assertIn("/quiosco", body)
+
+            # Confirmación de quiosco NO ofrece enlaces internos de operador o admin
+            self.assertNotIn("/cola", body)
+            self.assertNotIn("/panel", body)
+            self.assertNotIn("/historial", body)
+            self.assertNotIn("/dashboard", body)
+
+    # 18. Kiosk mode: Invalid priority returns 400
+    def test_quiosco_invalid_priority_returns_400(self):
+        req = MagicMock()
+        resp = accion_quiosco(req, "invalida")
+        self.assertEqual(resp.status_code, 400)
+        body = resp.body.decode("utf-8")
+        self.assertIn("Prioridad inválida", body)
 
 
 if __name__ == "__main__":

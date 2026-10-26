@@ -5,6 +5,7 @@ Equivalente a la versión PHP: listar/crear colecciones y CRUD de documentos.
 import json
 import os
 import re
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -27,6 +28,7 @@ from app.excepciones import ErrorAtencion
 from app.panel_atencion import estado_ventanillas
 from app.redis_atencion import liberar_turno
 from app.consulta_qr import QRError, consultar_por_token
+from app.qr import generar_qr_svg
 from app.rutas_eventos import registrar as registrar_rutas_eventos
 from app.schemas import TurnoEnAtencion, TurnoFinalizado
 from app.emitir import EmisionError, emitir_turno
@@ -37,6 +39,7 @@ from app.redis_client import verificar_conexion as verificar_redis
 from app.turnos_schema import TurnoValidationError, validar_documento_turno
 from app.historial import obtener_historial_turnos
 from app.dashboard import calcular_metricas_dashboard
+from app.pantalla_publica import pantalla as _pantalla
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -60,10 +63,31 @@ MENSAJES = {
     "eliminado": "Documento eliminado correctamente.",
 }
 
-app = FastAPI(title="MongoDB Web Admin")
+
+@asynccontextmanager
+async def _lifespan(app_):
+    """Suscribe la pantalla pública al Hub de eventos (TT-013) para HU-009 al arrancar la app."""
+    from app.tiempo_real import hub
+    import json as _json
+    _orig_repartir = hub._repartir
+
+    def _repartir_con_pantalla(mensaje: str) -> None:
+        _orig_repartir(mensaje)
+        try:
+            evento = _json.loads(mensaje)
+            if isinstance(evento, dict):
+                _pantalla.procesar_evento(evento)
+        except Exception:
+            pass
+
+    hub._repartir = _repartir_con_pantalla
+    yield
+    hub._repartir = _orig_repartir
+
+
+app = FastAPI(title="MongoDB Web Admin", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=BASE_DIR.parent / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
-
 
 def _version_css() -> int:
     """Fecha de modificación de style.css: cambia el enlace y obliga al navegador a recargarlo."""
@@ -332,6 +356,7 @@ def accion_emitir(request: Request, prioridad: str = Form("")):
     try:
         turno = emitir_turno(get_db(), prioridad)
         _publicar_evento(eventos.TURNO_EMITIDO, turno["codigo"], "pendiente", prioridad=turno.get("prioridad"))
+        qr_svg = generar_qr_svg(turno["qr_url"]) if turno.get("qr_url") else ""
         return templates.TemplateResponse(
             request,
             "turno_confirmado.html",
@@ -339,6 +364,8 @@ def accion_emitir(request: Request, prioridad: str = Form("")):
                 "base": BASE,
                 "turno": turno,
                 "servicio": SERVICIO_NOMBRE,
+                "qr_url": turno.get("qr_url", ""),
+                "qr_svg": qr_svg,
             },
         )
     except EmisionError as e:
@@ -361,6 +388,67 @@ def accion_emitir(request: Request, prioridad: str = Form("")):
                 "base": BASE,
                 "servicio": SERVICIO_NOMBRE,
                 "error": "El servicio no se encuentra disponible temporalmente. Por favor intente de nuevo más tarde.",
+                "prioridad_seleccionada": prioridad,
+            },
+            status_code=503,
+        )
+
+
+# --- HU-001: Modo quiosco para clientes (ampliación S3) ----------------------
+
+@app.get("/quiosco", response_class=HTMLResponse)
+def vista_quiosco(request: Request, error: str = ""):
+    """Vista de emisión simplificada tipo quiosco (HU-001): sin navegación interna ni administrativa."""
+    return templates.TemplateResponse(
+        request,
+        "quiosco.html",
+        {
+            "base": BASE,
+            "servicio": SERVICIO_NOMBRE,
+            "error": error,
+            "prioridad_seleccionada": "normal",
+        },
+    )
+
+
+@app.post("/quiosco", response_class=HTMLResponse)
+def accion_quiosco(request: Request, prioridad: str = Form("")):
+    """Procesar emisión desde el quiosco reutilizando el backend existente de HU-001."""
+    try:
+        turno = emitir_turno(get_db(), prioridad)
+        _publicar_evento(eventos.TURNO_EMITIDO, turno["codigo"], "pendiente", prioridad=turno.get("prioridad"))
+        qr_svg = generar_qr_svg(turno["qr_url"]) if turno.get("qr_url") else ""
+        return templates.TemplateResponse(
+            request,
+            "quiosco_confirmado.html",
+            {
+                "base": BASE,
+                "turno": turno,
+                "servicio": SERVICIO_NOMBRE,
+                "qr_url": turno.get("qr_url", ""),
+                "qr_svg": qr_svg,
+            },
+        )
+    except EmisionError as e:
+        return templates.TemplateResponse(
+            request,
+            "quiosco.html",
+            {
+                "base": BASE,
+                "servicio": SERVICIO_NOMBRE,
+                "error": str(e),
+                "prioridad_seleccionada": prioridad,
+            },
+            status_code=e.status,
+        )
+    except (RedisError, PyMongoError):
+        return templates.TemplateResponse(
+            request,
+            "quiosco.html",
+            {
+                "base": BASE,
+                "servicio": SERVICIO_NOMBRE,
+                "error": "El servicio no se encuentra disponible temporalmente. Por favor solicite asistencia.",
                 "prioridad_seleccionada": prioridad,
             },
             status_code=503,
@@ -758,3 +846,45 @@ def vista_dashboard(request: Request, sla_espera: int = 300):
             status_code=500,
         )
 
+
+# --- HU-009: Pantalla pública de llamados (Aaron Benavides) ------------------
+
+@app.get("/api/llamados")
+def api_llamados():
+    """
+    Llamados activos para la pantalla de sala (HU-009).
+    Solo devuelve código y ventanilla; sin datos personales.
+    """
+    vigentes = _pantalla.llamados_vigentes()
+    if not vigentes:
+        # Fallback a MongoDB cuando la lista en memoria está vacía
+        try:
+            mongo = _pantalla.consultar_desde_mongo(get_db())
+            if mongo is not None:
+                # Hidratar el estado en memoria para las consultas siguientes
+                for entry in reversed(mongo):
+                    _pantalla.registrar_llamado(entry["codigo"], entry["ventanilla"])
+                vigentes = mongo
+        except Exception:
+            pass
+    return {"ok": True, "llamados": vigentes}
+
+
+@app.get("/pantalla", response_class=HTMLResponse)
+def vista_pantalla(request: Request):
+    """Pantalla pública de sala: turnos llamados con código y ventanilla (HU-009)."""
+    vigentes = _pantalla.llamados_vigentes()
+    if not vigentes:
+        try:
+            mongo = _pantalla.consultar_desde_mongo(get_db())
+            if mongo is not None:
+                for entry in reversed(mongo):
+                    _pantalla.registrar_llamado(entry["codigo"], entry["ventanilla"])
+                vigentes = _pantalla.llamados_vigentes()
+        except Exception:
+            pass
+    return templates.TemplateResponse(
+        request,
+        "pantalla.html",
+        {"base": BASE, "llamados": vigentes},
+    )

@@ -1,0 +1,251 @@
+{% extends "base_publico.html" %}
+{% block titulo %}Pantalla de llamados{% endblock %}
+
+{% block contenido %}
+<section class="pantalla-sala" id="pantalla-sala" aria-live="polite" aria-label="Pantalla de llamados activos">
+
+  <h1 class="pantalla-titulo">Turnos llamados</h1>
+  <p class="pantalla-subtitulo" id="pantalla-estado">Conectando&hellip;</p>
+
+  <div class="pantalla-grid" id="llamados-lista" role="list">
+    {% for llamado in llamados %}
+    <article class="llamado-card llamado-{{ llamado.estado }}" role="listitem" aria-label="Turno {{ llamado.codigo }} en ventanilla {{ llamado.ventanilla }}">
+      <div class="llamado-codigo">{{ llamado.codigo }}</div>
+      <div class="llamado-ventanilla">{{ llamado.ventanilla }}</div>
+      {% if llamado.estado == "en_atencion" %}
+      <span class="llamado-badge">En atención</span>
+      {% else %}
+      <span class="llamado-badge llamado-badge-nuevo">Llamado</span>
+      {% endif %}
+    </article>
+    {% else %}
+    <p class="pantalla-vacia" id="pantalla-vacia">Sin turnos llamados actualmente.</p>
+    {% endfor %}
+  </div>
+
+  <!-- Indicador de conexión WebSocket -->
+  <div class="pantalla-ws-estado" id="ws-indicador" aria-live="polite">
+    <span class="ws-dot ws-dot-off" id="ws-dot"></span>
+    <span id="ws-texto">Sin conexión en vivo</span>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* ── Pantalla pública de sala (HU-009) ── */
+.pantalla-sala {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  text-align: center;
+}
+.pantalla-titulo {
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 800;
+  color: #e2e8f0;
+  margin-bottom: .25rem;
+}
+.pantalla-subtitulo {
+  color: #94a3b8;
+  font-size: .95rem;
+  margin-bottom: 2rem;
+  min-height: 1.4em;
+}
+.pantalla-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+.llamado-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 2px solid #334155;
+  border-radius: 1rem;
+  padding: 1.5rem 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .5rem;
+  animation: aparecer .4s ease;
+  transition: border-color .3s;
+}
+.llamado-card.llamado-llamado {
+  border-color: #3b82f6;
+  box-shadow: 0 0 18px rgba(59,130,246,.25);
+}
+.llamado-card.llamado-en_atencion {
+  border-color: #22c55e;
+  box-shadow: 0 0 18px rgba(34,197,94,.2);
+}
+.llamado-codigo {
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 900;
+  color: #f1f5f9;
+  letter-spacing: .04em;
+  line-height: 1;
+}
+.llamado-ventanilla {
+  font-size: 1.15rem;
+  color: #7dd3fc;
+  font-weight: 600;
+  letter-spacing: .05em;
+}
+.llamado-badge {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: .18rem .7rem;
+  border-radius: 999px;
+  background: #22c55e22;
+  color: #4ade80;
+  border: 1px solid #22c55e55;
+}
+.llamado-badge-nuevo {
+  background: #3b82f622;
+  color: #93c5fd;
+  border-color: #3b82f655;
+}
+.pantalla-vacia {
+  grid-column: 1/-1;
+  color: #475569;
+  font-size: 1.1rem;
+  padding: 2rem 0;
+}
+/* WebSocket indicator */
+.pantalla-ws-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: .78rem;
+  color: #64748b;
+  margin-top: 1rem;
+}
+.ws-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: background .3s;
+}
+.ws-dot-off  { background: #334155; }
+.ws-dot-ok   { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.ws-dot-err  { background: #ef4444; }
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  const BASE    = {{ base | tojson }};
+  const API_URL = BASE + "/api/llamados";
+  const WS_URL  = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + BASE + "/ws/eventos";
+
+  const lista   = document.getElementById("llamados-lista");
+  const estado  = document.getElementById("pantalla-estado");
+  const dot     = document.getElementById("ws-dot");
+  const wsTexto = document.getElementById("ws-texto");
+
+  let ws = null;
+  let reintento = 1000;
+  let timerPoll = null;
+
+  /* ── Renderizar lista de llamados ──────────────────────────────── */
+  function renderizar(llamados) {
+    lista.innerHTML = "";
+    if (!llamados || llamados.length === 0) {
+      lista.innerHTML = '<p class="pantalla-vacia">Sin turnos llamados actualmente.</p>';
+      estado.textContent = "Sin llamados activos";
+      return;
+    }
+    estado.textContent = llamados.length === 1
+      ? "1 turno activo"
+      : llamados.length + " turnos activos";
+    llamados.forEach(function (t) {
+      const art = document.createElement("article");
+      art.className = "llamado-card llamado-" + t.estado;
+      art.setAttribute("role", "listitem");
+      art.setAttribute("aria-label", "Turno " + t.codigo + " en ventanilla " + t.ventanilla);
+      const badgeClass = t.estado === "en_atencion" ? "" : " llamado-badge-nuevo";
+      const badgeText  = t.estado === "en_atencion" ? "En atención" : "Llamado";
+      art.innerHTML =
+        '<div class="llamado-codigo">' + t.codigo + '</div>' +
+        '<div class="llamado-ventanilla">' + t.ventanilla + '</div>' +
+        '<span class="llamado-badge' + badgeClass + '">' + badgeText + '</span>';
+      lista.appendChild(art);
+    });
+  }
+
+  /* ── Consulta periódica (fallback si WebSocket no está disponible) */
+  function consultarAPI() {
+    fetch(API_URL)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) renderizar(data.llamados);
+      })
+      .catch(function () { /* silencioso */ });
+  }
+
+  function iniciarPoll(intervaloMs) {
+    detenerPoll();
+    timerPoll = setInterval(consultarAPI, intervaloMs);
+  }
+
+  function detenerPoll() {
+    if (timerPoll !== null) { clearInterval(timerPoll); timerPoll = null; }
+  }
+
+  /* ── WebSocket ─────────────────────────────────────────────────── */
+  function conectarWS() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = function () {
+      reintento = 1000;
+      dot.className = "ws-dot ws-dot-ok";
+      wsTexto.textContent = "Conexión en vivo";
+      estado.textContent = "Conectado · actualizando en tiempo real";
+      /* Con WS activo, el poll es de seguridad cada 30 s */
+      iniciarPoll(30000);
+    };
+
+    ws.onmessage = function (ev) {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      const tipo = msg.tipo || "";
+      if (tipo === "latido" || tipo === "conectado") return;
+      /* Cualquier evento de negocio (turno_llamado, atencion_iniciada, etc.) */
+      if (tipo === "turno_llamado" || tipo === "atencion_iniciada" ||
+          tipo === "atencion_finalizada" || tipo === "turno_abandonado") {
+        consultarAPI();   /* el servidor ya actualizó su estado; solo recargamos */
+      }
+    };
+
+    ws.onerror = function () {
+      dot.className = "ws-dot ws-dot-err";
+      wsTexto.textContent = "Error de conexión";
+    };
+
+    ws.onclose = function () {
+      dot.className = "ws-dot ws-dot-off";
+      wsTexto.textContent = "Sin conexión · reintentando…";
+      estado.textContent = "Consultando periódicamente…";
+      /* Fallback: poll cada 3 s mientras el WS esté caído */
+      iniciarPoll(3000);
+      setTimeout(function () {
+        if (!ws || ws.readyState === WebSocket.CLOSED) {
+          reintento = Math.min(reintento * 1.5, 30000);
+          conectarWS();
+        }
+      }, reintento);
+    };
+  }
+
+  /* ── Inicializar ───────────────────────────────────────────────── */
+  consultarAPI();    /* primer pintado inmediato */
+  conectarWS();      /* luego conectar WS */
+})();
+</script>
+{% endblock %}
