@@ -849,42 +849,28 @@ def vista_dashboard(request: Request, sla_espera: int = 300):
 
 # --- HU-009: Pantalla pública de llamados (Aaron Benavides) ------------------
 
+def _obtener_llamados_actuales() -> list[dict]:
+    """MongoDB decide el estado real; memoria como respaldo si MongoDB falla."""
+    try:
+        mongo = _pantalla.consultar_desde_mongo(get_db())
+    except Exception:
+        mongo = None
+    # MongoDB vacío significa que no hay activos; no revivir caché obsoleta.
+    if mongo is not None:
+        return mongo
+    return _pantalla.llamados_vigentes()
+
+
 @app.get("/api/llamados")
 def api_llamados():
-    """
-    Llamados activos para la pantalla de sala (HU-009).
-    Solo devuelve código y ventanilla; sin datos personales.
-    """
-    vigentes = _pantalla.llamados_vigentes()
-    if not vigentes:
-        # Fallback a MongoDB cuando la lista en memoria está vacía
-        try:
-            mongo = _pantalla.consultar_desde_mongo(get_db())
-            if mongo is not None:
-                # Hidratar el estado en memoria para las consultas siguientes
-                for entry in reversed(mongo):
-                    _pantalla.registrar_llamado(entry["codigo"], entry["ventanilla"])
-                vigentes = mongo
-        except Exception:
-            pass
-    return {"ok": True, "llamados": vigentes}
+    """Listado de llamados activos para pantalla de sala (HU-009)."""
+    return {"ok": True, "llamados": _obtener_llamados_actuales()}
 
 
 @app.get("/pantalla", response_class=HTMLResponse)
 def vista_pantalla(request: Request):
-    """Pantalla pública de sala: turnos llamados con código y ventanilla (HU-009)."""
-    vigentes = _pantalla.llamados_vigentes()
-    if not vigentes:
-        try:
-            mongo = _pantalla.consultar_desde_mongo(get_db())
-            if mongo is not None:
-                for entry in reversed(mongo):
-                    _pantalla.registrar_llamado(entry["codigo"], entry["ventanilla"])
-                vigentes = _pantalla.llamados_vigentes()
-        except Exception:
-            pass
+    """Vista pública de llamados, sin datos personales (HU-009)."""
     return templates.TemplateResponse(
-        request,
-        "pantalla.html",
-        {"base": BASE, "llamados": vigentes},
+        request, "pantalla.html",
+        {"base": BASE, "llamados": _obtener_llamados_actuales()},
     )

@@ -246,6 +246,8 @@ class TestRutasHU009(unittest.TestCase):
         self._patches = [
             patch("app.main.get_db", return_value=MagicMock()),
             patch("app.main.verificar_redis", return_value={"ok": True}),
+            # Pruebas anteriores verifican el respaldo en memoria sin MongoDB real.
+            patch("app.pantalla_publica.PantallaPública.consultar_desde_mongo", return_value=None),
         ]
         for p in self._patches:
             p.start()
@@ -295,6 +297,22 @@ class TestRutasHU009(unittest.TestCase):
         item = r.json()["llamados"][0]
         self.assertEqual(set(item.keys()), {"codigo", "ventanilla", "estado"})
 
+    def test_mongo_vacio_prevalece_sobre_cache_obsoleta(self):
+        self._m._pantalla.registrar_llamado("A-777", "V-01")
+        with patch.object(self._m._pantalla, "consultar_desde_mongo", return_value=[]):
+            r = self.client.get("/api/llamados")
+        self.assertEqual(r.json()["llamados"], [])
+
+    def test_mongo_muestra_turno_activo_aunque_cache_expiro(self):
+        self._m._pantalla.registrar_llamado("A-778", "V-02")
+        self._m._pantalla._llamados[0].ts = (
+            datetime.now(timezone.utc).timestamp() - TTL_LLAMADO_SEG - 1
+        )
+        actual = [{"codigo": "A-778", "ventanilla": "V-02", "estado": ESTADO_EN_ATENCION}]
+        with patch.object(self._m._pantalla, "consultar_desde_mongo", return_value=actual):
+            r = self.client.get("/api/llamados")
+        self.assertEqual(r.json()["llamados"], actual)
+
     def test_vista_pantalla_200(self):
         r = self.client.get("/pantalla")
         self.assertEqual(r.status_code, 200)
@@ -305,6 +323,13 @@ class TestRutasHU009(unittest.TestCase):
         r = self.client.get("/pantalla")
         self.assertIn("C-007", r.text)
         self.assertIn("V-03", r.text)
+
+    def test_vista_descarta_cache_obsoleta_si_mongo_vacio(self):
+        self._m._pantalla.registrar_llamado("A-779", "V-03")
+        with patch.object(self._m._pantalla, "consultar_desde_mongo", return_value=[]):
+            r = self.client.get("/pantalla")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("A-779", r.text)
 
     def test_vista_pantalla_sin_datos_personales(self):
         """La plantilla no debe renderizar campos personales."""
