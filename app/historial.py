@@ -61,7 +61,9 @@ def obtener_historial_turnos(
     total = col.count_documents(filtro)
 
     # Ordenar por creado descendente (más recientes primero)
-    cursor = col.find(filtro).sort("timestamps.creado", -1).skip(salto).limit(limite)
+    cursor = col.find(filtro).sort("timestamps.creado", -1).skip(salto)
+    if limite and limite > 0:
+        cursor = cursor.limit(limite)
 
     turnos_procesados = []
     for doc in cursor:
@@ -117,3 +119,35 @@ def obtener_historial_turnos(
         },
         "turnos": turnos_procesados,
     }
+
+
+def exportar_historial_turnos(
+    db: Database,
+    estado: Optional[str] = None,
+    ventanilla: Optional[str] = None,
+    prioridad: Optional[str] = None,
+    codigo: Optional[str] = None,
+) -> dict:
+    """
+    Exporta la totalidad de turnos en MongoDB que cumplan con los filtros indicados (HU-010).
+    Sin límite de paginación para auditoría completa y descarga en formato JSON.
+    """
+    res = obtener_historial_turnos(
+        db=db,
+        estado=estado,
+        ventanilla=ventanilla,
+        prioridad=prioridad,
+        codigo=codigo,
+        limite=0,
+        salto=0,
+    )
+    return {
+        "ok": True,
+        "servicio": SERVICIO_ID,
+        "fecha_exportacion": datetime.now(timezone.utc).isoformat(),
+        "total_exportados": len(res["turnos"]),
+        "total_registros_coincidentes": res["total"],
+        "filtros_aplicados": res["filtros"],
+        "turnos": res["turnos"],
+    }
+

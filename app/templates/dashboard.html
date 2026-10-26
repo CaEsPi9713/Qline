@@ -19,7 +19,8 @@
         <option value="600" {% if metricas.sla.objetivo_max_espera_seg == 600 %}selected{% endif %}>10 minutos (600 s)</option>
       </select>
       <button type="submit" class="btn-secundario">Actualizar</button>
-      <a href="{{ base }}/api/dashboard?sla_espera={{ metricas.sla.objetivo_max_espera_seg }}" target="_blank">API JSON &rarr;</a>
+      <a href="{{ base }}/api/dashboard/descargar?sla_espera={{ metricas.sla.objetivo_max_espera_seg }}" class="btn">Descargar JSON</a>
+      <a href="{{ base }}/api/dashboard?sla_espera={{ metricas.sla.objetivo_max_espera_seg }}" target="_blank" class="btn btn-secundario">Ver JSON</a>
     </form>
   </div>
 </div>

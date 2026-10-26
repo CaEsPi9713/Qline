@@ -2,7 +2,7 @@
 
 Registro de las decisiones tomadas durante el desarrollo, con las alternativas que se consideraron y por qué se descartaron. Cada integrante documenta las de su área. Este archivo no sustituye al Plan de Desarrollo: lo complementa con el *por qué*.
 
-**Estado:** secciones de Redis, tiempo real y consulta por QR (Alessandro) y de ciclo de atención y recuperación (Abigail) completas. Quedan por añadir las de MongoDB e historial (Carlos) y cliente (Aaron).
+**Estado:** secciones de Redis, tiempo real y consulta por QR (Alessandro), MongoDB e historial (Carlos) y ciclo de atención y recuperación (Abigail) completas. Queda por añadir la sección de cliente (Aaron).
 
 ---
 
@@ -80,7 +80,7 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 | | |
 |---|---|
-| **Decisión** | La consulta por QR no modifica el esquema ni los índices. El esquema de `turnos` admite campos adicionales, por lo que `qr_token` pasa sin tocarlo; la búsqueda funciona sin índice. El índice único parcial y la validación del formato son de Carlos y exigen acuerdo del equipo (sección 26). |
+| **Decisión** | La consulta por QR no modifica el esquema ni los índices. El esquema de `turnos` admite campos adicionales, por lo que `qr_token` pasa sin tocarlo; la búsqueda funciona sin índice. El índice único parcial y la validación del formato son de Carlos y exigen acuerdo del equipo (sección 26). *Actualización de S3: ese acuerdo se dio; Carlos añadió el campo, su validación y el índice parcial único (D-13).* |
 | **Por qué** | El usuario del curso no puede ejecutar `collMod`, y recrear la colección (`--recrear`) borra datos: el plan no autoriza usarlo para esto. |
 
 ### D-10 · Redis falla rápido
@@ -103,13 +103,45 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 ## MongoDB e historial (Carlos)
 
-*Pendiente de completar por el integrante.*
+### D-12 · Validación con $jsonSchema a nivel de motor y espejo en Python
+
+| | |
+|---|---|
+| **Decisión** | Se definió un esquema `$jsonSchema` estricto en MongoDB (`turnos_schema.py`) con `validationLevel: strict` y `validationAction: error`, respaldado por un validador en memoria en Python (`validar_documento_turno`) para validación previa en tests y scripts. |
+| **Por qué** | Garantiza la integridad del modelo de datos como fuente de verdad duradera: ningún script, inserción directa o error de aplicación puede guardar estados desconocidos, ventanillas inexistentes o timestamps con tipos incompatibles. |
+| **Alternativas** | *Validar únicamente en la aplicación*: deja el motor desprotegido ante scripts de migración, consola `mongosh` o accesos concurrentes. *Dejar MongoDB totalmente schemaless*: facilita corrupción de datos a largo plazo. |
+
+### D-13 · Índice parcial único para `qr_token` sin migración destructiva
+
+| | |
+|---|---|
+| **Contexto** | S3 introduce la consulta por QR móvil (HU-003 / HU-013) con un token UUID v4 en MongoDB. Existen más de 500 registros previos en la base de datos sin este campo. Un índice único estándar fallaría por claves duplicadas (nulas). |
+| **Decisión** | Definir `idx_turnos_qr_token_unico` con `unique: True` y `partialFilterExpression: {"qr_token": {"$exists": True, "$type": "string"}}`. |
+| **Por qué** | Garantiza unicidad estricta para todos los turnos que poseen QR, mientras que los turnos antiguos o sin token no son indexados ni colisionan. Permite una evolución de esquema 100 % no destructiva, sin requerir `--recrear` ni borrar datos del servidor compartido (respetando la regla de la sección 26 del plan). |
+| **Alternativas** | *Índice sparse simple*: en MongoDB un índice `sparse` con campos nulos explícitos puede generar colisiones en unicidad. *Poblar UUIDs ficticios en documentos viejos*: alteraría la auditoría histórica de S2 sin necesidad. |
+
+### D-14 · Cálculo de KPIs y SLA en el motor mediante Aggregation Pipelines
+
+| | |
+|---|---|
+| **Decisión** | Los indicadores operacionales del Dashboard (conteo por estados, tiempos promedio de espera y porcentaje de cumplimiento SLA) se calculan en MongoDB mediante Aggregation Pipelines (`$match -> $group` con `$avg`, `$cond`), no en bucles Python. |
+| **Por qué** | Evita transferir miles de documentos por la red hacia el proceso web. El motor ejecuta los cálculos en C++ optimizado y devuelve únicamente el resumen agregado, logrando respuestas en menos de 0.5 ms. |
+| **Alternativas** | *Calcular en Python en cada petición*: descargar todos los registros genera saturación de memoria RAM y latencia proporcional al volumen histórico (O(N) en red). |
+
+### D-15 · Exportación completa de historial filtrado en JSON
+
+| | |
+|---|---|
+| **Decisión** | `/api/historial/descargar` exporta todos los documentos que cumplen los filtros seleccionados (`limite=0`), entregando un archivo descargable con cabecera `Content-Disposition: attachment; filename="historial_turnos_<timestamp>.json"`. |
+| **Por qué** | El visor web pagina a 100 registros para ergonomía visual, pero una auditoría analítica requiere descargar la totalidad de los datos filtrados en un solo archivo estructurado con metadatos de auditoría (`fecha_exportacion`, `total_exportados`, `filtros_aplicados`). |
+| **Alternativas** | *Descargar solo la página visible (100 registros)*: incompleto para supervisores que auditan días completos. *Exportar a CSV*: el alcance acordado en el plan especificó JSON sin introducir dependencias de formateo CSV. |
+
 
 ## Ciclo de atención y recuperación (Abigail)
 
 > Diseño de los módulos de Abigail; la integración y los módulos de soporte los implementó Alessandro con asistencia de Claude Code (ver la nota de autoría en `docs/seguimientos/S3.md`, sección 5).
 
-### D-12 · El abandono lo decide un barrido sobre MongoDB y el Hash, no un aviso de Redis
+### D-16 · El abandono lo decide un barrido sobre MongoDB y el Hash, no un aviso de Redis
 
 | | |
 |---|---|
@@ -118,7 +150,7 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 | **Alternativas** | *Notificaciones de expiración de Redis*: requieren `CONFIG SET`, no disponible. *Índice TTL de MongoDB*: borra documentos, y aquí el turno debe conservarse para el historial. *Un temporizador por turno en memoria*: se pierde al reiniciar la aplicación y no funciona con varios procesos. |
 | **Resultado** | Verificado en el servidor: `A-001` llamado a las 23:31:23,881 y abandonado con `abandonado = 23:34:23,881`. |
 
-### D-13 · El abandono es idempotente por una condición en el `update_one`
+### D-17 · El abandono es idempotente por una condición en el `update_one`
 
 | | |
 |---|---|
@@ -126,16 +158,16 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 | **Por qué** | Permite repetir el barrido, ejecutarlo en varios procesos a la vez y reintentar tras un fallo sin duplicar ni deshacer nada. Se probó con 4 barridos simultáneos sobre 20 turnos: 20 abandonados, 20 únicos, 20 eventos. |
 | **Alternativas** | *Lua o transacción entre MongoDB y Redis*: no existen transacciones entre ambos y no se verificó `EVAL` en el Redis compartido. *Revertir MongoDB si Redis falla*: dejaría un turno llamado sin Hash que el siguiente barrido volvería a procesar. |
 
-### D-14 · Un barrido por proceso de la aplicación, sin candado distribuido
+### D-18 · Un barrido por proceso de la aplicación, sin candado distribuido
 
 | | |
 |---|---|
 | **Decisión** | El barrido corre en un hilo daemon que se inicia y detiene con la aplicación (`_lifespan`), cada 10 s (`BARRIDO_INTERVALO_SEG`) y se apaga con `BARRIDO_ABANDONO=0`. Con varios *workers* de Gunicorn habrá uno por worker. Las pruebas lo apagan por defecto. |
-| **Por qué** | Es seguro gracias a D-13 y evita depender de un candado en Redis o de un proceso aparte. Un fallo de una pasada (MongoDB caído) se cuenta y la siguiente reintenta. La ventanilla única bloquea una ventanilla hasta que su turno se resuelve, por lo que el barrido es crítico para que no queden ventanillas retenidas. |
+| **Por qué** | Es seguro gracias a D-17 y evita depender de un candado en Redis o de un proceso aparte. Un fallo de una pasada (MongoDB caído) se cuenta y la siguiente reintenta. La ventanilla única bloquea una ventanilla hasta que su turno se resuelve, por lo que el barrido es crítico para que no queden ventanillas retenidas. |
 | **Alternativas** | *Cron que ejecute el script*: no corre a menos de 1 minuto y se desacopla de la aplicación. *Candado `SET NX` para un solo barrido*: más piezas para ahorrar trabajo que ya es barato (consulta indexada). |
 | **Índice** | `idx_turnos_estado_llamado` `{estado, timestamps.llamado}` para la consulta del barrido. |
 
-### D-15 · La recuperación es una reconciliación, no un vaciado
+### D-19 · La recuperación es una reconciliación, no un vaciado
 
 | | |
 |---|---|
@@ -144,7 +176,7 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 | **Alternativas** | *Vaciar y reconstruir toda la cola*: dejaría la cola vacía unos instantes y está prohibido `FLUSHALL`/`FLUSHDB`. *Reencolar también los llamados vencidos*: los cubre el barrido. |
 | **Resultado** | Verificado en el servidor: 12 pendientes recuperados en 0,0028 s, mismo orden, sin duplicados; contador restaurado de 0 a 20 (clave aislada). |
 
-### D-16 · La rehidratación no es atómica con las llamadas
+### D-20 · La rehidratación no es atómica con las llamadas
 
 | | |
 |---|---|
@@ -152,7 +184,7 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 | **Por qué** | Si un turno se llama justo mientras se reencola, queda un código obsoleto en la cola; el siguiente llamado lo rechaza con el aviso de inconsistencia que ya existe y no se duplica ni se pierde ninguna atención. La rehidratación es un procedimiento de recuperación, poco frecuente. |
 | **Alternativas** | *Script Lua atómico*: `EVAL` no verificado en el Redis compartido. *Bloquear las llamadas durante la recuperación*: añadiría estado compartido nuevo. |
 
-### D-17 · Las pruebas usan datos y claves propios, y un reloj adelantado
+### D-21 · Las pruebas usan datos y claves propios, y un reloj adelantado
 
 | | |
 |---|---|
