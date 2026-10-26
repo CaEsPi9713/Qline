@@ -10,8 +10,10 @@ Calcula mediante Aggregation Pipelines e indicadores analíticos en MongoDB:
   - Ventanillas activas / con turno asignado
   - Cumplimiento de objetivo SLA (tiempo de espera)
 """
+from datetime import datetime, timezone
 from typing import Optional
 from pymongo.database import Database
+
 
 from app.constantes import (
     ESTADO_ABANDONADO,
@@ -171,3 +173,22 @@ def calcular_metricas_dashboard(
             "estado": "CUMPLIDO" if sla_cumplido else "INCUMPLIDO",
         },
     }
+
+
+def exportar_metricas_dashboard(
+    db: Database,
+    sla_espera_max_seg: int = SLA_OBJETIVO_ESPERA_SEG_DEFECTO,
+) -> dict:
+    """
+    Exporta las métricas operacionales del dashboard y el análisis de SLA (HU-011)
+    con metadatos de auditoría para descarga en formato JSON.
+    """
+    metricas = calcular_metricas_dashboard(db, sla_espera_max_seg=sla_espera_max_seg)
+    return {
+        "ok": True,
+        "servicio": SERVICIO_ID,
+        "fecha_exportacion": datetime.now(timezone.utc).isoformat(),
+        "tipo_reporte": "metricas_dashboard_sla",
+        "datos": metricas,
+    }
+

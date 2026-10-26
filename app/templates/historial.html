@@ -48,7 +48,10 @@
 <div class="card">
   <div class="card-cabecera">
     <h2>Registros históricos ({{ total }} encontrados)</h2>
-    <a href="{{ base }}/api/historial?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" target="_blank" class="btn btn-secundario">Ver JSON</a>
+    <div class="fila" style="gap:8px">
+      <a href="{{ base }}/api/historial/descargar?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" class="btn">Descargar JSON</a>
+      <a href="{{ base }}/api/historial?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" target="_blank" class="btn btn-secundario">Ver JSON</a>
+    </div>
   </div>
   <div class="tabla-wrap">
     <table>

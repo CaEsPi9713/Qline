@@ -2,7 +2,7 @@
 
 Registro de las decisiones tomadas durante el desarrollo, con las alternativas que se consideraron y por qué se descartaron. Cada integrante documenta las de su área. Este archivo no sustituye al Plan de Desarrollo: lo complementa con el *por qué*.
 
-**Estado:** sección de Redis, tiempo real y consulta por QR (Alessandro) completa. Quedan por añadir las secciones de MongoDB e historial (Carlos), ciclo de atención y recuperación (Abigail) y cliente (Aaron).
+**Estado:** secciones de Redis, tiempo real y consulta por QR (Alessandro) y MongoDB e historial (Carlos) completas. Quedan por añadir las secciones de ciclo de atención y recuperación (Abigail) y cliente (Aaron).
 
 ---
 
@@ -103,7 +103,39 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 ## MongoDB e historial (Carlos)
 
-*Pendiente de completar por el integrante.*
+### D-12 · Validación con $jsonSchema a nivel de motor y espejo en Python
+
+| | |
+|---|---|
+| **Decisión** | Se definió un esquema `$jsonSchema` estricto en MongoDB (`turnos_schema.py`) con `validationLevel: strict` y `validationAction: error`, respaldado por un validador en memoria en Python (`validar_documento_turno`) para validación previa en tests y scripts. |
+| **Por qué** | Garantiza la integridad del modelo de datos como fuente de verdad duradera: ningún script, inserción directa o error de aplicación puede guardar estados desconocidos, ventanillas inexistentes o timestamps con tipos incompatibles. |
+| **Alternativas** | *Validar únicamente en la aplicación*: deja el motor desprotegido ante scripts de migración, consola `mongosh` o accesos concurrentes. *Dejar MongoDB totalmente schemaless*: facilita corrupción de datos a largo plazo. |
+
+### D-13 · Índice parcial único para `qr_token` sin migración destructiva
+
+| | |
+|---|---|
+| **Contexto** | S3 introduce la consulta por QR móvil (HU-003 / HU-013) con un token UUID v4 en MongoDB. Existen más de 500 registros previos en la base de datos sin este campo. Un índice único estándar fallaría por claves duplicadas (nulas). |
+| **Decisión** | Definir `idx_turnos_qr_token_unico` con `unique: True` y `partialFilterExpression: {"qr_token": {"$exists": True, "$type": "string"}}`. |
+| **Por qué** | Garantiza unicidad estricta para todos los turnos que poseen QR, mientras que los turnos antiguos o sin token no son indexados ni colisionan. Permite una evolución de esquema 100 % no destructiva, sin requerir `--recrear` ni borrar datos del servidor compartido (respetando la regla de la sección 26 del plan). |
+| **Alternativas** | *Índice sparse simple*: en MongoDB un índice `sparse` con campos nulos explícitos puede generar colisiones en unicidad. *Poblar UUIDs ficticios en documentos viejos*: alteraría la auditoría histórica de S2 sin necesidad. |
+
+### D-14 · Cálculo de KPIs y SLA en el motor mediante Aggregation Pipelines
+
+| | |
+|---|---|
+| **Decisión** | Los indicadores operacionales del Dashboard (conteo por estados, tiempos promedio de espera y porcentaje de cumplimiento SLA) se calculan en MongoDB mediante Aggregation Pipelines (`$match -> $group` con `$avg`, `$cond`), no en bucles Python. |
+| **Por qué** | Evita transferir miles de documentos por la red hacia el proceso web. El motor ejecuta los cálculos en C++ optimizado y devuelve únicamente el resumen agregado, logrando respuestas en menos de 0.5 ms. |
+| **Alternativas** | *Calcular en Python en cada petición*: descargar todos los registros genera saturación de memoria RAM y latencia proporcional al volumen histórico (O(N) en red). |
+
+### D-15 · Exportación completa de historial filtrado en JSON
+
+| | |
+|---|---|
+| **Decisión** | `/api/historial/descargar` exporta todos los documentos que cumplen los filtros seleccionados (`limite=0`), entregando un archivo descargable con cabecera `Content-Disposition: attachment; filename="historial_turnos_<timestamp>.json"`. |
+| **Por qué** | El visor web pagina a 100 registros para ergonomía visual, pero una auditoría analítica requiere descargar la totalidad de los datos filtrados en un solo archivo estructurado con metadatos de auditoría (`fecha_exportacion`, `total_exportados`, `filtros_aplicados`). |
+| **Alternativas** | *Descargar solo la página visible (100 registros)*: incompleto para supervisores que auditan días completos. *Exportar a CSV*: el alcance acordado en el plan especificó JSON sin introducir dependencias de formateo CSV. |
+
 
 ## Ciclo de atención y recuperación (Abigail)
 
