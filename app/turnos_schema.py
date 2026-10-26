@@ -19,6 +19,7 @@ COLECCION_TURNOS = "turnos"
 # La serie real de la operación es "A-"; la serie "S-" es de los datos sintéticos
 # (TT-005), que deben poder convivir con la validación del motor.
 PATRON_CODIGO = r"^[A-Z]-\d{3,}$"
+PATRON_UUID_V4 = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 
 # Definición formal de $jsonSchema de MongoDB
 SCHEMA_TURNOS = {
@@ -59,6 +60,11 @@ SCHEMA_TURNOS = {
             "operador": {
                 "bsonType": ["string", "null"],
                 "description": "Identificador del operador asignado o null",
+            },
+            "qr_token": {
+                "bsonType": ["string", "null"],
+                "pattern": PATRON_UUID_V4,
+                "description": "Token UUID v4 único para acceso y consulta móvil por QR (HU-003, HU-013)",
             },
             "timestamps": {
                 "bsonType": "object",
@@ -123,6 +129,14 @@ INDICES_TURNOS = [
         "keys": [("timestamps.creado", -1)],
         "options": {"name": "idx_turnos_creado_desc"},
     },
+    {
+        "keys": [("qr_token", 1)],
+        "options": {
+            "name": "idx_turnos_qr_token_unico",
+            "unique": True,
+            "partialFilterExpression": {"qr_token": {"$exists": True, "$type": "string"}},
+        },
+    },
 ]
 
 
@@ -163,6 +177,11 @@ def validar_documento_turno(doc: dict) -> bool:
     ventanilla = doc.get("ventanilla")
     if ventanilla is not None and ventanilla not in VENTANILLAS:
         raise TurnoValidationError(f"Ventanilla inválida: {ventanilla!r}. Opciones: {VENTANILLAS} o null.")
+
+    qr_token = doc.get("qr_token")
+    if qr_token is not None:
+        if not isinstance(qr_token, str) or not re.fullmatch(PATRON_UUID_V4, qr_token):
+            raise TurnoValidationError(f"qr_token inválido: {qr_token!r}. Debe ser UUID v4 o null.")
 
     ts = doc.get("timestamps")
     if not isinstance(ts, dict) or "creado" not in ts or ts["creado"] is None:

@@ -13,7 +13,7 @@ from bson import ObjectId, json_util
 from bson.errors import InvalidId
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pymongo import MongoClient
@@ -35,8 +35,9 @@ from app.llamado import LlamadoError, llamar_siguiente_turno
 from app.constantes import ESTADOS, PRIORIDADES, SERVICIO_ID, SERVICIO_NOMBRE, VENTANILLAS
 from app.redis_client import verificar_conexion as verificar_redis
 from app.turnos_schema import TurnoValidationError, validar_documento_turno
-from app.historial import obtener_historial_turnos
-from app.dashboard import calcular_metricas_dashboard
+from app.historial import exportar_historial_turnos, obtener_historial_turnos
+from app.dashboard import calcular_metricas_dashboard, exportar_metricas_dashboard
+
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -665,6 +666,37 @@ def api_historial(
         return JSONResponse({"ok": False, "error": f"Error al consultar historial: {e}"}, status_code=500)
 
 
+@app.get("/api/historial/descargar")
+def api_descargar_historial(
+    estado: str = "",
+    ventanilla: str = "",
+    prioridad: str = "",
+    codigo: str = "",
+):
+    """Descarga en archivo JSON todos los registros del historial filtrados (HU-010)."""
+    try:
+        datos = exportar_historial_turnos(
+            get_db(),
+            estado=estado.strip() or None,
+            ventanilla=ventanilla.strip() or None,
+            prioridad=prioridad.strip() or None,
+            codigo=codigo.strip() or None,
+        )
+        contenido = json.dumps(datos, indent=2, ensure_ascii=False)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        nombre_archivo = f"historial_turnos_{timestamp}.json"
+        return Response(
+            content=contenido,
+            media_type="application/json; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{nombre_archivo}"',
+            },
+        )
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Error al exportar historial: {e}"}, status_code=500)
+
+
+
 @app.get("/historial", response_class=HTMLResponse)
 def vista_historial(
     request: Request,
@@ -724,6 +756,26 @@ def api_dashboard(sla_espera: int = 300):
         return calcular_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera)
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"Error calculando métricas: {e}"}, status_code=500)
+
+
+@app.get("/api/dashboard/descargar")
+def api_descargar_dashboard(sla_espera: int = 300):
+    """Descarga en archivo JSON los indicadores y el cumplimiento de SLA actual (HU-011)."""
+    try:
+        datos = exportar_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera)
+        contenido = json.dumps(datos, indent=2, ensure_ascii=False)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        nombre_archivo = f"dashboard_sla_{sla_espera}s_{timestamp}.json"
+        return Response(
+            content=contenido,
+            media_type="application/json; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{nombre_archivo}"',
+            },
+        )
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Error al exportar dashboard: {e}"}, status_code=500)
+
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
