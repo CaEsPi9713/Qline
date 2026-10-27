@@ -1,54 +1,63 @@
 {% extends "base.html" %}
 {% block titulo %}Guía de demo{% endblock %}
-{% block lead %}Recorrido paso a paso del flujo completo de QLine (Seguimientos 2 y 3). Cada paso abre la pantalla correspondiente y dice qué debe verse; marque los pasos a medida que los comprueba.{% endblock %}
+{% block lead %}Recorrido paso a paso del Seguimiento 3: del turno que emite el cliente hasta la evidencia generada en el servidor. Cada paso abre la pantalla correspondiente y dice qué debe verse; marque los pasos a medida que los comprueba.{% endblock %}
 {% block contenido %}
 
 <div class="estado-sistema" aria-label="Estado del sistema">
   <span class="chip {{ 'ok-chip' if redis.ok else 'mal-chip' }}">Redis {% if redis.ok %}{{ redis.version }}{% else %}sin conexión{% endif %}</span>
   <span class="chip {{ 'ok-chip' if mongo.ok else 'mal-chip' }}">MongoDB {% if mongo.ok %}· {{ mongo.turnos }} turnos{% else %}sin conexión{% endif %}</span>
   <span class="chip {{ 'ok-chip' if cola_tam is not none else 'mal-chip' }}">Cola Redis {% if cola_tam is not none %}· {{ cola_tam }} en espera{% else %}no disponible{% endif %}</span>
+  <span class="chip {{ 'mal-chip' if qr_local else 'ok-chip' }}" title="Dominio que llevan los códigos QR">QR apunta a {{ qr_base }}</span>
+  <span class="chip {{ 'ok-chip' if barrido_activo else 'mal-chip' }}" title="Marca como abandonados los turnos llamados que no se presentan en 180 s">Abandono automático {% if barrido_activo %}· cada {{ barrido_intervalo|int }} s{% else %}apagado{% endif %}</span>
   <a class="btn btn-secundario" href="{{ base }}/demo">Actualizar estado</a>
 </div>
 {% if not redis.ok %}<div class="error">Redis no responde: {{ redis.error }}</div>{% endif %}
 {% if not mongo.ok %}<div class="error">MongoDB no responde: {{ mongo.error }}</div>{% endif %}
+{% if qr_local %}<div class="error">Los QR apuntan a <code>{{ qr_base }}</code>, una dirección local: un celular no podrá abrirlos. Defina <code>PUBLIC_BASE_URL</code> en el <code>.env</code> con el dominio público y reinicie la aplicación.</div>{% endif %}
+{% if not barrido_activo %}<div class="error">El abandono automático está apagado (<code>BARRIDO_ABANDONO=0</code>) o no ha arrancado: el paso 14 no se cumplirá solo. Ejecute <code>python -m scripts.barrer_abandonos</code> o encienda el barrido.</div>{% endif %}
 
 <div class="card">
   <div class="card-cabecera">
-    <h2>Antes de empezar (en el servidor)</h2>
+    <h2>Antes de empezar</h2>
   </div>
+  <p class="sub"><strong>Necesita:</strong> esta guía en una pantalla, <code>/pantalla</code> en una <strong>segunda pantalla</strong> y un <strong>celular</strong> para escanear los códigos QR. Duración aproximada: 25 minutos, sin contar la evidencia del bloque 7.</p>
   <p class="sub">Deje el entorno en cero para que el primer turno sea <code>A-001</code>. Solo se tocan las claves <code>grupo2:qline:</code>; nunca <code>FLUSHALL</code>.</p>
   <div class="terminal" data-copiar>python scripts/init_mongo.py --recrear --confirmar</div>
   <div class="terminal" data-copiar>python scripts/generar_datos_sinteticos.py --cargar</div>
   <div class="terminal" data-copiar>redis-cli del grupo2:qline:contador:atencion_general grupo2:qline:cola:atencion_general grupo2:qline:ventanilla:V-01:actual grupo2:qline:ventanilla:V-02:actual grupo2:qline:ventanilla:V-03:actual</div>
-  <p class="nota" style="margin:8px 0 0">La aplicación debe estar corriendo con <code>BARRIDO_ABANDONO=1</code> (valor por defecto) para el paso 18. Si es la primera vez que se usa el abandono, el primer comando también crea el índice del barrido.</p>
-  <p class="nota" style="margin:8px 0 0">El primer comando borra y recrea la colección <code>turnos</code> con su JSON Schema; el segundo carga el historial sintético (serie <code>S-</code>).</p>
+  <p class="nota" style="margin:8px 0 0">El primer comando <strong>borra</strong> y recrea la colección <code>turnos</code> con su JSON Schema y todos sus índices (incluido el del barrido de abandono y el del <code>qr_token</code>); el segundo carga el historial sintético (serie <code>S-</code>); el tercero reinicia el contador y la cola de la demo. Las fichas de arriba deben quedar en verde: el QR apunta al dominio público y el abandono automático está encendido.</p>
 </div>
 
 <div class="card-cabecera" style="margin-top:28px">
   <h2 style="margin:0">Recorrido</h2>
-  <span class="nota"><span id="avance-texto">0 de 23 pasos</span></span>
+  <span class="nota"><span id="avance-texto">0 de 24 pasos</span></span>
 </div>
 <div class="progreso" aria-hidden="true"><span id="avance-barra"></span></div>
 
 <ol class="pasos" id="pasos" style="margin-top:14px">
+
+  <li class="bloque-titulo" role="presentation">
+    <h2>1 · El cliente emite su turno y lo sigue desde el celular</h2>
+    <span class="nota">Aaron · HU-001, HU-003, HU-013 · unos 4 min</span>
+  </li>
   <li class="paso" data-paso="1">
     <div>
-      <div class="rol">Cliente · MongoDB + Redis</div>
-      <h3>Emitir un turno normal</h3>
-      <p>Elija <strong>Atención Regular</strong> y pulse <em>Emitir mi turno</em>.</p>
-      <div class="esperado"><strong>Debe verse:</strong> el ticket con el código <code>A-001</code>, prioridad normal y estado «En espera».</div>
+      <div class="rol">Cliente · Quiosco · MongoDB + Redis</div>
+      <h3>Emitir un turno normal desde el quiosco</h3>
+      <p>Abra el quiosco (idealmente a pantalla completa), elija <strong>Atención Regular</strong> y confirme.</p>
+      <div class="esperado"><strong>Debe verse:</strong> una vista sin menús de operación; el ticket con el código <code>A-001</code>, su prioridad normal y un <strong>código QR</strong> con el enlace del turno. El enlace usa el dominio público, nunca <code>localhost</code>.</div>
     </div>
     <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/emitir">Abrir Emitir</a>
+      <a class="btn" href="{{ base }}/quiosco">Abrir Quiosco</a>
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
   <li class="paso" data-paso="2">
     <div>
-      <div class="rol">Cliente · MongoDB + Redis</div>
+      <div class="rol">Cliente · Web · MongoDB + Redis</div>
       <h3>Emitir un turno preferencial</h3>
-      <p>Vuelva a emitir, esta vez con <strong>Atención Preferencial</strong>.</p>
-      <div class="esperado"><strong>Debe verse:</strong> el ticket con <code>A-002</code> y la insignia «Prioridad Preferencial».</div>
+      <p>Desde la emisión web, elija <strong>Atención Preferencial</strong>.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el ticket con <code>A-002</code>, la insignia «Prioridad Preferencial» y su QR.</div>
     </div>
     <div class="paso-acciones">
       <a class="btn" href="{{ base }}/emitir">Abrir Emitir</a>
@@ -57,22 +66,27 @@
   </li>
   <li class="paso" data-paso="3">
     <div>
-      <div class="rol">Cliente · MongoDB + Redis</div>
-      <h3>Consultar la posición de A-001</h3>
-      <p>Mongo aporta el estado del turno y Redis su posición en la fila.</p>
-      <div class="esperado"><strong>Debe verse:</strong> estado Pendiente, <strong>1 turno por delante</strong> y posición 2, aunque llegó primero.</div>
+      <div class="rol">Cliente · Celular · Consulta por QR</div>
+      <h3>Seguir <code>A-001</code> desde el celular</h3>
+      <p>Escanee el QR del ticket de <code>A-001</code> con el celular (mejor en una ventana privada) y deje la página abierta durante toda la demo.</p>
+      <div class="esperado"><strong>Debe verse:</strong> la página abre <strong>sin usuario ni contraseña</strong> (solo las rutas del QR son públicas; el panel sí la pide), con estado «En espera», <strong>1 turno por delante</strong> (el preferencial) y el indicador «En vivo».</div>
     </div>
     <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/consultar?codigo=A-001">Consultar A-001</a>
+      <a class="btn btn-secundario" href="{{ base }}/consultar?codigo=A-001">Consultar A-001</a>
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
+
+  <li class="bloque-titulo" role="presentation">
+    <h2>2 · Redis: cola con prioridad, llamado atómico y ventanilla única</h2>
+    <span class="nota">Alessandro · TT-011, TT-012, TT-013 · unos 6 min</span>
+  </li>
   <li class="paso" data-paso="4">
     <div>
-      <div class="rol">Operador · Redis</div>
+      <div class="rol">Operador · Redis (Sorted Set)</div>
       <h3>Revisar la cola activa</h3>
       <p>La cola es un <em>sorted set</em>: la prioridad pesa más que la hora de llegada.</p>
-      <div class="esperado"><strong>Debe verse:</strong> <code>A-002</code> (preferencial) en la posición 1 y <code>A-001</code> en la 2.</div>
+      <div class="esperado"><strong>Debe verse:</strong> <code>A-002</code> (preferencial) en la posición 1 y <code>A-001</code> en la 2, aunque <code>A-001</code> llegó primero.</div>
     </div>
     <div class="paso-acciones">
       <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
@@ -81,41 +95,83 @@
   </li>
   <li class="paso" data-paso="5">
     <div>
+      <div class="rol">Sala de espera · Pantalla pública</div>
+      <h3>Abrir la pantalla de sala</h3>
+      <p>Ábrala en la segunda pantalla (idealmente a pantalla completa). Solo muestra código y ventanilla, sin datos personales.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el aviso «Sin turnos llamados», los contadores <em>En espera</em> (2) y <em>En ventanilla</em> (0), el reloj y el indicador «En vivo» en verde. Con el botón del pie puede activar un aviso sonoro para cada llamado nuevo.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/pantalla" target="_blank" rel="noopener">Abrir Pantalla</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="6">
+    <div>
       <div class="rol">Operador · Redis atómico</div>
       <h3>Llamar al siguiente desde V-01</h3>
       <p>En la cola, elija <strong>V-01</strong> y pulse <em>Llamar siguiente</em>. La extracción es atómica: dos ventanillas nunca reciben el mismo turno.</p>
-      <div class="esperado"><strong>Debe verse:</strong> «V-01 llamó al turno A-002 (preferencial)» y la cola con un solo turno.</div>
+      <div class="esperado"><strong>Debe verse:</strong> «V-01 llamó al turno A-002 (preferencial)». <strong>En la pantalla de sala</strong> aparece, sin recargar, la tarjeta grande «Llamando ahora» con <code>A-002</code> y la ventanilla <code>V-01</code>, y <strong>en el celular</strong> de <code>A-001</code> la página cambia sola: ya no tiene ningún turno por delante.</div>
     </div>
     <div class="paso-acciones">
       <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
-  <li class="paso" data-paso="6">
-    <div>
-      <div class="rol">Operador · MongoDB</div>
-      <h3>Iniciar la atención</h3>
-      <p>En el panel, la tarjeta de V-01 muestra <code>A-002</code> como «llamado».</p>
-      <div class="esperado"><strong>Debe verse:</strong> botón <em>Iniciar atención</em>; al pulsarlo el estado pasa a «en atención» y aparece <em>Finalizar atención</em>.</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/panel">Abrir Panel</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
   <li class="paso" data-paso="7">
     <div>
-      <div class="rol">Operador · MongoDB + Redis</div>
-      <h3>Finalizar la atención</h3>
-      <p>Pulse <em>Finalizar atención</em>. Mongo registra el cierre y Redis libera la ventanilla.</p>
-      <div class="esperado"><strong>Debe verse:</strong> mensaje con los segundos de atención y V-01 «Sin turno asignado». Si pulsa el botón otra vez desde una pestaña vieja, el error es controlado.</div>
+      <div class="rol">Operador · Redis (SET NX)</div>
+      <h3>Una ventanilla, un turno</h3>
+      <p>Sin atender <code>A-002</code>, vuelva a llamar al siguiente <strong>desde V-01</strong>.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el llamado se rechaza («V-01 ya tiene el turno A-002 (llamado)…», error 409) y <code>A-001</code> sigue en la cola: no se extrajo nada.</div>
     </div>
     <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/panel">Abrir Panel</a>
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
   <li class="paso" data-paso="8">
+    <div>
+      <div class="rol">Operador · Redis (Hash con TTL)</div>
+      <h3>Estado temporal del turno llamado</h3>
+      <p>Al llamar, Redis guarda el turno en un Hash que caduca a los 180 s si el cliente no se presenta. En el servidor:</p>
+      <div class="terminal" data-copiar>redis-cli type grupo2:qline:turno:A-002</div>
+      <div class="terminal" data-copiar>redis-cli ttl grupo2:qline:turno:A-002</div>
+      <div class="esperado"><strong>Debe verse:</strong> <code>hash</code> y un número menor que 180 que va bajando. Es la tercera estructura de Redis, junto con el sorted set de la cola y los strings (contador y ventanilla).</div>
+    </div>
+    <div class="paso-acciones">
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+
+  <li class="bloque-titulo" role="presentation">
+    <h2>3 · Atención y registro del turno</h2>
+    <span class="nota">Alessandro y Carlos · HU-006, HU-007, HU-010 · unos 3 min</span>
+  </li>
+  <li class="paso" data-paso="9">
+    <div>
+      <div class="rol">Operador · MongoDB</div>
+      <h3>Iniciar la atención</h3>
+      <p>En el panel, la tarjeta de V-01 muestra <code>A-002</code> como «llamado». Pulse <em>Iniciar atención</em>.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el estado pasa a «en atención» y aparece <em>Finalizar atención</em>. El Hash desaparece (<code>redis-cli ttl grupo2:qline:turno:A-002</code> devuelve <code>-2</code>: el cliente se presentó) y la pantalla de sala lo marca «En atención».</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/panel">Abrir Panel</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="10">
+    <div>
+      <div class="rol">Operador · MongoDB + Redis</div>
+      <h3>Finalizar la atención</h3>
+      <p>Pulse <em>Finalizar atención</em>. MongoDB registra el cierre y Redis libera la ventanilla.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el mensaje con los segundos de atención, V-01 «Sin turno asignado» y <code>A-002</code> retirado de la pantalla de sala. Si pulsa el botón otra vez desde una pestaña vieja, el error es controlado.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/panel">Abrir Panel</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="11">
     <div>
       <div class="rol">Supervisor · MongoDB</div>
       <h3>Ver el turno en el historial</h3>
@@ -127,50 +183,18 @@
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
-  <li class="paso" data-paso="9">
-    <div>
-      <div class="rol">Supervisor · MongoDB (aggregation)</div>
-      <h3>Revisar el dashboard y el SLA</h3>
-      <p>Cambie la espera máxima (120, 300, 600 s) y observe el cumplimiento.</p>
-      <div class="esperado"><strong>Debe verse:</strong> turnos esperando (1), atendidos, promedios de espera y atención, ocupación por ventanilla y el % de SLA cambiando con el umbral.</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/dashboard">Abrir Dashboard</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="10">
-    <div>
-      <div class="rol">Administración · JSON Schema</div>
-      <h3>CRUD de turnos y validación del esquema</h3>
-      <p>Abra la colección <code>turnos</code>, intente insertar un documento con <code>"prioridad": "urgente"</code> y luego uno válido.</p>
-      <div class="esperado"><strong>Debe verse:</strong> el documento inválido es rechazado con un mensaje de validación; el válido se inserta y se puede editar y eliminar (bórrelo al terminar).</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/?coleccion=turnos">Abrir CRUD turnos</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="11">
-    <div>
-      <div class="rol">Seguimiento 3 · Operador · Redis (Hash con TTL)</div>
-      <h3>Estado temporal del turno llamado</h3>
-      <p>Al llamar a un turno, Redis guarda su estado en un Hash que caduca a los 180 s si el cliente no se presenta. Llame a un turno desde la cola y, en el servidor, mire la clave (reemplace <code>A-001</code> por el turno llamado):</p>
-      <div class="terminal" data-copiar>redis-cli ttl grupo2:qline:turno:A-001</div>
-      <div class="esperado"><strong>Debe verse:</strong> un número cercano a 180 que baja. Al pulsar <em>Iniciar atención</em> en el panel, la clave desaparece (<code>-2</code>).</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
+
+  <li class="bloque-titulo" role="presentation">
+    <h2>4 · Abandono automático: el cliente que no se presenta</h2>
+    <span class="nota">Abigail · HU-008, TT-012 · unos 4 min (3 de espera)</span>
   </li>
   <li class="paso" data-paso="12">
     <div>
-      <div class="rol">Seguimiento 3 · Cliente · Consulta por QR</div>
-      <h3>Seguir el turno desde el celular</h3>
-      <p>Cree dos turnos con enlace de QR y abra uno de los enlaces en el celular:</p>
-      <div class="terminal" data-copiar>python scripts/crear_turnos_qr_demo.py --cantidad 2</div>
-      <div class="esperado"><strong>Debe verse:</strong> la página del turno con su posición y el indicador «En vivo». Al llamar al siguiente en la cola, la posición cambia sola, sin recargar; al llamar a ese turno aparece «¡Es su turno!» con la ventanilla y la cuenta regresiva.</div>
+      <div class="rol">Operador · Celular · Redis (TTL)</div>
+      <h3>Llamar a <code>A-001</code> y no atenderlo</h3>
+      <p>Llame al siguiente <strong>desde V-02</strong> y <strong>no inicie la atención</strong>. Empieza a correr el plazo de 180 s.</p>
+      <div class="terminal" data-copiar>redis-cli ttl grupo2:qline:turno:A-001</div>
+      <div class="esperado"><strong>Debe verse:</strong> el celular cambia solo a «¡Es su turno!» con la ventanilla y una cuenta regresiva; la pantalla de sala muestra <code>A-001 · V-02</code>; y V-02 queda ocupada (no puede llamar a otro).</div>
     </div>
     <div class="paso-acciones">
       <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
@@ -179,8 +203,125 @@
   </li>
   <li class="paso" data-paso="13">
     <div>
-      <div class="rol">Seguimiento 3 · Redis Pub/Sub + WebSocket</div>
-      <h3>Verificar el tiempo real</h3>
+      <div class="rol">Cliente · Quiosco</div>
+      <h3>Mientras corre el plazo, preparar la recuperación</h3>
+      <p>Aproveche la espera: emita desde el quiosco un turno <strong>normal</strong> (<code>A-003</code>) y uno <strong>preferencial</strong> (<code>A-004</code>). Quedan en espera y se usarán en el bloque 5.</p>
+      <div class="esperado"><strong>Debe verse:</strong> dos tickets nuevos con su QR. En la cola: <code>A-004</code> primero y <code>A-003</code> después.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/quiosco">Abrir Quiosco</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="14">
+    <div>
+      <div class="rol">Sistema · MongoDB + Redis + tiempo real</div>
+      <h3>Comprobar que <code>A-001</code> se abandonó solo</h3>
+      <p>Pasados unos 3 minutos desde el llamado, el Hash de Redis expira y el barrido automático (cada pocos segundos) pasa el turno a abandonado. Si no quiere esperar el ciclo, puede ejecutarlo a mano:</p>
+      <div class="terminal" data-copiar>python -m scripts.barrer_abandonos</div>
+      <div class="esperado"><strong>Debe verse:</strong> el celular cambia solo a «Turno cancelado»; la pantalla de sala retira <code>A-001</code>; en el panel V-02 queda libre; el historial lo muestra <em>abandonado</em> con su hora de abandono (llamado + 180 s); y <code>A-001</code> no vuelve a la cola. Antes de los 180 s, el barrido no lo toca.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/historial?estado=abandonado">Historial abandonados</a>
+      <a class="btn btn-secundario" href="{{ base }}/panel">Abrir Panel</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+
+  <li class="bloque-titulo" role="presentation">
+    <h2>5 · Recuperación: Redis pierde la cola y MongoDB la reconstruye</h2>
+    <span class="nota">Abigail · HU-012, TT-017 · unos 3 min</span>
+  </li>
+  <li class="paso" data-paso="15">
+    <div>
+      <div class="rol">Resiliencia · Redis + MongoDB</div>
+      <h3>Simular la pérdida de la cola y ver el plan</h3>
+      <p>Borre solo la clave de la cola (con <code>A-003</code> y <code>A-004</code> en espera) y pida el <strong>plan</strong>: no escribe nada.</p>
+      <div class="terminal" data-copiar>redis-cli del grupo2:qline:cola:atencion_general</div>
+      <div class="terminal" data-copiar>python -m scripts.rehidratar_cola</div>
+      <div class="esperado"><strong>Debe verse:</strong> la cola vacía en <code>/cola</code> y un plan que lista los 2 pendientes faltantes, sin tocar a <code>A-001</code> (abandonado) ni a <code>A-002</code> (atendido).</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="16">
+    <div>
+      <div class="rol">Resiliencia · Redis + MongoDB</div>
+      <h3>Aplicar la rehidratación</h3>
+      <p>Hágalo sin nadie llamando turnos. Es idempotente: puede repetirse.</p>
+      <div class="terminal" data-copiar>python -m scripts.rehidratar_cola --aplicar</div>
+      <div class="esperado"><strong>Debe verse:</strong> <code>recuperados_pct: 100</code>, <code>orden_correcto: true</code> y cero duplicados. La cola vuelve con <code>A-004</code> primero y <code>A-003</code> después (mismo orden que antes) y el contador intacto. Ejecutarlo otra vez no cambia nada. Al llamar el siguiente sale <code>A-004</code>.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+
+  <li class="bloque-titulo" role="presentation">
+    <h2>6 · MongoDB: dashboard, descargas, esquema e índices</h2>
+    <span class="nota">Carlos · HU-010, HU-011, TT-001, TT-002, TT-014, TT-015 · unos 5 min</span>
+  </li>
+  <li class="paso" data-paso="17">
+    <div>
+      <div class="rol">Supervisor · MongoDB (aggregation)</div>
+      <h3>Revisar el dashboard y el SLA</h3>
+      <p>Cambie la espera máxima (120, 300, 600 s) y observe el cumplimiento.</p>
+      <div class="esperado"><strong>Debe verse:</strong> turnos esperando, atendidos y <strong>abandonados</strong> (incluido <code>A-001</code>), promedios de espera y atención, ocupación por ventanilla y el % de SLA cambiando con el umbral.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/dashboard">Abrir Dashboard</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="18">
+    <div>
+      <div class="rol">Supervisor · MongoDB · Descargas JSON</div>
+      <h3>Descargar el historial y el dashboard</h3>
+      <p>En el historial filtre por <em>abandonado</em> y pulse <strong>Descargar JSON</strong>; en el dashboard descargue con otro umbral.</p>
+      <div class="esperado"><strong>Debe verse:</strong> se descargan <code>historial_turnos_&lt;fecha&gt;.json</code> y <code>dashboard_sla_&lt;umbral&gt;s_&lt;fecha&gt;.json</code>. El del historial trae solo lo filtrado (<code>total_exportados</code>, <code>filtros_aplicados</code>, tiempos incluido <code>abandonado</code>); el del dashboard trae totales, promedios y el SLA con el umbral elegido.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/historial?estado=abandonado">Historial abandonados</a>
+      <a class="btn btn-secundario" href="{{ base }}/dashboard">Abrir Dashboard</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="19">
+    <div>
+      <div class="rol">Administración · JSON Schema</div>
+      <h3>CRUD de turnos y validación del esquema</h3>
+      <p>Abra la colección <code>turnos</code> e intente insertar un documento con <code>"prioridad": "urgente"</code>, otro con <code>"qr_token": "no-es-un-uuid"</code> y luego uno válido.</p>
+      <div class="esperado"><strong>Debe verse:</strong> los dos inválidos son rechazados por MongoDB con un mensaje de validación (prioridad fuera de las opciones y token que no es UUID v4); el válido se inserta y se puede editar y eliminar (bórrelo al terminar).</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/?coleccion=turnos">Abrir CRUD turnos</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="20">
+    <div>
+      <div class="rol">MongoDB · Índices y qr_token</div>
+      <h3>Los índices se usan de verdad</h3>
+      <div class="terminal" data-copiar>python scripts/medir_indices_mongo.py --informe docs/evidencia/indices_mongo.md</div>
+      <div class="terminal" data-copiar>python -m scripts.probar_qr_token --informe docs/evidencia/qr_token.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> en el primer informe, las 4 consultas (por código, historial, token QR y candidatos del barrido) con <code>IXSCAN</code> frente a <code>COLLSCAN</code> en el recorrido completo, con los documentos examinados de cada una. El segundo termina en <em>CORRECTO</em>: el token válido se acepta, el repetido se rechaza (índice parcial único), los turnos sin token conviven y la consulta usa el índice.</div>
+    </div>
+    <div class="paso-acciones">
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+
+  <li class="bloque-titulo" role="presentation">
+    <h2>7 · Evidencia generada en el servidor</h2>
+    <span class="nota">Equipo · TT-016, TT-017, TT-018, TT-019 · los informes se escriben solos en <code>docs/evidencia/</code></span>
+  </li>
+  <li class="paso" data-paso="21">
+    <div>
+      <div class="rol">Tiempo real · Redis Pub/Sub + WebSocket</div>
+      <h3>Verificar el tiempo real a través de Apache</h3>
       <p>Comprueba que el WebSocket atraviesa el servidor y que un evento publicado en Redis llega al navegador.</p>
       <div class="esperado"><strong>Debe verse:</strong> los cuatro pasos en «OK» y el aviso «El WebSocket funciona».</div>
     </div>
@@ -189,119 +330,14 @@
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
-  <li class="paso" data-paso="14">
-    <div>
-      <div class="rol">Seguimiento 3 · Concurrencia (TT-016)</div>
-      <h3>Prueba formal: 10 solicitudes simultáneas, 0 duplicados</h3>
-      <p>Con la cola vacía y las ventanillas libres, en el servidor:</p>
-      <div class="terminal" data-copiar>python scripts/prueba_concurrencia.py --http --informe docs/evidencia/concurrencia.md</div>
-      <div class="esperado"><strong>Debe verse:</strong> <code>Todo OK · turnos duplicados: 0</code>. La prueba elimina sus turnos; reinicie después el contador (primer bloque de esta página).</div>
-    </div>
-    <div class="paso-acciones">
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="15">
-    <div>
-      <div class="rol">Seguimiento 3 · Mediciones y fallos (TT-018, TT-019)</div>
-      <h3>Rendimiento de Redis y comportamiento cuando Redis no responde</h3>
-      <div class="terminal" data-copiar>python scripts/medir_rendimiento.py --informe docs/evidencia/rendimiento.md</div>
-      <div class="terminal" data-copiar>python scripts/probar_fallos_redis.py --informe docs/evidencia/fallos.md</div>
-      <div class="esperado"><strong>Debe verse:</strong> las medianas de Redis y MongoDB con su mínimo y máximo, contrastadas con las hipótesis de S1; y todos los casos de datos inválidos y de Redis caído respondiendo de forma controlada, sin errores 500.</div>
-    </div>
-    <div class="paso-acciones">
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="16">
-    <div>
-      <div class="rol">Seguimiento 3 · Cliente · Quiosco con QR (HU-001, HU-003)</div>
-      <h3>Emitir desde el quiosco y escanear el QR</h3>
-      <p>Abra el quiosco, elija una prioridad y confirme. El ticket trae un código QR; escanéelo con el celular.</p>
-      <div class="esperado"><strong>Debe verse:</strong> el ticket con el código del turno y un QR; al escanearlo, la página de seguimiento del turno con su posición y el indicador «En vivo».</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/quiosco">Abrir Quiosco</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="17">
-    <div>
-      <div class="rol">Seguimiento 3 · Sala de espera · Pantalla pública (HU-009)</div>
-      <h3>Ver los llamados en la pantalla</h3>
-      <p>Deje la pantalla abierta en otra pestaña y llame al siguiente turno desde la cola.</p>
-      <div class="esperado"><strong>Debe verse:</strong> el turno llamado aparece con su ventanilla, solo código y ventanilla (sin datos personales). Al iniciar y finalizar su atención, o al abandonarse, desaparece de la lista.</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/pantalla" target="_blank" rel="noopener">Abrir Pantalla</a>
-      <a class="btn btn-secundario" href="{{ base }}/cola">Abrir Cola</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="18">
-    <div>
-      <div class="rol">Seguimiento 3 · Operador · Abandono automático (HU-008)</div>
-      <h3>Un cliente que no se presenta a los 180 s</h3>
-      <p>Emita un turno, llámelo desde la cola y <strong>no inicie la atención</strong>. Mientras espera, confirme que Redis cuenta el plazo y que la ventanilla queda ocupada (no se puede llamar otro turno desde ella):</p>
-      <div class="terminal" data-copiar>redis-cli ttl grupo2:qline:turno:A-001</div>
-      <p>Al vencer el plazo el Hash desaparece y el barrido automático (cada 10 s) marca el turno como abandonado. Si lo desea, puede ejecutar el barrido a mano:</p>
-      <div class="terminal" data-copiar>python -m scripts.barrer_abandonos</div>
-      <div class="esperado"><strong>Debe verse:</strong> pasados unos 3 minutos, el turno en estado <em>abandonado</em> en el historial; en el panel la ventanilla queda «Sin turno asignado» y puede llamar al siguiente; la página del QR muestra «Turno cancelado» sola, sin recargar; y la pantalla pública ya no lo lista. Antes de los 180 s, el barrido no lo toca.</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
-      <a class="btn btn-secundario" href="{{ base }}/historial?estado=abandonado">Historial abandonados</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="19">
-    <div>
-      <div class="rol">Seguimiento 3 · Resiliencia · Recuperación de la cola (HU-012)</div>
-      <h3>Reconstruir la cola desde MongoDB</h3>
-      <p>Con varios turnos pendientes, simule que Redis perdió la cola (solo esa clave) y reconstrúyala. Primero el plan, que no escribe nada; después la aplicación:</p>
-      <div class="terminal" data-copiar>redis-cli del grupo2:qline:cola:atencion_general</div>
-      <div class="terminal" data-copiar>python -m scripts.rehidratar_cola</div>
-      <div class="terminal" data-copiar>python -m scripts.rehidratar_cola --aplicar</div>
-      <div class="esperado"><strong>Debe verse:</strong> el plan lista los pendientes faltantes; al aplicar, la cola vuelve con los mismos turnos y el mismo orden (preferenciales primero), sin duplicados y sin atendidos ni abandonados. Ejecutarlo de nuevo no cambia nada. Hágalo sin nadie llamando turnos.</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/cola">Abrir Cola</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="20">
-    <div>
-      <div class="rol">Seguimiento 3 · Evidencia (TT-017, TT-018, TT-019)</div>
-      <h3>Pruebas de recuperación, mediciones y fallos del abandono</h3>
-      <div class="terminal" data-copiar>python -m scripts.probar_recuperacion --informe docs/evidencia/recuperacion.md</div>
-      <div class="terminal" data-copiar>python -m scripts.medir_recuperacion --informe docs/evidencia/rendimiento_recuperacion.md</div>
-      <div class="terminal" data-copiar>python -m scripts.probar_fallos_recuperacion --informe docs/evidencia/fallos_recuperacion.md</div>
-      <div class="esperado"><strong>Debe verse:</strong> la prueba de recuperación con todas sus verificaciones en «cumple» y resultado <em>CORRECTO</em>; las medianas de rehidratación, reconciliación y barrido con 3 o más ejecuciones; y todos los casos de fallo en «OK». Los tres usan datos de prueba propios (series R, M y F) y no tocan los turnos reales.</div>
-    </div>
-    <div class="paso-acciones">
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
-  <li class="paso" data-paso="21">
-    <div>
-      <div class="rol">Seguimiento 3 &middot; Supervisor &middot; Descargas JSON (HU-010, HU-011)</div>
-      <h3>Descargar el historial y el dashboard en JSON</h3>
-      <p>En el historial filtre por estado <em>abandonado</em> y pulse <strong>Descargar JSON</strong>; en el dashboard cambie el umbral y vuelva a descargar.</p>
-      <div class="esperado"><strong>Debe verse:</strong> se descargan <code>historial_turnos_&lt;fecha&gt;.json</code> y <code>dashboard_sla_&lt;umbral&gt;s_&lt;fecha&gt;.json</code>. El del historial trae solo los turnos filtrados, con sus tiempos (incluido <code>abandonado</code>) y los metadatos <code>total_exportados</code> y <code>filtros_aplicados</code>; el del dashboard trae los totales, los promedios y el cumplimiento del SLA con el umbral elegido.</div>
-    </div>
-    <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/historial?estado=abandonado">Historial abandonados</a>
-      <a class="btn btn-secundario" href="{{ base }}/dashboard">Abrir Dashboard</a>
-      <label class="marcar"><input type="checkbox"> Hecho</label>
-    </div>
-  </li>
   <li class="paso" data-paso="22">
     <div>
-      <div class="rol">Seguimiento 3 &middot; MongoDB &middot; Índices y qr_token (TT-001, TT-002, TT-014, TT-015)</div>
-      <h3>Los índices se usan de verdad</h3>
-      <div class="terminal" data-copiar>python scripts/medir_indices_mongo.py --informe docs/evidencia/indices_mongo.md</div>
-      <div class="terminal" data-copiar>python -m scripts.probar_qr_token --informe docs/evidencia/qr_token.md</div>
-      <div class="esperado"><strong>Debe verse:</strong> en el primer informe, las 4 consultas con <code>IXSCAN</code> (por código, historial, token QR y candidatos del barrido) frente a <code>COLLSCAN</code> en el recorrido completo, con los documentos examinados de cada una. El segundo termina en <em>CORRECTO</em>: el turno con token se acepta, el repetido se rechaza, los turnos sin token conviven y la consulta usa el índice.</div>
+      <div class="rol">Redis · Concurrencia y rendimiento (TT-016, TT-018)</div>
+      <h3>10 solicitudes simultáneas, 0 duplicados, y Redis frente a MongoDB</h3>
+      <p>Con la cola vacía y las ventanillas libres (esta prueba elimina sus turnos; reinicie después el contador con el primer bloque de esta página):</p>
+      <div class="terminal" data-copiar>python scripts/prueba_concurrencia.py --http --informe docs/evidencia/concurrencia.md</div>
+      <div class="terminal" data-copiar>python scripts/medir_rendimiento.py --informe docs/evidencia/rendimiento.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> <code>Todo OK · turnos duplicados: 0</code>; y las medianas de Redis y MongoDB con su mínimo y máximo, contrastadas con las hipótesis de S1 (la de más del 85 % de mejora no se cumplió y el informe lo dice).</div>
     </div>
     <div class="paso-acciones">
       <label class="marcar"><input type="checkbox"> Hecho</label>
@@ -309,28 +345,46 @@
   </li>
   <li class="paso" data-paso="23">
     <div>
-      <div class="rol">Seguimiento 3 &middot; Cliente &middot; QR sin contraseña (HU-003, HU-013)</div>
-      <h3>El enlace del QR abre en cualquier celular</h3>
-      <p>Emita un turno desde el quiosco, escanee el QR con un celular y abra el enlace en una ventana privada. Después intente abrir el panel desde ese mismo celular.</p>
-      <div class="esperado"><strong>Debe verse:</strong> la página del turno abre <strong>sin usuario ni contraseña</strong> y queda en «En vivo»; cambia sola cuando el turno se llama o se abandona. El panel, la cola y el resto del sitio <strong>sí</strong> piden usuario y contraseña.</div>
+      <div class="rol">Fallos · Redis y MongoDB caídos, datos inválidos (TT-019)</div>
+      <h3>Qué pasa cuando algo falla</h3>
+      <div class="terminal" data-copiar>python scripts/probar_fallos_redis.py --informe docs/evidencia/fallos.md</div>
+      <div class="terminal" data-copiar>python -m scripts.probar_fallos_recuperacion --informe docs/evidencia/fallos_recuperacion.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> en ambos informes todos los casos «OK»: las rutas responden de forma controlada (sin errores 500) cuando Redis no responde, los datos inválidos se rechazan, y el abandono y la recuperación se comportan bien con Redis o MongoDB caídos y con carreras entre procesos.</div>
     </div>
     <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/quiosco">Abrir Quiosco</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="24">
+    <div>
+      <div class="rol">Recuperación · Pruebas y mediciones (TT-017, TT-018)</div>
+      <h3>Rehidratación probada y medida</h3>
+      <div class="terminal" data-copiar>python -m scripts.probar_recuperacion --informe docs/evidencia/recuperacion.md</div>
+      <div class="terminal" data-copiar>python -m scripts.medir_recuperacion --informe docs/evidencia/rendimiento_recuperacion.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> la prueba con todas sus verificaciones en «cumple» y resultado <em>CORRECTO</em>; y las medianas de rehidratar, reconciliar y abandonar con 50, 200 y 500 turnos (5 ejecuciones cada una, todas correctas). Usan datos propios (series R y M) y no tocan los turnos reales.</div>
+    </div>
+    <div class="paso-acciones">
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
 </ol>
 
 <div class="info" style="margin-top:24px">
-  <strong>Mensaje técnico:</strong> MongoDB conserva el registro de lo que ocurrió; Redis administra la cola activa; y la llamada del siguiente turno es atómica.
+  <strong>Mensaje técnico:</strong> MongoDB conserva el registro y valida el modelo; Redis administra la cola activa, el estado temporal de cada turno y el tiempo real; llamar al siguiente turno es atómico y una ventanilla atiende un turno a la vez; si el cliente no se presenta, el turno se abandona solo a los 180 s; y si Redis pierde la cola, MongoDB la reconstruye.
   <div style="margin-top:10px"><button type="button" id="reiniciar" class="btn-secundario">Reiniciar marcas del recorrido</button></div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+.pasos .bloque-titulo { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; margin: 14px 0 -4px; padding: 0 4px; border-bottom: 2px solid var(--c-borde); }
+.pasos .bloque-titulo h2 { margin: 0 0 6px; font-size: 17px; }
+.pasos .bloque-titulo .nota { margin: 0 0 6px; }
+.pasos .bloque-titulo:first-child { margin-top: 0; }
+</style>
 <script>
 (function () {
-  var CLAVE = "qline-demo-s2", pasos = document.querySelectorAll(".paso");
+  var CLAVE = "qline-demo-s3", pasos = document.querySelectorAll(".paso");
   function leer() { try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch (e) { return {}; } }
   function guardar(m) { try { localStorage.setItem(CLAVE, JSON.stringify(m)); } catch (e) {} }
   function pintar() {

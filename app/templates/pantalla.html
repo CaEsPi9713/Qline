@@ -1,260 +1,233 @@
 {% extends "base_publico.html" %}
-{% block titulo %}Pantalla de llamados{% endblock %}
+{% block titulo %}Turnos llamados{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
+{% block cabecera_extra %}<div class="sala-reloj" id="reloj" aria-hidden="true"></div>{% endblock %}
+
+{#- Pantalla de sala (HU-009). Solo muestra código de turno y ventanilla: nada de datos personales ni del token del QR.
+    El primer pintado lo hace el servidor; después la página se actualiza sola (WebSocket con consulta periódica de respaldo). -#}
+{% macro tarjeta(t) %}
+<article class="sala-card" role="listitem" data-estado="{{ t.estado }}" data-codigo="{{ t.codigo }}" aria-label="Turno {{ t.codigo }} en ventanilla {{ t.ventanilla }}">
+  <div class="sala-card-banda"><span aria-hidden="true">{{ "👤" if t.estado == "en_atencion" else "🔔" }}</span><span>{{ "En atención" if t.estado == "en_atencion" else "Llamado" }}</span></div>
+  <div class="sala-card-cuerpo">
+    <div class="sala-card-codigo">{{ t.codigo }}</div>
+    <div class="visual-ventanilla">{{ t.ventanilla }}</div>
+  </div>
+</article>
+{% endmacro %}
 
 {% block contenido %}
-<section class="pantalla-sala" id="pantalla-sala" aria-live="polite" aria-label="Pantalla de llamados activos">
+{% set principal = llamados[0] if llamados and llamados[0].estado == "llamado" else none %}
+{% set otros = llamados[1:] if principal else llamados %}
+<section class="sala" id="sala" aria-label="Pantalla de llamados activos">
 
-  <h1 class="pantalla-titulo">Turnos llamados</h1>
-  <p class="pantalla-subtitulo" id="pantalla-estado">Conectando&hellip;</p>
-
-  <div class="pantalla-grid" id="llamados-lista" role="list">
-    {% for llamado in llamados %}
-    <article class="llamado-card llamado-{{ llamado.estado }}" role="listitem" aria-label="Turno {{ llamado.codigo }} en ventanilla {{ llamado.ventanilla }}">
-      <div class="llamado-codigo">{{ llamado.codigo }}</div>
-      <div class="llamado-ventanilla">{{ llamado.ventanilla }}</div>
-      {% if llamado.estado == "en_atencion" %}
-      <span class="llamado-badge">En atención</span>
-      {% else %}
-      <span class="llamado-badge llamado-badge-nuevo">Llamado</span>
-      {% endif %}
-    </article>
-    {% else %}
-    <p class="pantalla-vacia" id="pantalla-vacia">Sin turnos llamados actualmente.</p>
-    {% endfor %}
+  <div class="sala-cab">
+    <div>
+      <h1>Turnos llamados</h1>
+      <p class="sala-sub" id="sala-sub">{% if llamados %}{{ llamados|length }} {{ "turno activo" if llamados|length == 1 else "turnos activos" }}{% else %}Sin llamados activos{% endif %}</p>
+    </div>
+    <div class="sala-datos">
+      <span class="sala-chip">En espera <strong id="n-espera">{{ en_espera if en_espera is not none else "—" }}</strong></span>
+      <span class="sala-chip">En ventanilla <strong id="n-activos">{{ llamados|length }}</strong></span>
+    </div>
   </div>
 
-  <!-- Indicador de conexión WebSocket -->
-  <div class="pantalla-ws-estado" id="ws-indicador" aria-live="polite">
-    <span class="ws-dot ws-dot-off" id="ws-dot"></span>
-    <span id="ws-texto">Sin conexión en vivo</span>
+  <div id="sala-principal" aria-live="polite">
+    {% if principal %}
+    <section class="turno-hero" data-estado="llamado" data-codigo="{{ principal.codigo }}">
+      <div class="turno-banda"><span class="turno-banda-icono" aria-hidden="true">🔔</span><span>Llamando ahora</span></div>
+      <div class="turno-cuerpo">
+        <div class="estado-etiqueta">Turno</div>
+        <div class="estado-codigo">{{ principal.codigo }}</div>
+        <p class="sala-ir">Diríjase a la ventanilla</p>
+        <div class="visual-ventanilla">{{ principal.ventanilla }}</div>
+      </div>
+    </section>
+    {% else %}
+    <section class="sala-vacio">
+      <div class="sala-vacio-icono" aria-hidden="true">⏱</div>
+      <h2>{{ "Nadie está siendo llamado" if llamados else "Sin turnos llamados" }}</h2>
+      <p>Cuando se llame a un turno, aparecerá aquí con su ventanilla.</p>
+    </section>
+    {% endif %}
+  </div>
+
+  <div class="sala-grid" id="sala-otros" role="list" aria-label="Otros turnos en ventanilla">
+    {% for t in otros %}{{ tarjeta(t) }}{% endfor %}
+  </div>
+
+  <div class="sala-pie">
+    <p class="indicador" id="indicador"><span class="punto"></span><span id="indicador-texto">Conectando…</span></p>
+    <p class="nota" id="actualizado"></p>
+    <button type="button" class="sala-sonido" id="btn-sonido" aria-pressed="false">🔔 Activar aviso sonoro</button>
   </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
-<style>
-/* ── Pantalla pública de sala (HU-009) ── */
-.pantalla-sala {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-  text-align: center;
-}
-.pantalla-titulo {
-  font-size: clamp(1.8rem, 5vw, 3rem);
-  font-weight: 800;
-  color: #e2e8f0;
-  margin-bottom: .25rem;
-}
-.pantalla-subtitulo {
-  color: #94a3b8;
-  font-size: .95rem;
-  margin-bottom: 2rem;
-  min-height: 1.4em;
-}
-.pantalla-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 2rem;
-}
-.llamado-card {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border: 2px solid #334155;
-  border-radius: 1rem;
-  padding: 1.5rem 1rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: .5rem;
-  animation: aparecer .4s ease;
-  transition: border-color .3s;
-}
-.llamado-card.llamado-llamado {
-  border-color: #3b82f6;
-  box-shadow: 0 0 18px rgba(59,130,246,.25);
-}
-.llamado-card.llamado-en_atencion {
-  border-color: #22c55e;
-  box-shadow: 0 0 18px rgba(34,197,94,.2);
-}
-.llamado-codigo {
-  font-size: clamp(2rem, 6vw, 3.5rem);
-  font-weight: 900;
-  color: #f1f5f9;
-  letter-spacing: .04em;
-  line-height: 1;
-}
-.llamado-ventanilla {
-  font-size: 1.15rem;
-  color: #7dd3fc;
-  font-weight: 600;
-  letter-spacing: .05em;
-}
-.llamado-badge {
-  font-size: .72rem;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  padding: .18rem .7rem;
-  border-radius: 999px;
-  background: #22c55e22;
-  color: #4ade80;
-  border: 1px solid #22c55e55;
-}
-.llamado-badge-nuevo {
-  background: #3b82f622;
-  color: #93c5fd;
-  border-color: #3b82f655;
-}
-.pantalla-vacia {
-  grid-column: 1/-1;
-  color: #475569;
-  font-size: 1.1rem;
-  padding: 2rem 0;
-}
-/* WebSocket indicator */
-.pantalla-ws-estado {
-  display: inline-flex;
-  align-items: center;
-  gap: .45rem;
-  font-size: .78rem;
-  color: #64748b;
-  margin-top: 1rem;
-}
-.ws-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  transition: background .3s;
-}
-.ws-dot-off  { background: #334155; }
-.ws-dot-ok   { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
-.ws-dot-err  { background: #ef4444; }
-@keyframes aparecer {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-</style>
-
 <script>
 (function () {
   "use strict";
+  var BASE = {{ base | tojson }};
+  var API_URL = BASE + "/api/llamados";
+  var WS_URL = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + BASE + "/ws/eventos";
+  var ESTADOS = { llamado: { icono: "🔔", texto: "Llamado" }, en_atencion: { icono: "👤", texto: "En atención" } };
 
-  const BASE    = {{ base | tojson }};
-  const API_URL = BASE + "/api/llamados";
-  const WS_URL  = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + BASE + "/ws/eventos";
+  var $ = function (id) { return document.getElementById(id); };
+  var ws = null, reintento = 1000, timerPoll = null, primera = true, vistos = {}, sonido = false;
 
-  const lista   = document.getElementById("llamados-lista");
-  const estado  = document.getElementById("pantalla-estado");
-  const dot     = document.getElementById("ws-dot");
-  const wsTexto = document.getElementById("ws-texto");
+  /* Todo se construye con textContent: el código y la ventanilla se tratan siempre como texto. */
+  function el(tag, clase, texto) {
+    var n = document.createElement(tag);
+    if (clase) n.className = clase;
+    if (texto !== undefined) n.textContent = texto;
+    return n;
+  }
 
-  let ws = null;
-  let reintento = 1000;
-  let timerPoll = null;
+  function principal(t, nuevo) {
+    var s = el("section", "turno-hero" + (nuevo ? " nuevo" : ""));
+    s.setAttribute("data-estado", "llamado");
+    s.setAttribute("data-codigo", t.codigo);
+    var banda = el("div", "turno-banda");
+    var ic = el("span", "turno-banda-icono", "🔔"); ic.setAttribute("aria-hidden", "true");
+    banda.appendChild(ic); banda.appendChild(el("span", null, "Llamando ahora"));
+    var cuerpo = el("div", "turno-cuerpo");
+    cuerpo.appendChild(el("div", "estado-etiqueta", "Turno"));
+    cuerpo.appendChild(el("div", "estado-codigo", t.codigo));
+    cuerpo.appendChild(el("p", "sala-ir", "Diríjase a la ventanilla"));
+    cuerpo.appendChild(el("div", "visual-ventanilla", t.ventanilla));
+    s.appendChild(banda); s.appendChild(cuerpo);
+    return s;
+  }
 
-  /* ── Renderizar lista de llamados ──────────────────────────────── */
-  function renderizar(llamados) {
-    lista.innerHTML = "";
-    if (!llamados || llamados.length === 0) {
-      lista.innerHTML = '<p class="pantalla-vacia">Sin turnos llamados actualmente.</p>';
-      estado.textContent = "Sin llamados activos";
-      return;
-    }
-    estado.textContent = llamados.length === 1
-      ? "1 turno activo"
-      : llamados.length + " turnos activos";
-    llamados.forEach(function (t) {
-      const art = document.createElement("article");
-      art.className = "llamado-card llamado-" + t.estado;
-      art.setAttribute("role", "listitem");
-      art.setAttribute("aria-label", "Turno " + t.codigo + " en ventanilla " + t.ventanilla);
-      const badgeClass = t.estado === "en_atencion" ? "" : " llamado-badge-nuevo";
-      const badgeText  = t.estado === "en_atencion" ? "En atención" : "Llamado";
-      /* textContent y no innerHTML: el código y la ventanilla vienen del servidor y se tratan siempre como texto */
-      const cod = document.createElement("div");
-      cod.className = "llamado-codigo";
-      cod.textContent = t.codigo;
-      const ven = document.createElement("div");
-      ven.className = "llamado-ventanilla";
-      ven.textContent = t.ventanilla;
-      const badge = document.createElement("span");
-      badge.className = "llamado-badge" + badgeClass;
-      badge.textContent = badgeText;
-      art.appendChild(cod);
-      art.appendChild(ven);
-      art.appendChild(badge);
-      lista.appendChild(art);
+  function vacio(hayActivos) {
+    var s = el("section", "sala-vacio");
+    var ic = el("div", "sala-vacio-icono", "⏱"); ic.setAttribute("aria-hidden", "true");
+    s.appendChild(ic);
+    s.appendChild(el("h2", null, hayActivos ? "Nadie está siendo llamado" : "Sin turnos llamados"));
+    s.appendChild(el("p", null, "Cuando se llame a un turno, aparecerá aquí con su ventanilla."));
+    return s;
+  }
+
+  function tarjeta(t, nuevo) {
+    var e = ESTADOS[t.estado] || ESTADOS.llamado;
+    var a = el("article", "sala-card" + (nuevo ? " nuevo" : ""));
+    a.setAttribute("role", "listitem");
+    a.setAttribute("data-estado", t.estado);
+    a.setAttribute("data-codigo", t.codigo);
+    a.setAttribute("aria-label", "Turno " + t.codigo + " en ventanilla " + t.ventanilla);
+    var banda = el("div", "sala-card-banda");
+    var ic = el("span", null, e.icono); ic.setAttribute("aria-hidden", "true");
+    banda.appendChild(ic); banda.appendChild(el("span", null, e.texto));
+    var cuerpo = el("div", "sala-card-cuerpo");
+    cuerpo.appendChild(el("div", "sala-card-codigo", t.codigo));
+    cuerpo.appendChild(el("div", "visual-ventanilla", t.ventanilla));
+    a.appendChild(banda); a.appendChild(cuerpo);
+    return a;
+  }
+
+  function aviso() {
+    if (!sonido) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var ctx = new Ctx();
+      [660, 880].forEach(function (f, i) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.28);
+        g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + i * 0.28 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.28 + 0.26);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + i * 0.28); o.stop(ctx.currentTime + i * 0.28 + 0.28);
+      });
+    } catch (e) { /* sin audio disponible: no pasa nada */ }
+  }
+
+  function renderizar(datos) {
+    var lista = datos.llamados || [];
+    var hayNuevo = false, actuales = {};
+    lista.forEach(function (t) {
+      actuales[t.codigo] = t.estado;
+      if (!primera && t.estado === "llamado" && vistos[t.codigo] !== "llamado") hayNuevo = true;
     });
+    var cabeza = lista.length && lista[0].estado === "llamado" ? lista[0] : null;
+    var resto = cabeza ? lista.slice(1) : lista;
+
+    var zona = $("sala-principal");
+    zona.textContent = "";
+    zona.appendChild(cabeza ? principal(cabeza, !primera && vistos[cabeza.codigo] !== "llamado") : vacio(lista.length > 0));
+
+    var grilla = $("sala-otros");
+    grilla.textContent = "";
+    resto.forEach(function (t) { grilla.appendChild(tarjeta(t, !primera && vistos[t.codigo] === undefined)); });
+
+    $("sala-sub").textContent = lista.length === 0 ? "Sin llamados activos"
+      : (lista.length === 1 ? "1 turno activo" : lista.length + " turnos activos");
+    $("n-activos").textContent = lista.length;
+    if (datos.en_espera !== undefined && datos.en_espera !== null) $("n-espera").textContent = datos.en_espera;
+    $("actualizado").textContent = "Actualizado a las " + new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+    vistos = actuales; primera = false;
+    if (hayNuevo) aviso();
   }
 
-  /* ── Consulta periódica (fallback si WebSocket no está disponible) */
-  function consultarAPI() {
-    fetch(API_URL)
+  function indicador(clase, texto) {
+    $("indicador").className = "indicador " + clase;
+    $("indicador-texto").textContent = texto;
+  }
+
+  function consultar() {
+    fetch(API_URL, { cache: "no-store" })
       .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.ok) renderizar(data.llamados);
-      })
-      .catch(function () { /* silencioso */ });
+      .then(function (d) { if (d && d.ok) renderizar(d); })
+      .catch(function () { /* se reintenta en la siguiente consulta */ });
   }
 
-  function iniciarPoll(intervaloMs) {
-    detenerPoll();
-    timerPoll = setInterval(consultarAPI, intervaloMs);
-  }
+  function iniciarPoll(ms) { detenerPoll(); timerPoll = setInterval(consultar, ms); }
+  function detenerPoll() { if (timerPoll !== null) { clearInterval(timerPoll); timerPoll = null; } }
 
-  function detenerPoll() {
-    if (timerPoll !== null) { clearInterval(timerPoll); timerPoll = null; }
-  }
-
-  /* ── WebSocket ─────────────────────────────────────────────────── */
-  function conectarWS() {
-    ws = new WebSocket(WS_URL);
-
+  function conectar() {
+    try { ws = new WebSocket(WS_URL); } catch (e) { iniciarPoll(3000); indicador("respaldo", "Actualizando cada 3 s"); return; }
     ws.onopen = function () {
       reintento = 1000;
-      dot.className = "ws-dot ws-dot-ok";
-      wsTexto.textContent = "Conexión en vivo";
-      estado.textContent = "Conectado · actualizando en tiempo real";
-      /* Con WS activo, el poll es de seguridad cada 30 s */
-      iniciarPoll(30000);
+      indicador("vivo", "En vivo");
+      iniciarPoll(30000);                       /* con WebSocket activo, la consulta es solo de seguridad */
     };
-
     ws.onmessage = function (ev) {
-      let msg;
-      try { msg = JSON.parse(ev.data); } catch (e) { return; }
-      const tipo = msg.tipo || "";
-      if (tipo === "latido" || tipo === "conectado") return;
-      /* Cualquier evento de negocio (turno_llamado, atencion_iniciada, etc.) */
-      if (tipo === "turno_llamado" || tipo === "atencion_iniciada" ||
-          tipo === "atencion_finalizada" || tipo === "turno_abandonado") {
-        consultarAPI();   /* el servidor ya actualizó su estado; solo recargamos */
-      }
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      var tipo = m.tipo || "";
+      if (tipo === "turno_llamado" || tipo === "atencion_iniciada" || tipo === "atencion_finalizada" ||
+          tipo === "turno_abandonado" || tipo === "turno_emitido") consultar();
     };
-
-    ws.onerror = function () {
-      dot.className = "ws-dot ws-dot-err";
-      wsTexto.textContent = "Error de conexión";
-    };
-
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
     ws.onclose = function () {
-      dot.className = "ws-dot ws-dot-off";
-      wsTexto.textContent = "Sin conexión · reintentando…";
-      estado.textContent = "Consultando periódicamente…";
-      /* Fallback: poll cada 3 s mientras el WS esté caído */
-      iniciarPoll(3000);
-      setTimeout(function () {
-        if (!ws || ws.readyState === WebSocket.CLOSED) {
-          reintento = Math.min(reintento * 1.5, 30000);
-          conectarWS();
-        }
-      }, reintento);
+      indicador("respaldo", "Actualizando cada 3 s");
+      iniciarPoll(3000);                        /* mientras no haya WebSocket, se consulta seguido */
+      setTimeout(function () { reintento = Math.min(reintento * 1.5, 30000); conectar(); }, reintento);
     };
   }
 
-  /* ── Inicializar ───────────────────────────────────────────────── */
-  consultarAPI();    /* primer pintado inmediato */
-  conectarWS();      /* luego conectar WS */
+  function reloj() {
+    var d = new Date();
+    $("reloj").textContent = d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  var btn = $("btn-sonido");
+  try { sonido = localStorage.getItem("qline-sala-sonido") === "1"; } catch (e) {}
+  function pintarSonido() {
+    btn.setAttribute("aria-pressed", sonido ? "true" : "false");
+    btn.textContent = sonido ? "🔔 Aviso sonoro activado" : "🔔 Activar aviso sonoro";
+  }
+  btn.addEventListener("click", function () {
+    sonido = !sonido;
+    try { localStorage.setItem("qline-sala-sonido", sonido ? "1" : "0"); } catch (e) {}
+    pintarSonido();
+    if (sonido) aviso();                        /* una pausa corta confirma que suena y habilita el audio del navegador */
+  });
+  pintarSonido();
+
+  reloj(); setInterval(reloj, 15000);
+  consultar();
+  conectar();
 })();
 </script>
 {% endblock %}

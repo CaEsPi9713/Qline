@@ -34,7 +34,8 @@
   <dl class="datos">
     <dt>Servicio</dt><dd>{{ servicio }}</dd>
     <dt>Estado inicial</dt><dd><span class="badge badge-pendiente">En espera</span></dd>
-    <dt>Fecha / hora</dt><dd>{{ turno.creado[:19]|replace('T', ' ') }} UTC</dd>
+    <dt>Fecha</dt><dd>{{ turno.creado|fecha }}</dd>
+    <dt>Hora</dt><dd>{{ turno.creado|hora(false) }}</dd>
   </dl>
   <p class="texto-suave">Tome asiento en la sala de espera y permanezca atento al llamado por ventanilla.</p>
   <div class="fila" style="justify-content:center">

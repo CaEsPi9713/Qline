@@ -28,7 +28,8 @@ from app.excepciones import ErrorAtencion
 from app.panel_atencion import estado_ventanillas
 from app.redis_atencion import liberar_turno
 from app.consulta_qr import QRError, consultar_por_token
-from app.qr import generar_qr_svg
+from app import formato
+from app.qr import construir_url_qr, generar_qr_svg
 from app.rutas_eventos import registrar as registrar_rutas_eventos
 from app.schemas import TurnoEnAtencion, TurnoFinalizado
 from app.emitir import EmisionError, emitir_turno
@@ -109,6 +110,7 @@ def _version_css() -> int:
 
 
 templates.env.globals["css_version"] = _version_css()
+formato.registrar(templates.env)             # filtros de fecha y hora para las pantallas
 
 registrar_rutas_eventos(app, get_db=lambda: get_db())
 
@@ -260,7 +262,7 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
 
 @app.get("/demo", response_class=HTMLResponse)
 def guia_demo(request: Request):
-    """Guía ordenada para recorrer el flujo completo del Seguimiento 2."""
+    """Guía ordenada para recorrer el flujo completo de la demo (Seguimientos 2 y 3)."""
     redis_estado = verificar_redis()
     mongo_estado = {"ok": False, "turnos": 0, "error": ""}
     try:
@@ -273,9 +275,15 @@ def guia_demo(request: Request):
             cola_tam = cola_redis.tamano_cola()
         except RedisError:
             cola_tam = None
+    # Hacia dónde apuntan los QR y si el abandono automático está corriendo: lo que más falla al preparar la demo.
+    qr_base = construir_url_qr("123e4567-e89b-42d3-a456-426614174000").rsplit("/turno/qr/", 1)[0]
+    barrido = getattr(request.app.state, "barrido", None)
     return templates.TemplateResponse(
         request, "demo.html",
-        {"base": BASE, "redis": redis_estado, "mongo": mongo_estado, "cola_tam": cola_tam},
+        {"base": BASE, "redis": redis_estado, "mongo": mongo_estado, "cola_tam": cola_tam,
+         "qr_base": qr_base, "qr_local": any(h in qr_base for h in ("localhost", "127.0.0.1", "0.0.0.0")),
+         "barrido_activo": bool(barrido and barrido.activo),
+         "barrido_intervalo": getattr(barrido, "intervalo_seg", 0) if barrido else 0},
     )
 
 
@@ -923,10 +931,18 @@ def _obtener_llamados_actuales() -> list[dict]:
     return _pantalla.llamados_vigentes()
 
 
+def _contar_en_espera():
+    """Cantidad de turnos pendientes (dato agregado, sin códigos ni personas); None si MongoDB no responde."""
+    try:
+        return get_db()["turnos"].count_documents({"estado": "pendiente", "servicio": SERVICIO_ID})
+    except Exception:
+        return None
+
+
 @app.get("/api/llamados")
 def api_llamados():
-    """Listado de llamados activos para pantalla de sala (HU-009)."""
-    return {"ok": True, "llamados": _obtener_llamados_actuales()}
+    """Listado de llamados activos para pantalla de sala (HU-009), con la cantidad de turnos en espera."""
+    return {"ok": True, "llamados": _obtener_llamados_actuales(), "en_espera": _contar_en_espera()}
 
 
 @app.get("/pantalla", response_class=HTMLResponse)
@@ -934,5 +950,6 @@ def vista_pantalla(request: Request):
     """Vista pública de llamados, sin datos personales (HU-009)."""
     return templates.TemplateResponse(
         request, "pantalla.html",
-        {"base": BASE, "llamados": _obtener_llamados_actuales()},
+        {"base": BASE, "llamados": _obtener_llamados_actuales(), "en_espera": _contar_en_espera(),
+         "servicio": SERVICIO_NOMBRE},
     )

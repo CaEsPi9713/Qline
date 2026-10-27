@@ -346,3 +346,54 @@ body.publico { background: #eef2f7; min-height: 100vh; display: flex; flex-direc
   .paso-acciones { grid-column: 1 / -1; flex-direction: row; align-items: center; flex-wrap: wrap; }
   .ticket-codigo { font-size: 54px; }
 }
+
+/* ---------- Pantalla pública de sala (HU-009): mismos componentes que la página del QR, a tamaño de pantalla ---------- */
+.publico-cuerpo.ancho { max-width: 1240px; padding-top: 20px; }
+.sala-reloj { margin-left: auto; font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #e2e8f0; }
+.sala-cab { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 18px; }
+.sala-cab h1 { margin: 0; font-size: clamp(26px, 4vw, 40px); letter-spacing: -.5px; }
+.sala-sub { margin: 4px 0 0; color: var(--c-texto-suave); font-size: 15px; min-height: 1.4em; }
+.sala-datos { display: flex; gap: 10px; flex-wrap: wrap; }
+.sala-chip { display: inline-flex; align-items: baseline; gap: 8px; background: #fff; border: 1px solid var(--c-borde); border-radius: 999px; padding: 8px 18px; font-size: 14px; font-weight: 600; color: var(--c-texto-suave); box-shadow: var(--sombra); }
+.sala-chip strong { font-size: 22px; font-weight: 800; color: var(--c-texto); line-height: 1; }
+
+.sala .turno-hero { margin-bottom: clamp(12px, 2.5vh, 22px); }
+.sala .turno-banda { font-size: clamp(18px, 2.4vw, 26px); padding: clamp(10px, 2vh, 18px) 16px; letter-spacing: .6px; text-transform: uppercase; }
+.sala .turno-banda-icono { font-size: clamp(22px, 3vw, 32px); }
+.sala .turno-cuerpo { padding: clamp(14px, 3vh, 28px) 20px clamp(18px, 4vh, 34px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.sala .turno-hero .estado-codigo { font-size: clamp(64px, min(12vw, 21vh), 150px); margin: 0; letter-spacing: 4px; }
+.sala .turno-hero .estado-etiqueta { font-size: clamp(13px, 1.6vw, 17px); }
+.sala-ir { margin: 8px 0 4px; font-size: clamp(16px, 2vw, 22px); font-weight: 600; color: var(--c-texto-suave); }
+.sala .visual-ventanilla { font-size: clamp(36px, min(7vw, 11vh), 84px); padding: 6px clamp(24px, 5vw, 64px); border-radius: 20px; }
+
+.sala-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+.sala-card { --acento: #94a3b8; --acento-2: #cbd5e1; --acento-suave: #f1f5f9; background: #fff; border: 1px solid var(--c-borde); border-radius: 18px; overflow: hidden; box-shadow: var(--sombra-lg); display: flex; flex-direction: column; text-align: center; animation: aparecer .45s ease; }
+.sala-card[data-estado="llamado"] { --acento: #4f46e5; --acento-2: #6366f1; --acento-suave: #eef2ff; }
+.sala-card[data-estado="en_atencion"] { --acento: #0284c7; --acento-2: #0ea5e9; --acento-suave: #f0f9ff; }
+.sala-card-banda { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; background: linear-gradient(135deg, var(--acento), var(--acento-2)); }
+.sala-card-cuerpo { padding: 18px 14px 20px; background: linear-gradient(180deg, var(--acento-suave), #fff 90px); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sala-card-codigo { font-family: var(--mono); font-size: clamp(40px, 5vw, 56px); font-weight: 800; letter-spacing: 2px; line-height: 1; }
+.sala-card .visual-ventanilla { font-size: 26px; padding: 4px 18px; border-radius: 12px; }
+
+.sala-vacio { background: #fff; border: 1px dashed var(--c-borde-fuerte); border-radius: 20px; padding: 44px 20px; text-align: center; box-shadow: var(--sombra); margin-bottom: 22px; }
+.sala-vacio-icono { width: 72px; height: 72px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 34px; background: var(--c-marca-claro); }
+.sala-vacio h2 { margin: 0 0 4px; font-size: clamp(20px, 3vw, 28px); }
+.sala-vacio p { margin: 0; color: var(--c-texto-suave); }
+
+.sala-pie { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--c-borde); }
+.sala-pie .indicador { margin: 0; justify-content: flex-start; }
+.sala-pie .nota { margin: 0; }
+.sala-sonido { background: #fff; color: var(--c-texto-suave); border-color: var(--c-borde-fuerte); padding: 6px 14px; font-size: 13px; }
+.sala-sonido:hover { background: #f8fafc; color: var(--c-texto); }
+.sala-sonido[aria-pressed="true"] { background: var(--c-marca-claro); color: var(--c-marca-oscuro); border-color: var(--c-marca); }
+.sala .nuevo { animation: destello 1.6s ease-out 2; }
+@keyframes destello { 0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, .55); } 100% { box-shadow: 0 0 0 26px rgba(99, 102, 241, 0); } }
+@media (max-width: 560px) { .sala-reloj { font-size: 16px; } .sala-grid { grid-template-columns: 1fr 1fr; gap: 12px; } .sala-card-codigo { font-size: 34px; } }
+@media (prefers-reduced-motion: reduce) { .sala .nuevo, .sala-card { animation: none; } }
+
+/* ---------- Fechas y horas legibles (app/formato.py) ---------- */
+td.fecha { white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1.3; }
+.fecha-dia { display: block; font-weight: 600; color: var(--c-texto); }
+.fecha-hora { display: block; font-size: 12px; color: var(--c-texto-suave); }
+.fecha-nota { display: inline-block; margin-top: 2px; padding: 0 8px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; background: #fee2e2; color: #991b1b; }
+

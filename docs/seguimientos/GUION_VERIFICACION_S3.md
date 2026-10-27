@@ -48,8 +48,8 @@ Debe verse **200**, **200**, **401** y **401**: las dos rutas del cliente abren 
 | 1.1 | En el celular o en una tablet abre `/quiosco`, ponla a **pantalla completa** y elige una prioridad | Vista sin menús de operación ni administración. La confirmación muestra el código del turno y un QR |
 | 1.2 | Pulsa derecho / inspecciona el enlace bajo el QR | La URL empieza por el dominio público, incluye `BASE_PATH` y termina en `/turno/qr/<uuid>`. Sin `localhost` |
 | 1.3 | Con **otro** celular, escanea el QR de la pantalla | Se abre la página del turno con su estado ("En espera") y el indicador "En vivo" |
-| 1.4 | Abre `/pantalla` en la segunda pantalla | "Sin turnos llamados actualmente" y la luz de conexión en vivo en verde |
-| 1.5 | Desde `/cola` llama al siguiente turno con V-01 | **En la pantalla** aparece el turno con V-01, sin recargar. **En el celular** la página cambia sola a "¡Es su turno!" con la cuenta regresiva |
+| 1.4 | Abre `/pantalla` en la segunda pantalla (a pantalla completa) | "Sin turnos llamados", los contadores "En espera" y "En ventanilla", el reloj y el indicador "En vivo" en verde |
+| 1.5 | Desde `/cola` llama al siguiente turno con V-01 | **En la pantalla** aparece la tarjeta grande "Llamando ahora" con el turno y V-01, sin recargar (con el aviso sonoro activado, suena un tono). **En el celular** la página cambia sola a "¡Es su turno!" con la cuenta regresiva |
 | 1.6 | En `/panel` pulsa *Iniciar atención* y luego *Finalizar* | La pantalla pasa el turno a "En atención" y luego lo retira; el celular muestra "En atención" y "Atendido" |
 | 1.7 | Con el celular, vuelve a abrir el enlace del turno ya atendido | Muestra el estado final "Atendido" |
 

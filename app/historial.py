@@ -16,9 +16,14 @@ COLECCION_TURNOS = "turnos"
 
 
 def _formatear_fecha(dt) -> Optional[str]:
-    """Formatea un objeto datetime a string ISO legible."""
+    """Fecha en ISO 8601 y UTC, con milisegundos y la zona explícita (`2026-10-27T01:12:49.757Z`).
+
+    MongoDB entrega las fechas sin zona (en UTC); las pantallas las convierten a hora local con app/formato.py.
+    """
     if isinstance(dt, datetime):
-        return dt.isoformat()
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     return None
 
 

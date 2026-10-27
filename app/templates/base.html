@@ -57,7 +57,7 @@
 <main class="pagina {{ ancho or '' }}">
   <div class="page-head">
     {% if actual %}<div class="paso-pill">Paso {{ actual.n }} de {{ pasos|length }} · {{ actual.rol }}</div>
-    {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 2 · Guía de demostración</div>{% endif %}
+    {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 3 · Guía de demostración</div>{% endif %}
     <h1>{% block h1 %}{{ self.titulo() }}{% endblock %}</h1>
     {% block lead_bloque %}<p class="lead">{% block lead %}{% endblock %}</p>{% endblock %}
   </div>
