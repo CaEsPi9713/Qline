@@ -1,7 +1,7 @@
 # Diseño técnico · S3 · HU-008 y HU-012
 
 **Responsable:** Abigail Urbina / `aurbina`
-**Estado:** implementado e integrado (ver `docs/seguimientos/S3.md`, sección 5, y `docs/decisiones.md`, D-12 a D-17). Este documento conserva el diseño original; donde difiere, manda `decisiones.md`.
+**Estado:** implementado e integrado (ver `docs/seguimientos/S3.md`, sección 5, y `docs/decisiones.md`, D-16 a D-21). Este documento conserva el diseño original; donde difiere, manda `decisiones.md`.
 
 ## 1. Principio
 > MongoDB conserva lo que ocurrió. Redis controla lo que ocurre ahora.
@@ -144,4 +144,4 @@ Ventaja: se garantiza el mismo miembro y el mismo score que usa la emisión, sin
 | `scripts/*.py` | `barrer_abandonos`, `rehidratar_cola`, `probar_recuperacion`, `medir_recuperacion` |
 
 ## 6. Decisiones abiertas
-Resueltas: ver `docs/decisiones.md` (D-12 a D-17).
+Resueltas: ver `docs/decisiones.md` (D-16 a D-21).

@@ -32,37 +32,17 @@ SLA_OBJETIVO_ESPERA_SEG_DEFECTO = 300
 SLA_TASA_MINIMA_CUMPLIMIENTO = 80.0  # 80% de cumplimiento para calificar verde/cumple
 
 
-def calcular_metricas_dashboard(
-    db: Database,
-    sla_espera_max_seg: int = SLA_OBJETIVO_ESPERA_SEG_DEFECTO,
-) -> dict:
-    """
-    Ejecuta aggregation pipelines sobre la colección `turnos` de MongoDB
-    para obtener los indicadores del dashboard y el cumplimiento de SLA.
-    """
-    col = db[COLECCION_TURNOS]
-
-    # 1. Conteo global por estados
-    pipeline_estados = [
+def pipeline_conteo_estados() -> list:
+    """Pipeline del dashboard: cantidad de turnos por estado ($match -> $group)."""
+    return [
         {"$match": {"servicio": SERVICIO_ID}},
         {"$group": {"_id": "$estado", "total": {"$sum": 1}}},
     ]
-    conteo_estados = {est: 0 for est in (
-        ESTADO_PENDIENTE, ESTADO_LLAMADO, ESTADO_EN_ATENCION, ESTADO_ATENDIDO, ESTADO_ABANDONADO
-    )}
-    for item in col.aggregate(pipeline_estados):
-        if item["_id"] in conteo_estados:
-            conteo_estados[item["_id"]] = item["total"]
 
-    turnos_esperando = conteo_estados[ESTADO_PENDIENTE]
-    turnos_llamados = conteo_estados[ESTADO_LLAMADO]
-    turnos_en_atencion = conteo_estados[ESTADO_EN_ATENCION]
-    turnos_atendidos = conteo_estados[ESTADO_ATENDIDO]
-    turnos_abandonados = conteo_estados[ESTADO_ABANDONADO]
-    total_turnos = sum(conteo_estados.values())
 
-    # 2. Promedios de tiempos (espera y atención) y métricas SLA
-    pipeline_tiempos = [
+def pipeline_tiempos_sla(sla_espera_max_seg: int = SLA_OBJETIVO_ESPERA_SEG_DEFECTO) -> list:
+    """Pipeline del dashboard: promedios de espera y atención y cumplimiento del SLA ($match -> $group)."""
+    return [
         {
             "$match": {
                 "servicio": SERVICIO_ID,
@@ -99,6 +79,36 @@ def calcular_metricas_dashboard(
             }
         },
     ]
+
+
+def calcular_metricas_dashboard(
+    db: Database,
+    sla_espera_max_seg: int = SLA_OBJETIVO_ESPERA_SEG_DEFECTO,
+) -> dict:
+    """
+    Ejecuta aggregation pipelines sobre la colección `turnos` de MongoDB
+    para obtener los indicadores del dashboard y el cumplimiento de SLA.
+    """
+    col = db[COLECCION_TURNOS]
+
+    # 1. Conteo global por estados
+    pipeline_estados = pipeline_conteo_estados()
+    conteo_estados = {est: 0 for est in (
+        ESTADO_PENDIENTE, ESTADO_LLAMADO, ESTADO_EN_ATENCION, ESTADO_ATENDIDO, ESTADO_ABANDONADO
+    )}
+    for item in col.aggregate(pipeline_estados):
+        if item["_id"] in conteo_estados:
+            conteo_estados[item["_id"]] = item["total"]
+
+    turnos_esperando = conteo_estados[ESTADO_PENDIENTE]
+    turnos_llamados = conteo_estados[ESTADO_LLAMADO]
+    turnos_en_atencion = conteo_estados[ESTADO_EN_ATENCION]
+    turnos_atendidos = conteo_estados[ESTADO_ATENDIDO]
+    turnos_abandonados = conteo_estados[ESTADO_ABANDONADO]
+    total_turnos = sum(conteo_estados.values())
+
+    # 2. Promedios de tiempos (espera y atención) y métricas SLA
+    pipeline_tiempos = pipeline_tiempos_sla(sla_espera_max_seg)
 
     res_tiempos = list(col.aggregate(pipeline_tiempos))
     if res_tiempos:

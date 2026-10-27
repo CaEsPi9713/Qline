@@ -46,11 +46,21 @@ def validar_token(token) -> str:
     return token.strip().lower()
 
 
+def filtro_por_token(token: str) -> dict:
+    """Filtro de MongoDB para buscar un turno por su qr_token.
+
+    El índice idx_turnos_qr_token_unico es parcial (solo indexa valores de tipo string). MongoDB solo usa un
+    índice parcial si la consulta incluye la condición del índice; con `{"qr_token": token}` a secas el
+    plan fue COLLSCAN al medirlo en el servidor. Por eso el filtro declara también el tipo.
+    """
+    return {"qr_token": {"$eq": token, "$type": "string"}}
+
+
 def consultar_por_token(db, token: str) -> dict:
     """Estado y posición del turno asociado al token. Solo lectura."""
     token = validar_token(token)
     try:
-        documento = db[COLECCION].find_one({"qr_token": token}, {"_id": 0, "codigo": 1})
+        documento = db[COLECCION].find_one(filtro_por_token(token), {"_id": 0, "codigo": 1})
     except PyMongoError as exc:
         raise QRError("No es posible consultar el turno en este momento. Intente de nuevo en unos segundos.", 503) from exc
     if documento is None:

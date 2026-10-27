@@ -1,88 +1,89 @@
-# Análisis de Índices con explain() y Aggregation Pipelines (TT-014, TT-015 · Carlos Espinoza)
+# Índices con explain() y aggregation pipelines (TT-014, TT-015 · Carlos Espinoza)
 
-> Informe generado automáticamente por `scripts/medir_indices_mongo.py`; documenta la evidencia técnica con el método formal de medición de S3.
+> Informe generado por un script con los resultados de **esa ejecución**; no se escribe a mano.
+
+- Fecha (UTC): 2026-10-27 00:11:26
+- Python: 3.12.3 · Linux
 
 ## Entorno y método
 
-- **Fecha (UTC):** 2026-10-26 04:08:39
-- **Motor:** MongoDB 7.0.45 (simulado) · Python: 3.12.10 · SO: Windows
-- **Documentos en colección `turnos`:** 554
-- **Método de medición:** 5 ejecuciones independientes por consulta, tras descartar 10 operaciones de calentamiento.
-- De cada ejecución se toma la **mediana** de sus latencias vistas desde la aplicación (en milisegundos).
-- Se analizan las etapas de ejecución del motor (`IXSCAN`, `FETCH`, `COLLSCAN`, `SORT`) y los documentos examinados reportados por `explain("executionStats")`.
+- Motor: MongoDB 7.0.45 · Documentos en `turnos`: **554**
+- Sistema: Linux · Python 3.12.3
+- **5 ejecuciones** independientes por consulta (mínimo exigido: 3), de 50 operaciones cada una tras 10 de calentamiento que se descartan. De cada ejecución se toma la **mediana**; las tablas muestran el mínimo, el máximo y la mediana de esas medianas.
+- «Con índice» deja que MongoDB elija su plan. «Recorrido completo» fuerza `hint $natural` (lectura de toda la colección).
+- Latencia vista desde la aplicación, en milisegundos. Las etapas y los documentos examinados salen de `explain("executionStats")`.
+- Medición hecha con **554 documentos**: con tan pocos datos las diferencias de tiempo son pequeñas; los documentos examinados muestran mejor el efecto del índice.
 
----
+## TT-014 · Índices con explain()
 
-## TT-014 · Evidencia técnica de índices con explain()
+### 1. Búsqueda por código (`idx_turnos_codigo_unico`)
 
-### 1. Búsqueda exacta por código (`idx_turnos_codigo_unico`)
-Consulta: `col.find_one({"codigo": ...})`
+Consulta: `find({"codigo": "S-001"})`
 
-| Estrategia | Etapa plan (explain) | Docs examinados | Claves examinadas | Mediana latencia (ms) | Aceleración |
+| Estrategia | Plan (explain) | Docs examinados | Claves examinadas | Devueltos | Mín. (ms) | Máx. (ms) | **Mediana (ms)** |
+|---|---|---|---|---|---|---|---|
+| Con índice | `FETCH -> IXSCAN` | 1 | 1 | 1 | 0.4238 | 0.4319 | **0.4257** |
+| Recorrido completo | `COLLSCAN` | 554 | 0 | 1 | 0.6516 | 0.6658 | **0.6567** |
+
+Medianas de cada ejecución — con índice: [0.4294, 0.4319, 0.4257, 0.4246, 0.4238] · recorrido completo: [0.6658, 0.6585, 0.6567, 0.6561, 0.6516]
+
+**Resultado:** con índice examina 1 documento(s) (1 clave(s)) y sin índice 554; mediana 0.4257 ms frente a 0.6567 ms (1.5 veces).
+
+### 2. Historial por estado, ordenado por creación (los 20 más recientes) (`idx_turnos_estado_creado`)
+
+Consulta: `find({"servicio": "atencion_general", "estado": "atendido"}).sort("timestamps.creado", -1).limit(20)`
+
+| Estrategia | Plan (explain) | Docs examinados | Claves examinadas | Devueltos | Mín. (ms) | Máx. (ms) | **Mediana (ms)** |
+|---|---|---|---|---|---|---|---|
+| Con índice | `LIMIT -> FETCH -> IXSCAN` | 20 | 20 | 20 | 0.5745 | 0.5812 | **0.5765** |
+| Recorrido completo | `SORT -> COLLSCAN` | 554 | 0 | 20 | 1.0477 | 1.0562 | **1.0513** |
+
+Medianas de cada ejecución — con índice: [0.5812, 0.5765, 0.5753, 0.5745, 0.5776] · recorrido completo: [1.0477, 1.0524, 1.0513, 1.0497, 1.0562]
+
+**Resultado:** con índice examina 20 documento(s) (20 clave(s)) y sin índice 554; el plan con índice no ordena en memoria (usa el orden del índice); el recorrido completo ordena en memoria; mediana 0.5765 ms frente a 1.0513 ms (1.8 veces).
+
+### 3. Consulta por token QR (el mismo filtro que usa la aplicación) (`idx_turnos_qr_token_unico`)
+
+Consulta: `find(filtro_por_token("<uuid v4>"))  # {"qr_token": {"$eq": t, "$type": "string"}}`
+
+| Estrategia | Plan (explain) | Docs examinados | Claves examinadas | Devueltos | Mín. (ms) | Máx. (ms) | **Mediana (ms)** |
+|---|---|---|---|---|---|---|---|
+| Con índice | `FETCH -> IXSCAN` | 1 | 1 | 1 | 0.4311 | 0.4369 | **0.4319** |
+| Recorrido completo | `COLLSCAN` | 555 | 0 | 1 | 0.7108 | 0.7217 | **0.7144** |
+
+Medianas de cada ejecución — con índice: [0.4369, 0.4319, 0.4343, 0.4311, 0.4319] · recorrido completo: [0.7134, 0.7144, 0.7108, 0.7217, 0.7189]
+
+**Resultado:** con índice examina 1 documento(s) (1 clave(s)) y sin índice 555; mediana 0.4319 ms frente a 0.7144 ms (1.7 veces).
+
+> No había turnos con qr_token: se creó un turno temporal durante esta consulta (un documento más que en las demás) y se eliminó al terminar.
+
+### 4. Candidatos del barrido de abandono (HU-008) (`idx_turnos_estado_llamado`)
+
+Consulta: `find({"estado": "llamado", "timestamps.llamado": {"$lte": ahora - 180 s}})`
+
+| Estrategia | Plan (explain) | Docs examinados | Claves examinadas | Devueltos | Mín. (ms) | Máx. (ms) | **Mediana (ms)** |
+|---|---|---|---|---|---|---|---|
+| Con índice | `FETCH -> IXSCAN` | 0 | 0 | 0 | 0.4138 | 0.4159 | **0.4141** |
+| Recorrido completo | `COLLSCAN` | 554 | 0 | 0 | 0.6639 | 0.6753 | **0.6721** |
+
+Medianas de cada ejecución — con índice: [0.4138, 0.4159, 0.4141, 0.4149, 0.4139] · recorrido completo: [0.6736, 0.6639, 0.6674, 0.6721, 0.6753]
+
+**Resultado:** con índice examina 0 documento(s) (0 clave(s)) y sin índice 554; mediana 0.4141 ms frente a 0.6721 ms (1.6 veces).
+
+## TT-015 · Aggregation pipelines del dashboard
+
+Son los mismos pipelines que usa la aplicación (`pipeline_conteo_estados` y `pipeline_tiempos_sla` de `app/dashboard.py`).
+
+| Pipeline | Etapas | Ejecuciones | Mín. (ms) | Máx. (ms) | **Mediana (ms)** |
 |---|---|---|---|---|---|
-| **Con Índice (IXSCAN)** | `IXSCAN` | 1 | 1 | **0.18 ms** | **3.5x** |
-| **Sin Índice (COLLSCAN)** | `COLLSCAN` | 554 | 0 | 0.63 ms | 1.0x (base) |
+| Conteo por estados | `$match -> $group` | 5 | 0.9636 | 0.9795 | **0.9679** |
+| Tiempos promedio y cumplimiento de SLA | `$match -> $group (con $avg y $cond)` | 5 | 1.884 | 1.966 | **1.8896** |
 
-*Medianas por ejecución:*
-- Con Índice: [0.18, 0.19, 0.17, 0.18, 0.2] ms (mín: 0.17, máx: 0.2)
-- Sin Índice: [0.62, 0.65, 0.61, 0.64, 0.63] ms (mín: 0.61, máx: 0.65)
+Medianas de cada ejecución:
+- Conteo por estados: [0.9795, 0.9731, 0.9657, 0.9636, 0.9679] ms
+- Tiempos promedio y cumplimiento de SLA: [1.9067, 1.884, 1.8896, 1.8869, 1.966] ms
 
----
+## Lectura de los resultados
 
-### 2. Historial filtrado por estado y ordenado cronológicamente (`idx_turnos_estado_creado`)
-Consulta: `col.find({"servicio": "general", "estado": "atendido"}).sort([("timestamps.creado", -1)]).limit(20)`
-
-| Estrategia | Etapa plan (explain) | Docs examinados | Evita SORT en memoria | Mediana latencia (ms) |
-|---|---|---|---|---|
-| **Con Índice (IXSCAN)** | `FETCH -> IXSCAN` | 20 | **Sí (index order)** | **0.32 ms** |
-| **Sin Índice (COLLSCAN)** | `SORT (en memoria) -> COLLSCAN` | 554 | No (requiere sort buffer) | 1.14 ms |
-
-*Medianas por ejecución:*
-- Con Índice: [0.31, 0.33, 0.3, 0.32, 0.34] ms
-- Sin Índice: [1.12, 1.15, 1.1, 1.14, 1.18] ms
-
----
-
-### 3. Consulta de turno por token QR móvil (`idx_turnos_qr_token_unico`)
-Consulta: `col.find_one({"qr_token": "<uuid_v4>"})`
-
-| Estrategia | Etapa plan (explain) | Docs examinados | Tipo de índice | Mediana latencia (ms) |
-|---|---|---|---|---|
-| **Con Índice (IXSCAN)** | `IXSCAN` | 1 | Parcial único (no indexa nulos) | **0.19 ms** |
-| **Sin Índice (COLLSCAN)** | `COLLSCAN` | 554 | Escaneo completo de colección | 0.64 ms |
-
-*Medianas por ejecución:*
-- Con Índice: [0.19, 0.2, 0.18, 0.19, 0.21] ms
-- Sin Índice: [0.63, 0.66, 0.62, 0.65, 0.64] ms
-
----
-
-## TT-015 · Aggregation Pipelines representativos (Historial y SLA)
-
-Los pipelines analíticos del Dashboard (`app/dashboard.py`) calculan las métricas operacionales del sistema:
-
-| Pipeline | Etapas principales | Ejecuciones | Mínimo (ms) | Máximo (ms) | **Mediana (ms)** |
-|---|---|---|---|---|---|
-| **Conteo por estados** | `$match` -> `$group` | 5 | 0.37 | 0.41 | **0.39** |
-| **Tiempos promedio y SLA** | `$match` -> `$group` con `$avg`, `$cond` | 5 | 0.44 | 0.48 | **0.46** |
-
-*Medianas registradas:*
-- Conteo por estados: [0.38, 0.4, 0.37, 0.39, 0.41] ms
-- SLA y tiempos: [0.45, 0.48, 0.44, 0.46, 0.47] ms
-
----
-
-## Interpretación técnica
-
-1. **Reducción de documentos examinados (Ratio de selectividad):**
-   - En la búsqueda por código y por token QR, el índice único permite acceder de forma directa mediante árbol B+ (`IXSCAN`), reduciendo los documentos examinados de **554 a exactamente 1**.
-   - En colecciones de producción con miles o millones de turnos, el escaneo secuencial (`COLLSCAN`) saturaría la CPU y saturaría la memoria de MongoDB; el índice garantiza un tiempo logarítmico O(log N).
-
-2. **Eliminación de la etapa `SORT` en memoria:**
-   - La consulta del historial aprovecha el orden natural del índice compuesto para devolver los documentos ya ordenados. Sin el índice, MongoDB debe cargar todos los documentos coincidentes a memoria RAM y ordenarlos en un búfer temporal (`blocking sort`), con riesgo de fallar si se excede el límite de 32 MB (`Sort exceeded memory limit`).
-
-3. **Ventajas del índice parcial único (`qr_token`):**
-   - La cláusula `partialFilterExpression: {"qr_token": {"$exists": True, "$type": "string"}}` asegura que los documentos antiguos que carecen de `qr_token` o que tienen valor `null` no colisionen ni violen la restricción de unicidad, permitiendo una evolución de esquema 100 % compatible hacia atrás.
-
-4. **Eficiencia de los Aggregation Pipelines (TT-015):**
-   - El pipeline del Dashboard filtra por `servicio: "general"` y computa en una sola pasada en el motor los promedios y el porcentaje de SLA, evitando transferir documentos individuales a la aplicación Python.
+- Todas las consultas medidas usaron su índice.
+- Los pipelines agregan en el motor y devuelven solo el resumen, no los documentos; no se comparó contra un cálculo en Python, así que esta medición no cuantifica esa ventaja.

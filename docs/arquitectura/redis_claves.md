@@ -66,7 +66,7 @@ pendiente ──llamar──▶ llamado ──iniciar atención──▶ en_aten
 
 ## Contrato para el abandono (HU-008 / TT-012, de Abigail) · implementado
 
-Implementado en [`app/abandono.py`](../../app/abandono.py) y [`app/integracion_s3.py`](../../app/integracion_s3.py); decisiones D-12 a D-14 en [`decisiones.md`](../decisiones.md).
+Implementado en [`app/abandono.py`](../../app/abandono.py) y [`app/integracion_s3.py`](../../app/integracion_s3.py); decisiones D-16 a D-18 en [`decisiones.md`](../decisiones.md).
 
 Redis **no avisa** cuando una clave expira: las notificaciones de expiración exigen `CONFIG SET`, que no está disponible con la cuenta del curso. Por eso:
 
@@ -85,7 +85,7 @@ Redis **no avisa** cuando una clave expira: las notificaciones de expiración ex
 | `grupo2:qline:cola:atencion_general` | `ZADD NX` de los pendientes que faltan, con `score = nivel × 10¹³ + creado_ms`. Nunca reordena ni duplica; no quita nada salvo con `--quitar-sobrantes` |
 | `grupo2:qline:contador:atencion_general` | Lo sube al mayor consecutivo de MongoDB si Redis lo perdió; nunca lo baja (se aplica con `WATCH/MULTI`) |
 
-Conviene ejecutarla con la atención detenida (decisión D-16).
+Conviene ejecutarla con la atención detenida (decisión D-20).
 
 ## Claves de prueba (se eliminan al terminar)
 

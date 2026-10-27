@@ -119,6 +119,7 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 | **Decisión** | Definir `idx_turnos_qr_token_unico` con `unique: True` y `partialFilterExpression: {"qr_token": {"$exists": True, "$type": "string"}}`. |
 | **Por qué** | Garantiza unicidad estricta para todos los turnos que poseen QR, mientras que los turnos antiguos o sin token no son indexados ni colisionan. Permite una evolución de esquema 100 % no destructiva, sin requerir `--recrear` ni borrar datos del servidor compartido (respetando la regla de la sección 26 del plan). |
 | **Alternativas** | *Índice sparse simple*: en MongoDB un índice `sparse` con campos nulos explícitos puede generar colisiones en unicidad. *Poblar UUIDs ficticios en documentos viejos*: alteraría la auditoría histórica de S2 sin necesidad. |
+| **Resultado de la integración** | Al medirlo en el servidor, `find({"qr_token": t})` hacía `COLLSCAN`: MongoDB solo usa un índice parcial si la consulta repite su condición. La aplicación (`consulta_qr.filtro_por_token`) y la medición usan ahora `{"qr_token": {"$eq": t, "$type": "string"}}`, y la repetición en el servidor dio `IXSCAN` con 1 documento examinado de 555. |
 
 ### D-14 · Cálculo de KPIs y SLA en el motor mediante Aggregation Pipelines
 
@@ -198,3 +199,19 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 ## Cliente (Aaron)
 
 *Pendiente de completar por el integrante.*
+
+---
+
+## Despliegue e integración (equipo)
+
+### D-22 · El seguimiento del turno por QR no pide contraseña de Apache; el resto sí
+
+| | |
+|---|---|
+| **Hallazgo** | En la demo, al abrir el enlace del QR en un celular, el navegador pedía usuario y contraseña una y otra vez. El `.htaccess` ponía `AuthType Basic` (`Require valid-user`) a **toda** la aplicación, también a la página del turno y a lo que ella consulta sola (consulta cada 3 s y WebSocket). Los navegadores del celular, y el visor de la cámara, no siempre reenvían las credenciales guardadas. |
+| **Decisión** | `.htaccess` deja pasar sin contraseña solo tres rutas, siempre con un UUID de 36 caracteres al final: `/turno/qr/{uuid}` (página), `/api/turnos/qr/{uuid}` (consulta) y `/ws/turno/qr/{uuid}` (WebSocket), además de `/static/` (CSS). Se hace con `SetEnvIf Request_URI ... ACCESO_PUBLICO` y `<RequireAny> Require valid-user / Require env ACCESO_PUBLICO`. Todo lo demás sigue exigiendo usuario y contraseña. |
+| **Por qué** | El contrato de HU-003 y HU-013 exige que el enlace del QR se abra desde cualquier celular; un cliente real no puede tener una cuenta de Apache. El UUID v4 es imposible de adivinar y esas rutas son de solo lectura y no exponen datos personales. |
+| **Qué sigue protegido** | Quiosco, panel, cola, historial, dashboard, descargas JSON, `/api/llamados`, `/ws/eventos`, la pantalla de sala y el administrador de MongoDB (`/insertar`, `/eliminar`, `/crear_coleccion`). `tests/test_htaccess.py` lo comprueba con más de 20 direcciones. |
+| **Alternativas** | *Dejar la protección en todo*: el cliente necesitaría credenciales. *Quitarla en todo*: expondría el administrador de MongoDB, que puede crear y borrar colecciones. *Reintentar menos el WebSocket desde la página*: reduce los avisos pero la página seguiría pidiendo contraseña. *Dejar pública la pantalla de sala y el quiosco*: son dispositivos fijos que se identifican una sola vez; el quiosco, además, emite turnos. |
+| **Riesgo** | La cuenta del curso protege el sitio con ese `.htpasswd`; esta decisión relaja esa protección solo para las rutas del cliente y debe estar acordada con el equipo (y, si aplica, con el profesor). La regla `/static/` es pública en cualquier lugar de la ruta. Requiere Apache 2.4 y que el hosting permita `AllowOverride` de autenticación y `FileInfo`; si no, el sitio puede responder 500 y se restaura el `.htaccess` anterior. |
+| **Estado** | Aplicado y **verificado en el servidor con un celular el 27/10/2026**: el enlace del QR abre sin usuario ni contraseña y el resto del sitio sigue protegido. |

@@ -26,7 +26,7 @@
 
 <div class="card-cabecera" style="margin-top:28px">
   <h2 style="margin:0">Recorrido</h2>
-  <span class="nota"><span id="avance-texto">0 de 20 pasos</span></span>
+  <span class="nota"><span id="avance-texto">0 de 23 pasos</span></span>
 </div>
 <div class="progreso" aria-hidden="true"><span id="avance-barra"></span></div>
 
@@ -279,6 +279,43 @@
       <div class="esperado"><strong>Debe verse:</strong> la prueba de recuperación con todas sus verificaciones en «cumple» y resultado <em>CORRECTO</em>; las medianas de rehidratación, reconciliación y barrido con 3 o más ejecuciones; y todos los casos de fallo en «OK». Los tres usan datos de prueba propios (series R, M y F) y no tocan los turnos reales.</div>
     </div>
     <div class="paso-acciones">
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="21">
+    <div>
+      <div class="rol">Seguimiento 3 &middot; Supervisor &middot; Descargas JSON (HU-010, HU-011)</div>
+      <h3>Descargar el historial y el dashboard en JSON</h3>
+      <p>En el historial filtre por estado <em>abandonado</em> y pulse <strong>Descargar JSON</strong>; en el dashboard cambie el umbral y vuelva a descargar.</p>
+      <div class="esperado"><strong>Debe verse:</strong> se descargan <code>historial_turnos_&lt;fecha&gt;.json</code> y <code>dashboard_sla_&lt;umbral&gt;s_&lt;fecha&gt;.json</code>. El del historial trae solo los turnos filtrados, con sus tiempos (incluido <code>abandonado</code>) y los metadatos <code>total_exportados</code> y <code>filtros_aplicados</code>; el del dashboard trae los totales, los promedios y el cumplimiento del SLA con el umbral elegido.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/historial?estado=abandonado">Historial abandonados</a>
+      <a class="btn btn-secundario" href="{{ base }}/dashboard">Abrir Dashboard</a>
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="22">
+    <div>
+      <div class="rol">Seguimiento 3 &middot; MongoDB &middot; Índices y qr_token (TT-001, TT-002, TT-014, TT-015)</div>
+      <h3>Los índices se usan de verdad</h3>
+      <div class="terminal" data-copiar>python scripts/medir_indices_mongo.py --informe docs/evidencia/indices_mongo.md</div>
+      <div class="terminal" data-copiar>python -m scripts.probar_qr_token --informe docs/evidencia/qr_token.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> en el primer informe, las 4 consultas con <code>IXSCAN</code> (por código, historial, token QR y candidatos del barrido) frente a <code>COLLSCAN</code> en el recorrido completo, con los documentos examinados de cada una. El segundo termina en <em>CORRECTO</em>: el turno con token se acepta, el repetido se rechaza, los turnos sin token conviven y la consulta usa el índice.</div>
+    </div>
+    <div class="paso-acciones">
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="23">
+    <div>
+      <div class="rol">Seguimiento 3 &middot; Cliente &middot; QR sin contraseña (HU-003, HU-013)</div>
+      <h3>El enlace del QR abre en cualquier celular</h3>
+      <p>Emita un turno desde el quiosco, escanee el QR con un celular y abra el enlace en una ventana privada. Después intente abrir el panel desde ese mismo celular.</p>
+      <div class="esperado"><strong>Debe verse:</strong> la página del turno abre <strong>sin usuario ni contraseña</strong> y queda en «En vivo»; cambia sola cuando el turno se llama o se abandona. El panel, la cola y el resto del sitio <strong>sí</strong> piden usuario y contraseña.</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/quiosco">Abrir Quiosco</a>
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>

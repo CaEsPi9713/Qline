@@ -17,15 +17,16 @@ class PruebasGuiaDemo(BaseRedisMongo):
         with mock.patch("app.main.verificar_redis", return_value={"ok": True, "version": "7"}):
             self.html = TestClient(main.app).get("/demo").text
 
-    def test_tiene_los_20_pasos_numerados_sin_repetir(self):
+    def test_tiene_los_23_pasos_numerados_sin_repetir(self):
         numeros = re.findall(r'data-paso="(\d+)"', self.html)
-        self.assertEqual(numeros, [str(i) for i in range(1, 21)])
-        self.assertIn("0 de 20 pasos", self.html)
+        self.assertEqual(numeros, [str(i) for i in range(1, 24)])
+        self.assertIn("0 de 23 pasos", self.html)
 
     def test_incluye_quiosco_pantalla_abandono_y_recuperacion(self):
         for texto in ("/quiosco", "/pantalla", "scripts.barrer_abandonos", "scripts.rehidratar_cola --aplicar",
                       "scripts.probar_recuperacion", "scripts.medir_recuperacion",
-                      "scripts.probar_fallos_recuperacion", "estado=abandonado"):
+                      "scripts.probar_fallos_recuperacion", "estado=abandonado",
+                      "scripts/medir_indices_mongo.py", "scripts.probar_qr_token", "Descargar JSON", "sin usuario ni contraseña"):
             self.assertIn(texto, self.html, texto)
 
     def test_los_comandos_no_usan_opciones_que_ya_no_existen(self):

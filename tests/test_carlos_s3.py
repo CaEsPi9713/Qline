@@ -35,6 +35,7 @@ from app.turnos_schema import (
     validar_documento_turno,
 )
 import scripts.medir_indices_mongo as mim
+from app import mediciones_indices as mi
 
 
 class TestCarlosS3Exportaciones(unittest.TestCase):
@@ -195,55 +196,24 @@ class TestCarlosS3QRTokenEIndice(unittest.TestCase):
 class TestCarlosS3MedicionesScript(unittest.TestCase):
     def test_minimo_tres_ejecuciones_requerido(self):
         """El script de medición rechaza peticiones con menos de 3 ejecuciones."""
-        self.assertEqual(mim.MIN_EJECUCIONES, 3)
+        self.assertEqual(mi.MIN_EJECUCIONES, 3)
         with patch("sys.stderr"):
-            salida = mim.main(["--ejecuciones", "2", "--simulado"])
+            salida = mim.main(["--ejecuciones", "2"])
         self.assertEqual(salida, 2)
+
+    def test_el_script_no_ofrece_modo_simulado(self):
+        """La evidencia sale de una medición real: ya no existe --simulado."""
+        with patch("sys.stderr"), self.assertRaises(SystemExit):
+            mim.main(["--simulado"])
 
     def test_resumen_estadistico_calcula_minimo_maximo_y_mediana(self):
         """La función resumen calcula correctamente min, max y mediana."""
         datos = [1.2, 0.5, 3.4, 2.1, 0.9]
-        res = mim.resumen(datos)
+        res = mi.resumen(datos)
         self.assertEqual(res["minimo"], 0.5)
         self.assertEqual(res["maximo"], 3.4)
         self.assertEqual(res["mediana"], 1.2)
         self.assertEqual(res["ejecuciones"], 5)
-
-    def test_generar_markdown_informe_contiene_todas_las_secciones(self):
-        """El informe generado contiene las secciones TT-014, TT-015 y tablas de resultados."""
-        datos_sim = {
-            "mongo_version": "7.0.45",
-            "ejecuciones": 5,
-            "op1": {
-                "stats_indice": {"stage": "IXSCAN", "totalDocsExamined": 1, "totalKeysExamined": 1},
-                "stats_sin_indice": {"stage": "COLLSCAN", "totalDocsExamined": 500, "totalKeysExamined": 0},
-                "latencia_indice": mim.resumen([0.1, 0.11, 0.12, 0.1, 0.11]),
-                "latencia_sin_indice": mim.resumen([0.5, 0.52, 0.51, 0.49, 0.5]),
-            },
-            "op2": {
-                "stats_indice": {"stage": "FETCH -> IXSCAN", "totalDocsExamined": 20},
-                "stats_sin_indice": {"stage": "SORT -> COLLSCAN", "totalDocsExamined": 500},
-                "latencia_indice": mim.resumen([0.2, 0.21, 0.22, 0.2, 0.21]),
-                "latencia_sin_indice": mim.resumen([0.8, 0.82, 0.81, 0.79, 0.8]),
-            },
-            "op3": {
-                "stats_indice": {"stage": "IXSCAN", "totalDocsExamined": 1},
-                "stats_sin_indice": {"stage": "COLLSCAN", "totalDocsExamined": 500},
-                "latencia_indice": mim.resumen([0.12, 0.13, 0.12, 0.11, 0.12]),
-                "latencia_sin_indice": mim.resumen([0.55, 0.56, 0.54, 0.55, 0.56]),
-            },
-            "agg": {
-                "pipeline_estados": {"latencia": mim.resumen([0.3, 0.31, 0.32, 0.29, 0.3])},
-                "pipeline_sla": {"latencia": mim.resumen([0.4, 0.41, 0.42, 0.39, 0.4])},
-            },
-        }
-        md = mim.generar_markdown_informe(datos_sim, 500)
-        self.assertIn("TT-014", md)
-        self.assertIn("TT-015", md)
-        self.assertIn("idx_turnos_codigo_unico", md)
-        self.assertIn("idx_turnos_estado_creado", md)
-        self.assertIn("idx_turnos_qr_token_unico", md)
-        self.assertIn("Aggregation Pipelines", md)
 
 
 if __name__ == "__main__":

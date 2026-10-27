@@ -3,7 +3,7 @@
 **Hito:** integración, pruebas y medición (tag objetivo `v0.3.0`)
 **Área:** ciclo de atención y continuidad operacional
 **Estado:** implementado e integrado; falta la revisión de Abigail y las verificaciones marcadas como pendientes.
-**Detalle y evidencia:** [`S3.md`](S3.md), sección 5 · decisiones D-12 a D-17 en [`../decisiones.md`](../decisiones.md).
+**Detalle y evidencia:** [`S3.md`](S3.md), sección 5 · decisiones D-16 a D-21 en [`../decisiones.md`](../decisiones.md).
 
 > **Autoría.** El diseño de los módulos de dominio es de Abigail. Las piezas que faltaban en su entrega y la integración las implementó Alessandro Cambronero con asistencia de Claude Code (detalle en la nota de autoría de `S3.md`). Abigail debe revisar y hacer suyo este trabajo antes de la entrega.
 
@@ -17,7 +17,7 @@
 | TT-017 | Prueba de caída y rehidratación | Hecho; [`recuperacion.md`](../evidencia/recuperacion.md) |
 | TT-018 | Mediciones (≥ 3 ejecuciones, mediana) | Hecho; [`rendimiento_recuperacion.md`](../evidencia/rendimiento_recuperacion.md) |
 | TT-019 | Casos normal, conexión fallida y datos inválidos | Hecho; [`fallos_recuperacion.md`](../evidencia/fallos_recuperacion.md) |
-| TT-020 | Decisiones técnicas | Hecho; D-12 a D-17 |
+| TT-020 | Decisiones técnicas | Hecho; D-16 a D-21 |
 | — | Sección propia de `S3.md` | Hecha; pendiente de revisión por Abigail |
 
 ## 2. Contratos que se respetan

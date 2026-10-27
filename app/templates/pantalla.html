@@ -171,10 +171,19 @@
       art.setAttribute("aria-label", "Turno " + t.codigo + " en ventanilla " + t.ventanilla);
       const badgeClass = t.estado === "en_atencion" ? "" : " llamado-badge-nuevo";
       const badgeText  = t.estado === "en_atencion" ? "En atención" : "Llamado";
-      art.innerHTML =
-        '<div class="llamado-codigo">' + t.codigo + '</div>' +
-        '<div class="llamado-ventanilla">' + t.ventanilla + '</div>' +
-        '<span class="llamado-badge' + badgeClass + '">' + badgeText + '</span>';
+      /* textContent y no innerHTML: el código y la ventanilla vienen del servidor y se tratan siempre como texto */
+      const cod = document.createElement("div");
+      cod.className = "llamado-codigo";
+      cod.textContent = t.codigo;
+      const ven = document.createElement("div");
+      ven.className = "llamado-ventanilla";
+      ven.textContent = t.ventanilla;
+      const badge = document.createElement("span");
+      badge.className = "llamado-badge" + badgeClass;
+      badge.textContent = badgeText;
+      art.appendChild(cod);
+      art.appendChild(ven);
+      art.appendChild(badge);
       lista.appendChild(art);
     });
   }
