@@ -1,6 +1,6 @@
 {#- Plantilla pública de QLine: solo la marca, sin enlaces a operación, supervisión
     ni administración. La usan las vistas pensadas para el cliente (consulta por QR
-    en el celular y, a futuro, el modo quiosco). Bloques: titulo, contenido, scripts. -#}
+    en el celular y, a futuro, el modo quiosco). Bloques: titulo, cabecera_extra, clase_cuerpo, contenido, scripts. -#}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -16,8 +16,9 @@
 <header class="publico-cab">
   <span class="brand-logo">Q</span>
   <span class="publico-marca">QLine<small>Gestión de filas y turnos</small></span>
+  {% block cabecera_extra %}{% endblock %}
 </header>
-<main class="publico-cuerpo">
+<main class="publico-cuerpo {% block clase_cuerpo %}{% endblock %}">
 {% block contenido %}{% endblock %}
 </main>
 <footer class="footer">QLine · Grupo 2 / Query Logic</footer>

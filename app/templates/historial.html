@@ -2,6 +2,10 @@
 {% block titulo %}Historial y auditoría{% endblock %}
 {% block lead %}Consulta persistente en MongoDB: los turnos se conservan con sus tiempos aunque ya no estén en Redis.{% endblock %}
 {% block contenido %}
+{#- Las fechas llegan en UTC (ISO 8601); aquí se muestran en hora local. El detalle (title) conserva el valor exacto en UTC. -#}
+{% macro celda_fecha(valor) -%}
+{%- if valor -%}<time datetime="{{ valor|iso_utc }}" title="{{ valor|iso_utc }} (UTC)"><span class="fecha-dia">{{ valor|fecha }}</span><span class="fecha-hora">{{ valor|hora }}</span></time>{%- else -%}<span class="texto-tenue">-</span>{%- endif -%}
+{%- endmacro %}
 {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 
 <div class="card">
@@ -53,12 +57,13 @@
       <a href="{{ base }}/api/historial?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" target="_blank" class="btn btn-secundario">Ver JSON</a>
     </div>
   </div>
+  <p class="nota" style="margin:0 0 8px">Fechas y horas en {{ etiqueta_zona() }}. Pase el cursor sobre una fecha para ver el valor exacto en UTC.</p>
   <div class="tabla-wrap">
     <table>
       <thead>
         <tr>
           <th>Código</th><th>Prioridad</th><th>Estado</th><th>Ventanilla</th>
-          <th>Creado</th><th>Llamado</th><th>Finalizado</th>
+          <th>Creado</th><th>Llamado</th><th>Cierre</th>
           <th class="num">Espera</th><th class="num">Atención</th>
         </tr>
       </thead>
@@ -69,9 +74,9 @@
           <td><span class="badge badge-{{ t.prioridad }}">{{ t.prioridad }}</span></td>
           <td><span class="badge badge-{{ t.estado }}">{{ t.estado }}</span></td>
           <td>{{ t.ventanilla or '-' }}</td>
-          <td class="nota">{{ t.timestamps.creado or '-' }}</td>
-          <td class="nota">{{ t.timestamps.llamado or '-' }}</td>
-          <td class="nota">{{ t.timestamps.finalizado or t.timestamps.abandonado or '-' }}</td>
+          <td class="fecha">{{ celda_fecha(t.timestamps.creado) }}</td>
+          <td class="fecha">{{ celda_fecha(t.timestamps.llamado) }}</td>
+          <td class="fecha">{{ celda_fecha(t.timestamps.finalizado or t.timestamps.abandonado) }}{% if not t.timestamps.finalizado and t.timestamps.abandonado %}<span class="fecha-nota">abandono</span>{% endif %}</td>
           <td class="num">{% if t.metricas.espera_seg is not none %}<strong>{{ t.metricas.espera_seg }}</strong> s{% else %}<span class="texto-tenue">-</span>{% endif %}</td>
           <td class="num">{% if t.metricas.atencion_seg is not none %}<strong>{{ t.metricas.atencion_seg }}</strong> s{% else %}<span class="texto-tenue">-</span>{% endif %}</td>
         </tr>

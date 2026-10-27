@@ -192,7 +192,7 @@
     else document.title = TITULO_BASE;
     if (cambio) { tarjeta.classList.remove("cambio"); void tarjeta.offsetWidth; tarjeta.classList.add("cambio"); }
     estadoAnterior = t.estado;
-    texto($("actualizado"), "Actualizado a las " + new Date().toLocaleTimeString("es"));
+    texto($("actualizado"), "Actualizado a las " + new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }));
   }
 
   function actualizarAnillo(faltan) {

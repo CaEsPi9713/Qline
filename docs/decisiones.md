@@ -2,7 +2,7 @@
 
 Registro de las decisiones tomadas durante el desarrollo, con las alternativas que se consideraron y por qué se descartaron. Cada integrante documenta las de su área. Este archivo no sustituye al Plan de Desarrollo: lo complementa con el *por qué*.
 
-**Estado:** secciones de Redis, tiempo real y consulta por QR (Alessandro) y MongoDB e historial (Carlos) completas. Quedan por añadir las secciones de ciclo de atención y recuperación (Abigail) y cliente (Aaron).
+**Estado:** secciones de Redis, tiempo real y consulta por QR (Alessandro), MongoDB e historial (Carlos) y ciclo de atención y recuperación (Abigail) completas. Queda por añadir la sección de cliente (Aaron).
 
 ---
 
@@ -80,7 +80,7 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 | | |
 |---|---|
-| **Decisión** | La consulta por QR no modifica el esquema ni los índices. El esquema de `turnos` admite campos adicionales, por lo que `qr_token` pasa sin tocarlo; la búsqueda funciona sin índice. El índice único parcial y la validación del formato son de Carlos y exigen acuerdo del equipo (sección 26). |
+| **Decisión** | La consulta por QR no modifica el esquema ni los índices. El esquema de `turnos` admite campos adicionales, por lo que `qr_token` pasa sin tocarlo; la búsqueda funciona sin índice. El índice único parcial y la validación del formato son de Carlos y exigen acuerdo del equipo (sección 26). *Actualización de S3: ese acuerdo se dio; Carlos añadió el campo, su validación y el índice parcial único (D-13).* |
 | **Por qué** | El usuario del curso no puede ejecutar `collMod`, y recrear la colección (`--recrear`) borra datos: el plan no autoriza usarlo para esto. |
 
 ### D-10 · Redis falla rápido
@@ -119,6 +119,7 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 | **Decisión** | Definir `idx_turnos_qr_token_unico` con `unique: True` y `partialFilterExpression: {"qr_token": {"$exists": True, "$type": "string"}}`. |
 | **Por qué** | Garantiza unicidad estricta para todos los turnos que poseen QR, mientras que los turnos antiguos o sin token no son indexados ni colisionan. Permite una evolución de esquema 100 % no destructiva, sin requerir `--recrear` ni borrar datos del servidor compartido (respetando la regla de la sección 26 del plan). |
 | **Alternativas** | *Índice sparse simple*: en MongoDB un índice `sparse` con campos nulos explícitos puede generar colisiones en unicidad. *Poblar UUIDs ficticios en documentos viejos*: alteraría la auditoría histórica de S2 sin necesidad. |
+| **Resultado de la integración** | Al medirlo en el servidor, `find({"qr_token": t})` hacía `COLLSCAN`: MongoDB solo usa un índice parcial si la consulta repite su condición. La aplicación (`consulta_qr.filtro_por_token`) y la medición usan ahora `{"qr_token": {"$eq": t, "$type": "string"}}`, y la repetición en el servidor dio `IXSCAN` con 1 documento examinado de 555. |
 
 ### D-14 · Cálculo de KPIs y SLA en el motor mediante Aggregation Pipelines
 
@@ -139,8 +140,88 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 ## Ciclo de atención y recuperación (Abigail)
 
-*Pendiente de completar por el integrante.*
+> Diseño de los módulos de Abigail; la integración y los módulos de soporte los implementó Alessandro con asistencia de Claude Code (ver la nota de autoría en `docs/seguimientos/S3.md`, sección 5).
+
+### D-16 · El abandono lo decide un barrido sobre MongoDB y el Hash, no un aviso de Redis
+
+| | |
+|---|---|
+| **Decisión** | Un barrido periódico busca los turnos `llamado` con `timestamps.llamado ≤ ahora − 180 s` y abandona los que ya no tienen su Hash `grupo2:qline:turno:{codigo}`. `timestamps.abandonado` se registra como `llamado + 180 s` (el instante en que venció el plazo), no como la hora en que corrió el barrido. |
+| **Por qué** | Redis no avisa cuando una clave expira (D-04). Pedir las dos condiciones evita abandonar por error: el plazo vencido por reloj no basta si el Hash sigue vivo (el cliente confirmó presencia), y la ausencia del Hash no basta si el plazo no venció (Redis pudo perder datos). Si Redis no responde, no se abandona: no se sabe si venció de verdad. |
+| **Alternativas** | *Notificaciones de expiración de Redis*: requieren `CONFIG SET`, no disponible. *Índice TTL de MongoDB*: borra documentos, y aquí el turno debe conservarse para el historial. *Un temporizador por turno en memoria*: se pierde al reiniciar la aplicación y no funciona con varios procesos. |
+| **Resultado** | Verificado en el servidor: `A-001` llamado a las 23:31:23,881 y abandonado con `abandonado = 23:34:23,881`. |
+
+### D-17 · El abandono es idempotente por una condición en el `update_one`
+
+| | |
+|---|---|
+| **Decisión** | La transición es `update_one({codigo, estado: "llamado"}) → abandonado`. Si el turno ya cambió (inició atención, otro proceso lo abandonó), no se modifica nada y se informa como `ya_cambiados`. Liberar la ventanilla solo ocurre si la clave sigue apuntando a ese turno; publicar el evento ocurre después de confirmar MongoDB y es de mejor esfuerzo. |
+| **Por qué** | Permite repetir el barrido, ejecutarlo en varios procesos a la vez y reintentar tras un fallo sin duplicar ni deshacer nada. Se probó con 4 barridos simultáneos sobre 20 turnos: 20 abandonados, 20 únicos, 20 eventos. |
+| **Alternativas** | *Lua o transacción entre MongoDB y Redis*: no existen transacciones entre ambos y no se verificó `EVAL` en el Redis compartido. *Revertir MongoDB si Redis falla*: dejaría un turno llamado sin Hash que el siguiente barrido volvería a procesar. |
+
+### D-18 · Un barrido por proceso de la aplicación, sin candado distribuido
+
+| | |
+|---|---|
+| **Decisión** | El barrido corre en un hilo daemon que se inicia y detiene con la aplicación (`_lifespan`), cada 10 s (`BARRIDO_INTERVALO_SEG`) y se apaga con `BARRIDO_ABANDONO=0`. Con varios *workers* de Gunicorn habrá uno por worker. Las pruebas lo apagan por defecto. |
+| **Por qué** | Es seguro gracias a D-17 y evita depender de un candado en Redis o de un proceso aparte. Un fallo de una pasada (MongoDB caído) se cuenta y la siguiente reintenta. La ventanilla única bloquea una ventanilla hasta que su turno se resuelve, por lo que el barrido es crítico para que no queden ventanillas retenidas. |
+| **Alternativas** | *Cron que ejecute el script*: no corre a menos de 1 minuto y se desacopla de la aplicación. *Candado `SET NX` para un solo barrido*: más piezas para ahorrar trabajo que ya es barato (consulta indexada). |
+| **Índice** | `idx_turnos_estado_llamado` `{estado, timestamps.llamado}` para la consulta del barrido. |
+
+### D-19 · La recuperación es una reconciliación, no un vaciado
+
+| | |
+|---|---|
+| **Decisión** | `reconciliar_cola` compara los pendientes de MongoDB con la cola de Redis y agrega solo los que faltan, con el mismo puntaje que la emisión (calculado con enteros, sin errores de coma flotante). Solo se recuperan `pendiente`. Lo que sobra se informa y solo se quita con `--quitar-sobrantes`. El contador de códigos solo sube. Sin `--aplicar` muestra el plan. Los pendientes con datos inválidos se informan y no se encolan. |
+| **Por qué** | Sirve igual para una pérdida total, una parcial y el caso abierto de S2 (turno extraído cuyo cambio no llegó a MongoDB). Repetirla no cambia nada. Bajar el contador repetiría códigos ya emitidos. |
+| **Alternativas** | *Vaciar y reconstruir toda la cola*: dejaría la cola vacía unos instantes y está prohibido `FLUSHALL`/`FLUSHDB`. *Reencolar también los llamados vencidos*: los cubre el barrido. |
+| **Resultado** | Verificado en el servidor: 12 pendientes recuperados en 0,0028 s, mismo orden, sin duplicados; contador restaurado de 0 a 20 (clave aislada). |
+
+### D-20 · La rehidratación no es atómica con las llamadas
+
+| | |
+|---|---|
+| **Decisión** | No se usa Lua ni bloqueo entre `rehidratar_cola` y `/api/llamar`. Se documenta que conviene ejecutarla con la atención detenida. |
+| **Por qué** | Si un turno se llama justo mientras se reencola, queda un código obsoleto en la cola; el siguiente llamado lo rechaza con el aviso de inconsistencia que ya existe y no se duplica ni se pierde ninguna atención. La rehidratación es un procedimiento de recuperación, poco frecuente. |
+| **Alternativas** | *Script Lua atómico*: `EVAL` no verificado en el Redis compartido. *Bloquear las llamadas durante la recuperación*: añadiría estado compartido nuevo. |
+
+### D-21 · Las pruebas usan datos y claves propios, y un reloj adelantado
+
+| | |
+|---|---|
+| **Decisión** | Las pruebas de recuperación, mediciones y fallos usan series propias (`R-*`, `M-*`, `F-*`), cola, contador, eventos y ventanillas aislados (`grupo2:qline:prueba:*`) y un reloj de prueba adelantado 6 minutos. «Caído» significa un cliente a un puerto sin servidor o una colección que lanza error; no se detiene ningún servicio. |
+| **Por qué** | Corren en el servidor compartido sin tocar turnos reales ni mostrar eventos de prueba al público. El reloj adelantado se agregó tras un incidente: el barrido automático de la aplicación abandonó, muy probablemente, parte de los turnos de prueba (vencidos a propósito) y una medición salió 4/5. Con el reloj adelantado esos turnos no vencen para el reloj real. |
+| **Alternativas** | *Datos simulados en memoria para la evidencia*: no probarían el servidor real (por eso se eliminó el modo `--simulado` de los scripts). *Apagar el barrido de la aplicación durante la medición*: requeriría reiniciar el servicio compartido. |
+| **Resultado** | Tras el cambio, 45 de 45 ejecuciones de medición correctas y 18 de 18 casos de fallo, en el servidor. |
+
+---
 
 ## Cliente (Aaron)
 
 *Pendiente de completar por el integrante.*
+
+---
+
+## Despliegue e integración (equipo)
+
+### D-22 · El seguimiento del turno por QR no pide contraseña de Apache; el resto sí
+
+| | |
+|---|---|
+| **Hallazgo** | En la demo, al abrir el enlace del QR en un celular, el navegador pedía usuario y contraseña una y otra vez. El `.htaccess` ponía `AuthType Basic` (`Require valid-user`) a **toda** la aplicación, también a la página del turno y a lo que ella consulta sola (consulta cada 3 s y WebSocket). Los navegadores del celular, y el visor de la cámara, no siempre reenvían las credenciales guardadas. |
+| **Decisión** | `.htaccess` deja pasar sin contraseña solo tres rutas, siempre con un UUID de 36 caracteres al final: `/turno/qr/{uuid}` (página), `/api/turnos/qr/{uuid}` (consulta) y `/ws/turno/qr/{uuid}` (WebSocket), además de `/static/` (CSS). Se hace con `SetEnvIf Request_URI ... ACCESO_PUBLICO` y `<RequireAny> Require valid-user / Require env ACCESO_PUBLICO`. Todo lo demás sigue exigiendo usuario y contraseña. |
+| **Por qué** | El contrato de HU-003 y HU-013 exige que el enlace del QR se abra desde cualquier celular; un cliente real no puede tener una cuenta de Apache. El UUID v4 es imposible de adivinar y esas rutas son de solo lectura y no exponen datos personales. |
+| **Qué sigue protegido** | Quiosco, panel, cola, historial, dashboard, descargas JSON, `/api/llamados`, `/ws/eventos`, la pantalla de sala y el administrador de MongoDB (`/insertar`, `/eliminar`, `/crear_coleccion`). `tests/test_htaccess.py` lo comprueba con más de 20 direcciones. |
+| **Alternativas** | *Dejar la protección en todo*: el cliente necesitaría credenciales. *Quitarla en todo*: expondría el administrador de MongoDB, que puede crear y borrar colecciones. *Reintentar menos el WebSocket desde la página*: reduce los avisos pero la página seguiría pidiendo contraseña. *Dejar pública la pantalla de sala y el quiosco*: son dispositivos fijos que se identifican una sola vez; el quiosco, además, emite turnos. |
+| **Riesgo** | La cuenta del curso protege el sitio con ese `.htpasswd`; esta decisión relaja esa protección solo para las rutas del cliente y debe estar acordada con el equipo (y, si aplica, con el profesor). La regla `/static/` es pública en cualquier lugar de la ruta. Requiere Apache 2.4 y que el hosting permita `AllowOverride` de autenticación y `FileInfo`; si no, el sitio puede responder 500 y se restaura el `.htaccess` anterior. |
+| **Estado** | Aplicado y **verificado en el servidor con un celular el 27/10/2026**: el enlace del QR abre sin usuario ni contraseña y el resto del sitio sigue protegido. |
+
+### D-23 · Las fechas se guardan y se entregan en UTC; las pantallas las muestran en hora local
+
+| | |
+|---|---|
+| **Hallazgo** | Varias pantallas mostraban la fecha tal como sale de la base de datos (`2026-10-27T01:12:49.757000`): sin zona horaria, con microsegundos y en UTC, lo que además se leía seis horas adelantado frente a la hora real de la sala. |
+| **Decisión** | MongoDB, las APIs y las descargas JSON conservan ISO 8601 en UTC y ahora con la zona explícita y milisegundos (`2026-10-27T01:12:49.757Z`). `app/formato.py` ofrece los filtros `fecha`, `hora`, `fecha_hora` e `iso_utc` para las plantillas: las pantallas muestran `26/10/2026` y `19:12:49` en la zona de la variable `ZONA_HORARIA` (por defecto `America/Costa_Rica`). El valor exacto en UTC queda en el detalle (`title`) y en `<time datetime>`. |
+| **Por qué** | Los datos deben ser inequívocos para otras máquinas (UTC con zona), y las personas deben leer la hora de su reloj. Separar ambos evita errores de conversión y deja la zona como un ajuste de despliegue. |
+| **Alternativas** | *Guardar la hora local en MongoDB*: ambigua en los cambios de horario y entre zonas. *Convertir en el navegador*: la hora dependería del dispositivo (cada celular vería la suya) y las tablas no se podrían probar. *Dejar el ISO en pantalla*: lo que se corrigió. |
+| **Alcance** | Historial, ticket y confirmación del quiosco; los relojes de la pantalla de sala y de la página del QR usan 24 horas. No cambian las descargas, las APIs ni los informes de `docs/evidencia/` (que indican UTC). El editor JSON del administrador de MongoDB mantiene el formato extendido, que debe poder editarse y guardarse. Si el servidor no tiene la base de zonas horarias, se muestra UTC (`tzdata` está en `requirements.txt`). |

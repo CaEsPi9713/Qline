@@ -40,7 +40,7 @@ JSON pequeño, **sin datos personales**. Los campos sin valor se omiten.
 
 Además, el servidor envía por el WebSocket: `conectado` (al abrir) y `latido` (cada 25 s, para mantener viva la conexión a través de proxies).
 
-> **Estado:** los cuatro eventos del flujo principal ya se publican (Fase 4). Falta solo `turno_abandonado`, que debe publicar el barrido de abandono de Abigail (HU-008).
+> **Estado:** los cinco eventos del flujo ya se publican. `turno_abandonado` lo publica el barrido de abandono (HU-008) después de confirmar el cambio en MongoDB; si Redis falla en ese momento el abandono se conserva y el resultado del barrido lo informa.
 
 ### Dónde se publica cada evento
 
@@ -104,6 +104,10 @@ RewriteRule ^(.*)$ ws://127.0.0.1:18002/$1 [P,L]
 - La condición solo afecta a las peticiones que piden WebSocket; el resto del sitio no cambia.
 - No requiere reiniciar Apache ni la app, y no se necesitaron permisos de administrador.
 - El `.htaccess` del repositorio ya incluye la regla. Si se despliega en otro servidor y no existe `mod_proxy_wstunnel`, esas peticiones fallarán; en ese caso se quita la regla y las pantallas usan consulta periódica a su API JSON (previsto en el diseño).
+
+## Apache: autenticación y rutas del cliente
+
+El `.htaccess` protege el sitio con autenticación Basic, **salvo** `/turno/qr/{uuid}`, `/api/turnos/qr/{uuid}`, `/ws/turno/qr/{uuid}` y `/static/`, que son las que usa el cliente al escanear el QR (decisión D-22). El resto de las rutas, incluidos `/ws/eventos` y la pantalla de sala, siguen pidiendo usuario y contraseña.
 
 ## Qué no hace esto
 

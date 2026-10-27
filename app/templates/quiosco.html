@@ -1,0 +1,36 @@
+{% extends "base_publico.html" %}
+{% block titulo %}Quiosco de turnos{% endblock %}
+{% block contenido %}
+<div class="quiosco-contenedor" style="max-width: 600px; margin: 0 auto; text-align: center;">
+  <h1 style="font-size: 28px; margin-bottom: 8px; color: var(--c-texto, #0f172a);">Bienvenido a QLine</h1>
+  <p style="font-size: 16px; color: var(--c-texto-tenue, #64748b); margin-bottom: 24px;">
+    Seleccione el tipo de atención para solicitar su turno en <strong>{{ servicio }}</strong>.
+  </p>
+
+  {% if error %}<div class="error" role="alert" style="margin-bottom: 20px;">{{ error }}</div>{% endif %}
+
+  <form method="post" action="{{ base }}/quiosco">
+    <div class="opciones" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; text-align: left;">
+      <label class="opcion" style="cursor: pointer; padding: 20px; border: 2px solid var(--c-borde, #cbd5e1); border-radius: 12px; display: flex; align-items: center; gap: 16px; background: #fff; transition: border-color 0.2s, box-shadow 0.2s;">
+        <input type="radio" name="prioridad" value="normal" style="width: 24px; height: 24px;" {% if prioridad_seleccionada != 'preferencial' %}checked{% endif %}>
+        <div>
+          <span class="opcion-titulo" style="display: block; font-size: 18px; font-weight: 700; color: var(--c-texto, #0f172a);">Atención Regular (Normal)</span>
+          <span class="opcion-desc" style="display: block; font-size: 14px; color: var(--c-texto-tenue, #64748b); margin-top: 4px;">Para todo público y trámites generales.</span>
+        </div>
+      </label>
+
+      <label class="opcion" style="cursor: pointer; padding: 20px; border: 2px solid var(--c-borde, #cbd5e1); border-radius: 12px; display: flex; align-items: center; gap: 16px; background: #fff; transition: border-color 0.2s, box-shadow 0.2s;">
+        <input type="radio" name="prioridad" value="preferencial" style="width: 24px; height: 24px;" {% if prioridad_seleccionada == 'preferencial' %}checked{% endif %}>
+        <div>
+          <span class="opcion-titulo" style="display: block; font-size: 18px; font-weight: 700; color: var(--c-marca, #0284c7);">Atención Preferencial</span>
+          <span class="opcion-desc" style="display: block; font-size: 14px; color: var(--c-texto-tenue, #64748b); margin-top: 4px;">Adultos mayores, personas con discapacidad o mujeres embarazadas.</span>
+        </div>
+      </label>
+    </div>
+
+    <button type="submit" class="btn-grande btn-bloque" style="font-size: 20px; padding: 18px; width: 100%;">
+      Emitir mi turno
+    </button>
+  </form>
+</div>
+{% endblock %}

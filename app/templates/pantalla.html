@@ -1,0 +1,233 @@
+{% extends "base_publico.html" %}
+{% block titulo %}Turnos llamados{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
+{% block cabecera_extra %}<div class="sala-reloj" id="reloj" aria-hidden="true"></div>{% endblock %}
+
+{#- Pantalla de sala (HU-009). Solo muestra código de turno y ventanilla: nada de datos personales ni del token del QR.
+    El primer pintado lo hace el servidor; después la página se actualiza sola (WebSocket con consulta periódica de respaldo). -#}
+{% macro tarjeta(t) %}
+<article class="sala-card" role="listitem" data-estado="{{ t.estado }}" data-codigo="{{ t.codigo }}" aria-label="Turno {{ t.codigo }} en ventanilla {{ t.ventanilla }}">
+  <div class="sala-card-banda"><span aria-hidden="true">{{ "👤" if t.estado == "en_atencion" else "🔔" }}</span><span>{{ "En atención" if t.estado == "en_atencion" else "Llamado" }}</span></div>
+  <div class="sala-card-cuerpo">
+    <div class="sala-card-codigo">{{ t.codigo }}</div>
+    <div class="visual-ventanilla">{{ t.ventanilla }}</div>
+  </div>
+</article>
+{% endmacro %}
+
+{% block contenido %}
+{% set principal = llamados[0] if llamados and llamados[0].estado == "llamado" else none %}
+{% set otros = llamados[1:] if principal else llamados %}
+<section class="sala" id="sala" aria-label="Pantalla de llamados activos">
+
+  <div class="sala-cab">
+    <div>
+      <h1>Turnos llamados</h1>
+      <p class="sala-sub" id="sala-sub">{% if llamados %}{{ llamados|length }} {{ "turno activo" if llamados|length == 1 else "turnos activos" }}{% else %}Sin llamados activos{% endif %}</p>
+    </div>
+    <div class="sala-datos">
+      <span class="sala-chip">En espera <strong id="n-espera">{{ en_espera if en_espera is not none else "—" }}</strong></span>
+      <span class="sala-chip">En ventanilla <strong id="n-activos">{{ llamados|length }}</strong></span>
+    </div>
+  </div>
+
+  <div id="sala-principal" aria-live="polite">
+    {% if principal %}
+    <section class="turno-hero" data-estado="llamado" data-codigo="{{ principal.codigo }}">
+      <div class="turno-banda"><span class="turno-banda-icono" aria-hidden="true">🔔</span><span>Llamando ahora</span></div>
+      <div class="turno-cuerpo">
+        <div class="estado-etiqueta">Turno</div>
+        <div class="estado-codigo">{{ principal.codigo }}</div>
+        <p class="sala-ir">Diríjase a la ventanilla</p>
+        <div class="visual-ventanilla">{{ principal.ventanilla }}</div>
+      </div>
+    </section>
+    {% else %}
+    <section class="sala-vacio">
+      <div class="sala-vacio-icono" aria-hidden="true">⏱</div>
+      <h2>{{ "Nadie está siendo llamado" if llamados else "Sin turnos llamados" }}</h2>
+      <p>Cuando se llame a un turno, aparecerá aquí con su ventanilla.</p>
+    </section>
+    {% endif %}
+  </div>
+
+  <div class="sala-grid" id="sala-otros" role="list" aria-label="Otros turnos en ventanilla">
+    {% for t in otros %}{{ tarjeta(t) }}{% endfor %}
+  </div>
+
+  <div class="sala-pie">
+    <p class="indicador" id="indicador"><span class="punto"></span><span id="indicador-texto">Conectando…</span></p>
+    <p class="nota" id="actualizado"></p>
+    <button type="button" class="sala-sonido" id="btn-sonido" aria-pressed="false">🔔 Activar aviso sonoro</button>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var BASE = {{ base | tojson }};
+  var API_URL = BASE + "/api/llamados";
+  var WS_URL = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + BASE + "/ws/eventos";
+  var ESTADOS = { llamado: { icono: "🔔", texto: "Llamado" }, en_atencion: { icono: "👤", texto: "En atención" } };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var ws = null, reintento = 1000, timerPoll = null, primera = true, vistos = {}, sonido = false;
+
+  /* Todo se construye con textContent: el código y la ventanilla se tratan siempre como texto. */
+  function el(tag, clase, texto) {
+    var n = document.createElement(tag);
+    if (clase) n.className = clase;
+    if (texto !== undefined) n.textContent = texto;
+    return n;
+  }
+
+  function principal(t, nuevo) {
+    var s = el("section", "turno-hero" + (nuevo ? " nuevo" : ""));
+    s.setAttribute("data-estado", "llamado");
+    s.setAttribute("data-codigo", t.codigo);
+    var banda = el("div", "turno-banda");
+    var ic = el("span", "turno-banda-icono", "🔔"); ic.setAttribute("aria-hidden", "true");
+    banda.appendChild(ic); banda.appendChild(el("span", null, "Llamando ahora"));
+    var cuerpo = el("div", "turno-cuerpo");
+    cuerpo.appendChild(el("div", "estado-etiqueta", "Turno"));
+    cuerpo.appendChild(el("div", "estado-codigo", t.codigo));
+    cuerpo.appendChild(el("p", "sala-ir", "Diríjase a la ventanilla"));
+    cuerpo.appendChild(el("div", "visual-ventanilla", t.ventanilla));
+    s.appendChild(banda); s.appendChild(cuerpo);
+    return s;
+  }
+
+  function vacio(hayActivos) {
+    var s = el("section", "sala-vacio");
+    var ic = el("div", "sala-vacio-icono", "⏱"); ic.setAttribute("aria-hidden", "true");
+    s.appendChild(ic);
+    s.appendChild(el("h2", null, hayActivos ? "Nadie está siendo llamado" : "Sin turnos llamados"));
+    s.appendChild(el("p", null, "Cuando se llame a un turno, aparecerá aquí con su ventanilla."));
+    return s;
+  }
+
+  function tarjeta(t, nuevo) {
+    var e = ESTADOS[t.estado] || ESTADOS.llamado;
+    var a = el("article", "sala-card" + (nuevo ? " nuevo" : ""));
+    a.setAttribute("role", "listitem");
+    a.setAttribute("data-estado", t.estado);
+    a.setAttribute("data-codigo", t.codigo);
+    a.setAttribute("aria-label", "Turno " + t.codigo + " en ventanilla " + t.ventanilla);
+    var banda = el("div", "sala-card-banda");
+    var ic = el("span", null, e.icono); ic.setAttribute("aria-hidden", "true");
+    banda.appendChild(ic); banda.appendChild(el("span", null, e.texto));
+    var cuerpo = el("div", "sala-card-cuerpo");
+    cuerpo.appendChild(el("div", "sala-card-codigo", t.codigo));
+    cuerpo.appendChild(el("div", "visual-ventanilla", t.ventanilla));
+    a.appendChild(banda); a.appendChild(cuerpo);
+    return a;
+  }
+
+  function aviso() {
+    if (!sonido) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var ctx = new Ctx();
+      [660, 880].forEach(function (f, i) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.28);
+        g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + i * 0.28 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.28 + 0.26);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + i * 0.28); o.stop(ctx.currentTime + i * 0.28 + 0.28);
+      });
+    } catch (e) { /* sin audio disponible: no pasa nada */ }
+  }
+
+  function renderizar(datos) {
+    var lista = datos.llamados || [];
+    var hayNuevo = false, actuales = {};
+    lista.forEach(function (t) {
+      actuales[t.codigo] = t.estado;
+      if (!primera && t.estado === "llamado" && vistos[t.codigo] !== "llamado") hayNuevo = true;
+    });
+    var cabeza = lista.length && lista[0].estado === "llamado" ? lista[0] : null;
+    var resto = cabeza ? lista.slice(1) : lista;
+
+    var zona = $("sala-principal");
+    zona.textContent = "";
+    zona.appendChild(cabeza ? principal(cabeza, !primera && vistos[cabeza.codigo] !== "llamado") : vacio(lista.length > 0));
+
+    var grilla = $("sala-otros");
+    grilla.textContent = "";
+    resto.forEach(function (t) { grilla.appendChild(tarjeta(t, !primera && vistos[t.codigo] === undefined)); });
+
+    $("sala-sub").textContent = lista.length === 0 ? "Sin llamados activos"
+      : (lista.length === 1 ? "1 turno activo" : lista.length + " turnos activos");
+    $("n-activos").textContent = lista.length;
+    if (datos.en_espera !== undefined && datos.en_espera !== null) $("n-espera").textContent = datos.en_espera;
+    $("actualizado").textContent = "Actualizado a las " + new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+    vistos = actuales; primera = false;
+    if (hayNuevo) aviso();
+  }
+
+  function indicador(clase, texto) {
+    $("indicador").className = "indicador " + clase;
+    $("indicador-texto").textContent = texto;
+  }
+
+  function consultar() {
+    fetch(API_URL, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok) renderizar(d); })
+      .catch(function () { /* se reintenta en la siguiente consulta */ });
+  }
+
+  function iniciarPoll(ms) { detenerPoll(); timerPoll = setInterval(consultar, ms); }
+  function detenerPoll() { if (timerPoll !== null) { clearInterval(timerPoll); timerPoll = null; } }
+
+  function conectar() {
+    try { ws = new WebSocket(WS_URL); } catch (e) { iniciarPoll(3000); indicador("respaldo", "Actualizando cada 3 s"); return; }
+    ws.onopen = function () {
+      reintento = 1000;
+      indicador("vivo", "En vivo");
+      iniciarPoll(30000);                       /* con WebSocket activo, la consulta es solo de seguridad */
+    };
+    ws.onmessage = function (ev) {
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      var tipo = m.tipo || "";
+      if (tipo === "turno_llamado" || tipo === "atencion_iniciada" || tipo === "atencion_finalizada" ||
+          tipo === "turno_abandonado" || tipo === "turno_emitido") consultar();
+    };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+    ws.onclose = function () {
+      indicador("respaldo", "Actualizando cada 3 s");
+      iniciarPoll(3000);                        /* mientras no haya WebSocket, se consulta seguido */
+      setTimeout(function () { reintento = Math.min(reintento * 1.5, 30000); conectar(); }, reintento);
+    };
+  }
+
+  function reloj() {
+    var d = new Date();
+    $("reloj").textContent = d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  var btn = $("btn-sonido");
+  try { sonido = localStorage.getItem("qline-sala-sonido") === "1"; } catch (e) {}
+  function pintarSonido() {
+    btn.setAttribute("aria-pressed", sonido ? "true" : "false");
+    btn.textContent = sonido ? "🔔 Aviso sonoro activado" : "🔔 Activar aviso sonoro";
+  }
+  btn.addEventListener("click", function () {
+    sonido = !sonido;
+    try { localStorage.setItem("qline-sala-sonido", sonido ? "1" : "0"); } catch (e) {}
+    pintarSonido();
+    if (sonido) aviso();                        /* una pausa corta confirma que suena y habilita el audio del navegador */
+  });
+  pintarSonido();
+
+  reloj(); setInterval(reloj, 15000);
+  consultar();
+  conectar();
+})();
+</script>
+{% endblock %}

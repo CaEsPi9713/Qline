@@ -12,7 +12,7 @@ Las constantes viven en [`app/constantes.py`](../../app/constantes.py); las oper
 | `grupo2:qline:cola:atencion_general` | Sorted Set | Mientras el turno espera | Emisión (`ZADD NX`) · llamada (`ZPOPMIN`) | Implementada |
 | `grupo2:qline:ventanilla:{id}:actual` | String | Mientras la ventanilla atiende el turno | Llamada · finalización | Implementada |
 | `grupo2:qline:turno:{codigo}` | **Hash + TTL 180 s** | Hasta que el cliente se presenta o vence | Llamada · inicio/fin de atención | **Implementada (Fase 1)** |
-| `grupo2:qline:eventos` | Pub/Sub | — | Todas las transiciones | Publicador y receptor implementados; emitir, llamar, iniciar y finalizar ya publican (falta el abandono, HU-008). Ver [tiempo_real.md](tiempo_real.md) |
+| `grupo2:qline:eventos` | Pub/Sub | — | Todas las transiciones | Publicador y receptor implementados; emitir, llamar, iniciar, finalizar y abandonar ya publican (el abandono lo publica el barrido, HU-008). Ver [tiempo_real.md](tiempo_real.md) |
 
 Con esto el flujo ya usa **tres estructuras distintas** de Redis (Sorted Set, String y Hash), requisito de TT-011.
 
@@ -64,7 +64,9 @@ pendiente ──llamar──▶ llamado ──iniciar atención──▶ en_aten
 | `cola.segundos_restantes(codigo)` | Segundos que faltan, o `None` |
 | `cola.confirmar_presencia(codigo)` | `True` si existía y se eliminó |
 
-## Contrato para el abandono (HU-008 / TT-012, de Abigail)
+## Contrato para el abandono (HU-008 / TT-012, de Abigail) · implementado
+
+Implementado en [`app/abandono.py`](../../app/abandono.py) y [`app/integracion_s3.py`](../../app/integracion_s3.py); decisiones D-16 a D-18 en [`decisiones.md`](../decisiones.md).
 
 Redis **no avisa** cuando una clave expira: las notificaciones de expiración exigen `CONFIG SET`, que no está disponible con la cuenta del curso. Por eso:
 
@@ -73,6 +75,30 @@ Redis **no avisa** cuando una clave expira: las notificaciones de expiración ex
 3. La transición `llamado → abandonado` debe ser idempotente: `update_one` con filtro `estado == "llamado"`, de modo que varias ejecuciones simultáneas (varios procesos de la app) no choquen.
 4. Al abandonar: registrar `timestamps.abandonado`, liberar la ventanilla (`cola.liberar_ventanilla_si(ventanilla, codigo)`) y no devolver el turno a la cola.
 5. Un turno `abandonado` no se vuelve a asignar (transición prohibida por el plan).
+
+## Recuperación de la cola (HU-012, de Abigail)
+
+[`app/recuperacion.py`](../../app/recuperacion.py) reconstruye la cola desde MongoDB (`python -m scripts.rehidratar_cola`, plan sin `--aplicar`). Escribe solo en dos claves del contrato, con las mismas reglas que la emisión:
+
+| Clave | Qué hace la recuperación |
+|---|---|
+| `grupo2:qline:cola:atencion_general` | `ZADD NX` de los pendientes que faltan, con `score = nivel × 10¹³ + creado_ms`. Nunca reordena ni duplica; no quita nada salvo con `--quitar-sobrantes` |
+| `grupo2:qline:contador:atencion_general` | Lo sube al mayor consecutivo de MongoDB si Redis lo perdió; nunca lo baja (se aplica con `WATCH/MULTI`) |
+
+Conviene ejecutarla con la atención detenida (decisión D-20).
+
+## Claves de prueba (se eliminan al terminar)
+
+Las pruebas de TT-017, TT-018 y TT-019 usan claves aparte para no tocar la operación real. Solo existen mientras corre el script.
+
+| Clave | Uso |
+|---|---|
+| `grupo2:qline:prueba:contador:R`, `...:M`, `...:F` | Contador aislado de la prueba de recuperación, de las mediciones y de los casos de fallo |
+| `grupo2:qline:prueba:cola:M`, `...:F` | Cola aislada de las mediciones y de los casos de fallo |
+| `grupo2:qline:prueba:eventos`, `...:eventos:F` | Canal de eventos aislado (el público no recibe nada) |
+| `grupo2:qline:prueba:ventanilla:F:{id}` | Claves de ventanilla de los casos de fallo |
+
+La prueba de recuperación (`R-*`) sí usa la cola real, pero solo con códigos `R-*`.
 
 ## Reglas de consistencia (sección 17 del plan)
 

@@ -1,7 +1,17 @@
 AuthType Basic
 AuthName "Area protegida - Clientes"
 AuthUserFile /home/grupo2/public_html/.auth/.htpasswd_clientes3
-Require valid-user
+
+# Rutas del cliente al escanear el QR (HU-003 / HU-013): el enlace debe abrirse desde cualquier celular,
+# sin usuario ni contrasena de Apache. Solo la pagina del turno, su consulta y su WebSocket, siempre con un
+# UUID de 36 caracteres (imposible de adivinar), y los archivos estaticos (CSS). Todo lo demas sigue protegido.
+SetEnvIf Request_URI "/(turno/qr|api/turnos/qr|ws/turno/qr)/[0-9a-fA-F-]{36}$" ACCESO_PUBLICO
+SetEnvIf Request_URI "/static/" ACCESO_PUBLICO
+
+<RequireAny>
+    Require valid-user
+    Require env ACCESO_PUBLICO
+</RequireAny>
 
 RewriteEngine On
 # WebSocket (tiempo real, TT-013): debe ir antes de las reglas HTTP

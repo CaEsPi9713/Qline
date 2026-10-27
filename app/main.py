@@ -5,6 +5,7 @@ Equivalente a la versión PHP: listar/crear colecciones y CRUD de documentos.
 import json
 import os
 import re
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -27,6 +28,8 @@ from app.excepciones import ErrorAtencion
 from app.panel_atencion import estado_ventanillas
 from app.redis_atencion import liberar_turno
 from app.consulta_qr import QRError, consultar_por_token
+from app import formato
+from app.qr import construir_url_qr, generar_qr_svg
 from app.rutas_eventos import registrar as registrar_rutas_eventos
 from app.schemas import TurnoEnAtencion, TurnoFinalizado
 from app.emitir import EmisionError, emitir_turno
@@ -37,7 +40,7 @@ from app.redis_client import verificar_conexion as verificar_redis
 from app.turnos_schema import TurnoValidationError, validar_documento_turno
 from app.historial import exportar_historial_turnos, obtener_historial_turnos
 from app.dashboard import calcular_metricas_dashboard, exportar_metricas_dashboard
-
+from app.pantalla_publica import pantalla as _pantalla
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -61,10 +64,42 @@ MENSAJES = {
     "eliminado": "Documento eliminado correctamente.",
 }
 
-app = FastAPI(title="MongoDB Web Admin")
+
+@asynccontextmanager
+async def _lifespan(app_):
+    """Al arrancar: suscribe la pantalla pública al Hub de eventos (TT-013, HU-009) e inicia el barrido de abandono (HU-008)."""
+    from app.tiempo_real import hub
+    import json as _json
+    _orig_repartir = hub._repartir
+
+    def _repartir_con_pantalla(mensaje: str) -> None:
+        _orig_repartir(mensaje)
+        try:
+            evento = _json.loads(mensaje)
+            if isinstance(evento, dict):
+                _pantalla.procesar_evento(evento)
+        except Exception:
+            pass
+
+    hub._repartir = _repartir_con_pantalla
+
+    # HU-008: barrido periódico que marca como abandonados los turnos llamados cuyo plazo venció.
+    from app.integracion_s3 import crear_barrido_abandono
+    barrido = crear_barrido_abandono()
+    app_.state.barrido = barrido
+    if barrido is not None:
+        barrido.iniciar()
+    try:
+        yield
+    finally:
+        if barrido is not None:
+            barrido.detener()
+        hub._repartir = _orig_repartir
+
+
+app = FastAPI(title="MongoDB Web Admin", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=BASE_DIR.parent / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
-
 
 def _version_css() -> int:
     """Fecha de modificación de style.css: cambia el enlace y obliga al navegador a recargarlo."""
@@ -75,6 +110,7 @@ def _version_css() -> int:
 
 
 templates.env.globals["css_version"] = _version_css()
+formato.registrar(templates.env)             # filtros de fecha y hora para las pantallas
 
 registrar_rutas_eventos(app, get_db=lambda: get_db())
 
@@ -226,7 +262,7 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
 
 @app.get("/demo", response_class=HTMLResponse)
 def guia_demo(request: Request):
-    """Guía ordenada para recorrer el flujo completo del Seguimiento 2."""
+    """Guía ordenada para recorrer el flujo completo de la demo (Seguimientos 2 y 3)."""
     redis_estado = verificar_redis()
     mongo_estado = {"ok": False, "turnos": 0, "error": ""}
     try:
@@ -239,9 +275,15 @@ def guia_demo(request: Request):
             cola_tam = cola_redis.tamano_cola()
         except RedisError:
             cola_tam = None
+    # Hacia dónde apuntan los QR y si el abandono automático está corriendo: lo que más falla al preparar la demo.
+    qr_base = construir_url_qr("123e4567-e89b-42d3-a456-426614174000").rsplit("/turno/qr/", 1)[0]
+    barrido = getattr(request.app.state, "barrido", None)
     return templates.TemplateResponse(
         request, "demo.html",
-        {"base": BASE, "redis": redis_estado, "mongo": mongo_estado, "cola_tam": cola_tam},
+        {"base": BASE, "redis": redis_estado, "mongo": mongo_estado, "cola_tam": cola_tam,
+         "qr_base": qr_base, "qr_local": any(h in qr_base for h in ("localhost", "127.0.0.1", "0.0.0.0")),
+         "barrido_activo": bool(barrido and barrido.activo),
+         "barrido_intervalo": getattr(barrido, "intervalo_seg", 0) if barrido else 0},
     )
 
 
@@ -333,6 +375,7 @@ def accion_emitir(request: Request, prioridad: str = Form("")):
     try:
         turno = emitir_turno(get_db(), prioridad)
         _publicar_evento(eventos.TURNO_EMITIDO, turno["codigo"], "pendiente", prioridad=turno.get("prioridad"))
+        qr_svg = generar_qr_svg(turno["qr_url"]) if turno.get("qr_url") else ""
         return templates.TemplateResponse(
             request,
             "turno_confirmado.html",
@@ -340,6 +383,8 @@ def accion_emitir(request: Request, prioridad: str = Form("")):
                 "base": BASE,
                 "turno": turno,
                 "servicio": SERVICIO_NOMBRE,
+                "qr_url": turno.get("qr_url", ""),
+                "qr_svg": qr_svg,
             },
         )
     except EmisionError as e:
@@ -362,6 +407,67 @@ def accion_emitir(request: Request, prioridad: str = Form("")):
                 "base": BASE,
                 "servicio": SERVICIO_NOMBRE,
                 "error": "El servicio no se encuentra disponible temporalmente. Por favor intente de nuevo más tarde.",
+                "prioridad_seleccionada": prioridad,
+            },
+            status_code=503,
+        )
+
+
+# --- HU-001: Modo quiosco para clientes (ampliación S3) ----------------------
+
+@app.get("/quiosco", response_class=HTMLResponse)
+def vista_quiosco(request: Request, error: str = ""):
+    """Vista de emisión simplificada tipo quiosco (HU-001): sin navegación interna ni administrativa."""
+    return templates.TemplateResponse(
+        request,
+        "quiosco.html",
+        {
+            "base": BASE,
+            "servicio": SERVICIO_NOMBRE,
+            "error": error,
+            "prioridad_seleccionada": "normal",
+        },
+    )
+
+
+@app.post("/quiosco", response_class=HTMLResponse)
+def accion_quiosco(request: Request, prioridad: str = Form("")):
+    """Procesar emisión desde el quiosco reutilizando el backend existente de HU-001."""
+    try:
+        turno = emitir_turno(get_db(), prioridad)
+        _publicar_evento(eventos.TURNO_EMITIDO, turno["codigo"], "pendiente", prioridad=turno.get("prioridad"))
+        qr_svg = generar_qr_svg(turno["qr_url"]) if turno.get("qr_url") else ""
+        return templates.TemplateResponse(
+            request,
+            "quiosco_confirmado.html",
+            {
+                "base": BASE,
+                "turno": turno,
+                "servicio": SERVICIO_NOMBRE,
+                "qr_url": turno.get("qr_url", ""),
+                "qr_svg": qr_svg,
+            },
+        )
+    except EmisionError as e:
+        return templates.TemplateResponse(
+            request,
+            "quiosco.html",
+            {
+                "base": BASE,
+                "servicio": SERVICIO_NOMBRE,
+                "error": str(e),
+                "prioridad_seleccionada": prioridad,
+            },
+            status_code=e.status,
+        )
+    except (RedisError, PyMongoError):
+        return templates.TemplateResponse(
+            request,
+            "quiosco.html",
+            {
+                "base": BASE,
+                "servicio": SERVICIO_NOMBRE,
+                "error": "El servicio no se encuentra disponible temporalmente. Por favor solicite asistencia.",
                 "prioridad_seleccionada": prioridad,
             },
             status_code=503,
@@ -810,3 +916,40 @@ def vista_dashboard(request: Request, sla_espera: int = 300):
             status_code=500,
         )
 
+
+# --- HU-009: Pantalla pública de llamados (Aaron Benavides) ------------------
+
+def _obtener_llamados_actuales() -> list[dict]:
+    """MongoDB decide el estado real; memoria como respaldo si MongoDB falla."""
+    try:
+        mongo = _pantalla.consultar_desde_mongo(get_db())
+    except Exception:
+        mongo = None
+    # MongoDB vacío significa que no hay activos; no revivir caché obsoleta.
+    if mongo is not None:
+        return mongo
+    return _pantalla.llamados_vigentes()
+
+
+def _contar_en_espera():
+    """Cantidad de turnos pendientes (dato agregado, sin códigos ni personas); None si MongoDB no responde."""
+    try:
+        return get_db()["turnos"].count_documents({"estado": "pendiente", "servicio": SERVICIO_ID})
+    except Exception:
+        return None
+
+
+@app.get("/api/llamados")
+def api_llamados():
+    """Listado de llamados activos para pantalla de sala (HU-009), con la cantidad de turnos en espera."""
+    return {"ok": True, "llamados": _obtener_llamados_actuales(), "en_espera": _contar_en_espera()}
+
+
+@app.get("/pantalla", response_class=HTMLResponse)
+def vista_pantalla(request: Request):
+    """Vista pública de llamados, sin datos personales (HU-009)."""
+    return templates.TemplateResponse(
+        request, "pantalla.html",
+        {"base": BASE, "llamados": _obtener_llamados_actuales(), "en_espera": _contar_en_espera(),
+         "servicio": SERVICIO_NOMBRE},
+    )
