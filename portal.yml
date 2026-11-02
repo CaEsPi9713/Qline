@@ -1,0 +1,81 @@
+# portal.yml - Ficha de publicación y metadatos del proyecto QLine (TT-026)
+# Proyecto: QLine - Sistema inteligente de gestión de filas y turnos en tiempo real
+# Curso: Tópicos Avanzados de Bases de Datos
+# Institución: Universidad Nacional (UNA)
+
+proyecto:
+  nombre: "QLine"
+  lema: "MongoDB conserva lo que ocurrió. Redis controla lo que ocurre ahora."
+  descripcion: >-
+    Sistema inteligente de gestión de filas y turnos en tiempo real desarrollado
+    con FastAPI, Redis, MongoDB y Jinja2. Integra emisión táctil de quiosco,
+    asignación atómica con prioridades, seguimiento móvil en vivo mediante código QR,
+    pantalla pública de llamados de sala, panel de operador y auditoría con KPIs analíticos.
+  version: "0.9.0-rc"
+  estado: "En desarrollo - Seguimiento 4 (S4)"
+  licencia: "MIT"
+  repositorio: "https://github.com/CaEsPi9713/Qline"
+  rama_principal: "main"
+  rama_desarrollo: "development"
+
+curso:
+  nombre: "Tópicos Avanzados de Bases de Datos"
+  periodo: "II Ciclo 2026"
+  institucion: "Universidad Nacional"
+  grupo: "Grupo 2"
+  equipo: "Query Logic"
+
+equipo:
+  - nombre: "Aaron Benavides Vega"
+    rol: "Experiencia del cliente, interfaz pública, tickets y documentación de release"
+    usuario_github: "abenavides"
+    branch: "abenavides"
+  - nombre: "Abigail Urbina Gómez"
+    rol: "Arquitectura visual, plantillas base, quiosco y accesibilidad"
+    usuario_github: "aurbina"
+    branch: "aurbina"
+  - nombre: "Alessandro Cambronero Delgado"
+    rol: "Concurrencia, Redis, tiempo real, WebSocket y operación"
+    usuario_github: "acambronero"
+    branch: "acambronero"
+  - nombre: "Carlos Espinoza Pérez"
+    rol: "Modelo MongoDB, índices, agregaciones analíticas e historial"
+    usuario_github: "cespinoza"
+    branch: "cespinoza"
+
+stack_tecnologico:
+  lenguaje: "Python 3.12"
+  framework_web: "FastAPI"
+  motor_plantillas: "Jinja2"
+  base_de_datos_operacional: "MongoDB"
+  memoria_y_concurrencia: "Redis (Sorted Sets, Hashes, Pub/Sub)"
+  comunicacion_cliente: "WebSockets y HTTP REST con sondeo de respaldo"
+
+arquitectura_y_datos:
+  motores:
+    - nombre: "Redis"
+      proposito: "Gestión de cola atómica (ZPOPMIN), ventana de llamado (Hash con TTL de 180s) y eventos Pub/Sub"
+    - nombre: "MongoDB"
+      proposito: "Persistencia documental definitiva, auditoría de estados, índices parciales y aggregation pipelines"
+  servicios:
+    - id: "atencion_general"
+      nombre: "Atención General"
+  prioridades:
+    - "normal"
+    - "preferencial"
+  estados:
+    - "pendiente"
+    - "llamado"
+    - "en_atencion"
+    - "atendido"
+    - "abandonado"
+
+enlaces_y_documentacion:
+  readme: "README.md"
+  licencia: "LICENSE"
+  changelog: "CHANGELOG.md"
+  plan_maestro: "docs/Plan de Desarrollo QLINE/PLAN_DESARROLLO_QLINE.md"
+  plan_s4: "docs/Plan de Desarrollo QLINE/PLAN_ALTERNATIVO_S4_QLINE.md"
+  seguimiento_s4: "docs/seguimientos/S4.md"
+  arquitectura_redis: "docs/arquitectura/redis_claves.md"
+  decisiones_tecnicas: "docs/decisiones.md"

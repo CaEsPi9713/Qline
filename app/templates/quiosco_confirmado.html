@@ -5,6 +5,7 @@
   <div class="ok" style="margin-bottom: 20px;">¡Turno generado con éxito!</div>
 
   <div class="ticket" style="margin-bottom: 24px;">
+    <div class="ticket-institucion">QLine · {{ servicio }}</div>
     <div class="ticket-etiqueta">Su número de turno es</div>
     <div class="ticket-codigo">{{ turno.codigo }}</div>
     {% if turno.prioridad == 'preferencial' %}
@@ -39,11 +40,14 @@
     <p class="texto-suave" style="margin-top: 16px;">Tome asiento en la sala de espera y permanezca atento al llamado por pantalla.</p>
   </div>
 
-  <div style="margin-top: 20px;">
-    <a href="{{ base }}/quiosco" class="btn btn-grande" style="display: block; width: 100%; box-sizing: border-box; font-size: 18px; padding: 14px;">
+  <div class="ticket-acciones" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+    <button type="button" id="btn-imprimir" class="btn btn-grande btn-imprimir" onclick="imprimirTicket()" style="display: flex; width: 100%; box-sizing: border-box; font-size: 18px; padding: 14px; background: var(--c-marca, #2563eb); color: #fff; justify-content: center; align-items: center; gap: 8px;">
+      🖨️ Imprimir ticket
+    </button>
+    <a href="{{ base }}/quiosco" class="btn btn-secundario btn-grande" style="display: block; width: 100%; box-sizing: border-box; font-size: 18px; padding: 14px; text-align: center;">
       Solicitar otro turno
     </a>
-    <p id="contador-retorno" style="font-size: 12px; color: var(--c-texto-tenue, #64748b); margin-top: 10px;">
+    <p id="contador-retorno" style="font-size: 12px; color: var(--c-texto-tenue, #64748b); margin-top: 4px;">
       Esta pantalla volverá al inicio en <span id="segundos">25</span> segundos.
     </p>
   </div>
@@ -55,7 +59,30 @@
 (function() {
   var seg = 25;
   var el = document.getElementById("segundos");
+  var pausado = false;
+
+  window.imprimirTicket = function() {
+    pausado = true;
+    window.print();
+    setTimeout(function() {
+      pausado = false;
+      seg = 25;
+      if (el) el.textContent = seg;
+    }, 1000);
+  };
+
+  window.addEventListener("beforeprint", function() {
+    pausado = true;
+  });
+
+  window.addEventListener("afterprint", function() {
+    pausado = false;
+    seg = 25;
+    if (el) el.textContent = seg;
+  });
+
   var t = setInterval(function() {
+    if (pausado) return;
     seg--;
     if (el) el.textContent = seg;
     if (seg <= 0) {
