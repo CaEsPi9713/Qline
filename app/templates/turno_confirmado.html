@@ -7,6 +7,7 @@
 <div class="ok">¡Su turno ha sido generado e ingresado a la cola exitosamente!</div>
 
 <div class="ticket">
+  <div class="ticket-institucion">QLine · {{ servicio }}</div>
   <div class="ticket-etiqueta">Su número de turno es</div>
   <div class="ticket-codigo">{{ turno.codigo }}</div>
   {% if turno.prioridad == 'preferencial' %}
@@ -39,6 +40,7 @@
   </dl>
   <p class="texto-suave">Tome asiento en la sala de espera y permanezca atento al llamado por ventanilla.</p>
   <div class="fila" style="justify-content:center">
+    <button type="button" id="btn-imprimir" class="btn btn-secundario btn-imprimir" onclick="window.print()">🖨️ Imprimir ticket</button>
     <a href="{{ base }}/turno/{{ turno.codigo }}" class="btn">Consultar este turno</a>
     <a href="{{ base }}/emitir" class="btn btn-secundario">Solicitar otro turno</a>
     <a href="{{ base }}/cola" class="btn btn-secundario">Ver cola activa</a>

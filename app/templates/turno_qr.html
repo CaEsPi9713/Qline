@@ -33,7 +33,12 @@
 
     <div class="turno-visual" id="visual"></div>
 
-    <p class="estado-mensaje" id="mensaje">{% if turno.estado == "pendiente" %}Su turno está en espera.{% if turno.posicion is none %} Pronto sabremos su posición.{% endif %}{% elif turno.estado == "llamado" %}¡Es su turno! Diríjase a la ventanilla {{ turno.ventanilla or "indicada" }}.{% elif turno.estado == "en_atencion" %}Está siendo atendido{% if turno.ventanilla %} en la ventanilla {{ turno.ventanilla }}{% endif %}.{% elif turno.estado == "atendido" %}Su atención finalizó. ¡Gracias por su visita!{% elif turno.estado == "abandonado" %}Este turno se canceló porque no se presentó a tiempo. Puede solicitar uno nuevo.{% endif %}</p>
+    <p class="estado-mensaje" id="mensaje">{% if turno.estado == "pendiente" %}Su turno está en espera.{% if turno.posicion is none %} Pronto sabremos su posición.{% endif %}{% elif turno.estado == "llamado" %}¡Es su turno! Diríjase a la ventanilla {{ turno.ventanilla or "indicada" }}.{% elif turno.estado == "en_atencion" %}Está siendo atendido{% if turno.ventanilla %} en la ventanilla {{ turno.ventanilla }}{% endif %}.{% elif turno.estado == "atendido" %}Su atención finalizó. Puede cerrar esta pestaña. ¡Gracias por su visita!{% elif turno.estado == "abandonado" %}Este turno se canceló porque no se presentó a tiempo. Puede solicitar uno nuevo.{% endif %}</p>
+
+    <div class="turno-instrucciones" id="instrucciones-espera" role="note" aria-label="Instrucciones de espera" style="margin-top: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid var(--c-borde, #e2e8f0); border-radius: 10px; font-size: 13px; color: var(--c-texto-suave, #475569); text-align: left; line-height: 1.4;">
+      <strong style="display: block; color: var(--c-texto, #0f172a); margin-bottom: 3px;">ℹ️ Instrucciones de espera:</strong>
+      Conserve esta página abierta en su navegador mientras espera su turno. La pantalla se actualiza automáticamente en tiempo real; no es necesario recargarla manualmente. Si cierra esta página, su turno sigue activo en el sistema.
+    </div>
 
     <dl class="datos estado-datos" id="datos">
       {% if turno.estado == "pendiente" and turno.posicion is not none %}
@@ -49,7 +54,7 @@
 <div class="turno-pie">
   <p class="indicador" id="indicador"><span class="punto"></span><span id="indicador-texto">Conectando…</span></p>
   <p class="nota centro" id="actualizado"></p>
-  <p class="nota centro">{{ servicio_nombre }}. Esta página se actualiza sola; no necesita recargarla.</p>
+  <p class="nota centro">QLine · {{ servicio_nombre }}. Esta página se actualiza sola; no necesita recargarla.</p>
 </div>
 {% endif %}
 {% endblock %}
@@ -83,7 +88,7 @@
       case "pendiente": return t.posicion != null ? "Su turno está en espera." : "Su turno está en espera. Pronto sabremos su posición.";
       case "llamado": return "¡Es su turno! Diríjase a la ventanilla " + (t.ventanilla || "indicada") + ".";
       case "en_atencion": return "Está siendo atendido" + (t.ventanilla ? " en la ventanilla " + t.ventanilla : "") + ".";
-      case "atendido": return "Su atención finalizó. ¡Gracias por su visita!";
+      case "atendido": return "Su atención finalizó. Puede cerrar esta pestaña. ¡Gracias por su visita!";
       case "abandonado": return "Este turno se canceló porque no se presentó a tiempo. Puede solicitar uno nuevo.";
       default: return "";
     }

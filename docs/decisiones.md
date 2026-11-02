@@ -2,7 +2,7 @@
 
 Registro de las decisiones tomadas durante el desarrollo, con las alternativas que se consideraron y por qué se descartaron. Cada integrante documenta las de su área. Este archivo no sustituye al Plan de Desarrollo: lo complementa con el *por qué*.
 
-**Estado:** secciones de Redis, tiempo real y consulta por QR (Alessandro), MongoDB e historial (Carlos) y ciclo de atención y recuperación (Abigail) completas. Queda por añadir la sección de cliente (Aaron).
+**Estado:** completo. Incluye las secciones de Redis, tiempo real y consulta por QR (Alessandro), MongoDB e historial (Carlos), ciclo de atención y recuperación (Abigail), y cliente, quiosco, tickets e interfaces públicas (Aaron).
 
 ---
 
@@ -196,9 +196,47 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 ---
 
-## Cliente (Aaron)
+## Cliente, quiosco y experiencia pública (Aaron)
 
-*Pendiente de completar por el integrante.*
+### D-24 · Quiosco táctil de emisión sin captura de datos personales (HU-001)
+
+| | |
+|---|---|
+| **Decisión** | La emisión en quiosco (`/quiosco`) permite al usuario obtener turno seleccionando únicamente la prioridad (Normal o Preferencial), sin solicitar cédula, nombre, teléfono ni datos personales. |
+| **Por qué** | Cumple con la regla de privacidad de datos y minimiza el tiempo de permanencia en la terminal física de autoservicio a menos de 3 segundos por usuario. Evita colas frente al quiosco y no requiere teclado alfanumérico complejo ni validaciones de identidad en una pantalla pública compartida. |
+| **Alternativas** | *Solicitar identificación o motivo de visita*: desestimado por el alcance oficial de QLine, ya que ralentiza la emisión y expondría datos sensibles de los clientes en una terminal pública sin supervisión continua. |
+
+### D-25 · Generación de código QR vectorial en SVG incrustado en el ticket (HU-003)
+
+| | |
+|---|---|
+| **Decisión** | El código QR de seguimiento móvil se genera en el backend durante la emisión como un SVG vectorial incrustado directamente en el HTML del ticket (`quiosco_confirmado.html` y `turno_confirmado.html`), apuntando a la URL `/turno/qr/{uuid}`. |
+| **Por qué** | El formato SVG es vectorial: se escala con nitidez perfecta tanto en pantallas móviles como en papel impreso, no depende de peticiones HTTP secundarias para cargar imágenes, no almacena archivos binarios temporales en disco y es liviano (~3 KB). |
+| **Alternativas** | *Generar imágenes PNG o base64*: generan pixelado al imprimir en formatos físicos o aumentan innecesariamente el peso del payload. *Almacenar archivos de imagen en el servidor web*: introduciría problemas de concurrencia y necesidad de tareas periódicas de limpieza de archivos en disco. |
+
+### D-26 · Pantalla pública de llamados con Web Audio API sintetizada y desacople de sesión (HU-009)
+
+| | |
+|---|---|
+| **Decisión** | La pantalla de sala (`/pantalla`) es una vista independiente optimizada para televisores o monitores públicos, con reloj en tiempo real, actualización automática por WebSocket y Pub/Sub, y campanilla auditiva generada dinámicamente mediante Web Audio API (dos tonos sinusoidales a 587 Hz y 880 Hz). |
+| **Por qué** | La pantalla pública debe operar de forma desatendida durante toda la jornada. Sintetizar el sonido con la Web Audio API evita depender de la descarga de archivos `.mp3` o `.wav` que podrían fallar por latencia, caché, políticas de CORS o bloqueos de red en el navegador de la sala. |
+| **Alternativas** | *Reproducir archivo de audio externo*: mayor fragilidad ante desconexiones de red y mayor consumo de ancho de banda. *Depender de la sesión de algún operador*: mezclaría interfaces de control con la pantalla pública de visualización. |
+
+### D-27 · Impresión nativa de tickets con `@media print` y control de temporizador (S4-M02)
+
+| | |
+|---|---|
+| **Decisión** | La función «Imprimir ticket» utiliza la API estándar `window.print()` del navegador, respaldada por reglas de estilo `@media print` en `static/style.css` que aíslan la tarjeta del ticket, ocultan cabeceras, botones, navegación y contadores. El temporizador de 25 segundos del quiosco se pausa durante la impresión mediante eventos `beforeprint` y `afterprint`. |
+| **Por qué** | No asume hardware específico ni librerías propietarias de impresión térmica (ESC/POS), permitiendo la interoperabilidad con cualquier impresora configurada en el sistema operativo. Pausar el temporizador previene que la pantalla se reinicie mientras el usuario tiene abierto el diálogo de impresión del sistema. |
+| **Alternativas** | *Integración con driver de impresora térmica*: exigiría dependencias de hardware fuera del alcance académico y rompería la portabilidad del proyecto. *Dejar correr el temporizador sin pausa*: provocaría la redirección forzada y el cierre abrupto del diálogo de impresión mientras el cliente interactúa con la impresora. |
+
+### D-28 · Instrucciones de espera claras y aviso de finalización en QR sin cierre forzado (P01, P04, P05)
+
+| | |
+|---|---|
+| **Decisión** | La vista móvil del QR (`/turno/qr/{uuid}`) incluye un aviso claro de espera indicando que se actualiza automáticamente, que no requiere recarga manual y que cerrar la pestaña no cancela el turno. Al transicionar a `atendido`, el mensaje cambia explícitamente en SSR y JS a «Su atención finalizó. Puede cerrar esta pestaña. ¡Gracias por su visita!», manteniendo visible la identidad institucional `QLine · Atención General`. |
+| **Por qué** | Disminuye la ansiedad del usuario en la sala de espera y mitiga el tráfico innecesario generado por recargas manuales compulsivas (F5). Informar al cliente que puede cerrar la pestaña respeta las políticas de seguridad de los navegadores móviles (los cuales impiden que scripts invoquen `window.close()` sobre pestañas abiertas directamente por el usuario o por lectores de QR externos). |
+| **Alternativas** | *Invocar `window.close()` automáticamente*: los navegadores modernos ignoran esta instrucción por seguridad si la pestaña no fue abierta mediante un script. *No indicar nada al finalizar*: dejaría al cliente en incertidumbre sobre el término formal de su trámite. |
 
 ---
 
