@@ -13,7 +13,7 @@ from urllib.parse import quote_plus
 from bson import ObjectId, json_util
 from bson.errors import InvalidId
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request
+from fastapi import Body, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -65,6 +65,10 @@ MENSAJES = {
     "ventanilla_creada": "Ventanilla registrada y activada correctamente (P09).",
     "ventanilla_desactivada": "Ventanilla desactivada correctamente (P09).",
     "ventanilla_reactivada": "Ventanilla reactivada correctamente (P09).",
+    "sucursal_creada": "Sucursal y ventanillas aprovisionadas correctamente.",
+    "sucursal_actualizada": "Sucursal y capacidad de ventanillas actualizadas correctamente.",
+    "sucursal_desactivada": "Sucursal desactivada correctamente.",
+    "sucursal_reactivada": "Sucursal reactivada correctamente.",
 }
 
 
@@ -229,6 +233,8 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
         contexto["colecciones"] = sorted(db.list_collection_names())
         from app.ventanillas import listar_ventanillas
         contexto["ventanillas_gestion"] = listar_ventanillas(db, solo_activas=False)
+        from app.sucursales import listar_sucursales
+        contexto["sucursales_gestion"] = listar_sucursales(db, solo_activas=False)
         if coleccion and editar:
             try:
                 doc = db[coleccion].find_one({"_id": a_object_id(editar)})
@@ -822,6 +828,205 @@ def web_reactivar_ventanilla(
         return RedirectResponse(f"{BASE}/?ok=ventanilla_reactivada", status_code=303)
     except Exception as e:
         return render(request, error=f"Error reactivando ventanilla: {e}")
+
+
+# --- Mantenimiento de Sucursales y Capacidad (RFC-004) -----------------------
+
+@app.get("/api/admin/sucursales")
+def api_listar_sucursales(solo_activas: bool = False):
+    """Retorna el catálogo de sucursales con métricas de capacidad (RFC-004)."""
+    try:
+        from app.sucursales import listar_sucursales
+        sucursales = listar_sucursales(get_db(), solo_activas=solo_activas)
+        return {"ok": True, "sucursales": sucursales}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/admin/sucursales/{codigo}")
+def api_obtener_sucursal(codigo: str):
+    """Detalle de una sucursal y el estado de sus ventanillas (RFC-004)."""
+    try:
+        from app.sucursales import obtener_sucursal
+        res = obtener_sucursal(get_db(), codigo=codigo)
+        if not res:
+            return JSONResponse({"ok": False, "error": f"Sucursal '{codigo}' no encontrada."}, status_code=404)
+        return {"ok": True, "sucursal": res}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/admin/sucursales")
+def api_crear_sucursal(payload: dict = Body(...)):
+    """Crea una sucursal y aprovisiona automáticamente sus ventanillas en MongoDB (RFC-004)."""
+    try:
+        from app.sucursales import crear_sucursal_con_ventanillas
+        res = crear_sucursal_con_ventanillas(
+            get_db(),
+            codigo=payload.get("codigo", ""),
+            nombre=payload.get("nombre", ""),
+            direccion=payload.get("direccion", ""),
+            telefono=payload.get("telefono", ""),
+            cantidad_ventanillas=int(payload.get("cantidad_ventanillas", 3)),
+            prefijo_ventanilla=payload.get("prefijo_ventanilla", "V"),
+            objetivo_max_espera_seg=int(payload.get("objetivo_max_espera_seg", 300)),
+            tasa_minima_cumplimiento=float(payload.get("tasa_minima_cumplimiento", 80.0)),
+        )
+        return JSONResponse(res, status_code=201)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.put("/api/admin/sucursales/{codigo}")
+def api_actualizar_sucursal(codigo: str, payload: dict = Body(...)):
+    """Modifica parámetros de la sucursal o ajusta la capacidad de ventanillas (RFC-004)."""
+    try:
+        from app.sucursales import actualizar_sucursal
+        res = actualizar_sucursal(
+            get_db(),
+            codigo=codigo,
+            nombre=payload.get("nombre"),
+            direccion=payload.get("direccion"),
+            telefono=payload.get("telefono"),
+            cantidad_ventanillas=payload.get("cantidad_ventanillas"),
+            estado=payload.get("estado"),
+            objetivo_max_espera_seg=payload.get("objetivo_max_espera_seg"),
+            tasa_minima_cumplimiento=payload.get("tasa_minima_cumplimiento"),
+        )
+        return res
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.post("/api/admin/sucursales/{codigo}/desactivar")
+def api_desactivar_sucursal(codigo: str):
+    """Desactiva una sucursal validando previamente que no tenga turnos en atención (RFC-004)."""
+    try:
+        from app.sucursales import desactivar_sucursal_segura
+        res = desactivar_sucursal_segura(get_db(), codigo=codigo)
+        return res
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.post("/api/admin/sucursales/{codigo}/activar")
+def api_activar_sucursal(codigo: str):
+    """Reactiva una sucursal previamente inactiva (RFC-004)."""
+    try:
+        from app.sucursales import reactivar_sucursal
+        res = reactivar_sucursal(get_db(), codigo=codigo)
+        return res
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.get("/admin/sucursales", response_class=HTMLResponse)
+def vista_admin_sucursales(request: Request, ok: str = "", error: str = ""):
+    """Pantalla administrativa para gestionar sucursales y ventanillas configurables (RFC-004)."""
+    try:
+        from app.sucursales import listar_sucursales
+        db = get_db()
+        sucursales = listar_sucursales(db)
+        return templates.TemplateResponse(
+            request,
+            "admin_sucursales.html",
+            {
+                "base": BASE,
+                "sucursales": sucursales,
+                "mensaje": MENSAJES.get(ok, ""),
+                "error": error,
+            },
+        )
+    except Exception as e:
+        return templates.TemplateResponse(
+            request,
+            "admin_sucursales.html",
+            {
+                "base": BASE,
+                "sucursales": [],
+                "mensaje": "",
+                "error": f"Error cargando catálogo de sucursales: {e}",
+            },
+            status_code=500,
+        )
+
+
+@app.post("/admin/sucursales/crear")
+def web_crear_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+    nombre: str = Form(""),
+    direccion: str = Form(""),
+    telefono: str = Form(""),
+    cantidad_ventanillas: int = Form(3),
+    prefijo_ventanilla: str = Form("V"),
+    objetivo_max_espera_seg: int = Form(300),
+):
+    """Acción web para crear sucursal y aprovisionar ventanillas."""
+    try:
+        from app.sucursales import crear_sucursal_con_ventanillas
+        crear_sucursal_con_ventanillas(
+            get_db(),
+            codigo=codigo,
+            nombre=nombre,
+            direccion=direccion,
+            telefono=telefono,
+            cantidad_ventanillas=int(cantidad_ventanillas),
+            prefijo_ventanilla=prefijo_ventanilla,
+            objetivo_max_espera_seg=int(objetivo_max_espera_seg),
+        )
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_creada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
+
+
+@app.post("/admin/sucursales/actualizar")
+def web_actualizar_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+    nombre: str = Form(""),
+    cantidad_ventanillas: int = Form(3),
+):
+    """Acción web para actualizar metadatos o capacidad de ventanillas de una sucursal."""
+    try:
+        from app.sucursales import actualizar_sucursal
+        actualizar_sucursal(
+            get_db(),
+            codigo=codigo,
+            nombre=nombre or None,
+            cantidad_ventanillas=int(cantidad_ventanillas) if cantidad_ventanillas else None,
+        )
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_actualizada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
+
+
+@app.post("/admin/sucursales/desactivar")
+def web_desactivar_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Acción web para pausar o desactivar una sucursal."""
+    try:
+        from app.sucursales import desactivar_sucursal_segura
+        desactivar_sucursal_segura(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_desactivada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
+
+
+@app.post("/admin/sucursales/activar")
+def web_activar_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Acción web para reactivar una sucursal inactiva."""
+    try:
+        from app.sucursales import reactivar_sucursal
+        reactivar_sucursal(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_reactivada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
 
 
 # --- HU-010: Historial y Auditoría (Carlos Espinoza) -------------------------

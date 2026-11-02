@@ -77,10 +77,11 @@ def registrar_ventanilla(
     codigo: str,
     nombre: Optional[str] = None,
     tipo: str = "general",
+    sucursal: str = "central",
 ) -> dict:
     """
-    Registra o reactiva una ventanilla en MongoDB (P09).
-    Valida el formato del código y garantiza que quede lista para atención.
+    Registra o reactiva una ventanilla en MongoDB (P09 / RFC-004).
+    Valida el formato del código, asocia la sucursal y garantiza que quede lista para atención.
     """
     codigo_norm = validar_codigo_ventanilla(codigo)
     tipo_norm = tipo.strip().lower() if tipo else "general"
@@ -91,12 +92,17 @@ def registrar_ventanilla(
     ahora = datetime.now(timezone.utc)
     col = db[COLECCION_VENTANILLAS]
 
-    doc_existente = col.find_one({"codigo": codigo_norm})
+    filtro = {"codigo": codigo_norm}
+    if sucursal:
+        filtro["sucursal"] = sucursal
+
+    doc_existente = col.find_one(filtro)
     if doc_existente:
         col.update_one(
             {"_id": doc_existente["_id"]},
             {
                 "$set": {
+                    "sucursal": sucursal,
                     "nombre": nombre_def,
                     "tipo": tipo_norm,
                     "estado": "activa",
@@ -107,6 +113,7 @@ def registrar_ventanilla(
         return {
             "ok": True,
             "accion": "actualizada",
+            "sucursal": sucursal,
             "codigo": codigo_norm,
             "nombre": nombre_def,
             "tipo": tipo_norm,
@@ -114,6 +121,7 @@ def registrar_ventanilla(
         }
 
     nuevo_doc = {
+        "sucursal": sucursal,
         "codigo": codigo_norm,
         "nombre": nombre_def,
         "tipo": tipo_norm,
@@ -125,6 +133,7 @@ def registrar_ventanilla(
     return {
         "ok": True,
         "accion": "creada",
+        "sucursal": sucursal,
         "codigo": codigo_norm,
         "nombre": nombre_def,
         "tipo": tipo_norm,
@@ -132,7 +141,7 @@ def registrar_ventanilla(
     }
 
 
-def desactivar_ventanilla(db: Database, codigo: str) -> dict:
+def desactivar_ventanilla(db: Database, codigo: str, sucursal: Optional[str] = None) -> dict:
     """
     Desactiva una ventanilla verificando que no tenga turnos activos en curso
     (estados 'llamado' o 'en_atencion') para preservar la consistencia operacional.
@@ -140,11 +149,15 @@ def desactivar_ventanilla(db: Database, codigo: str) -> dict:
     codigo_norm = validar_codigo_ventanilla(codigo)
     col_turnos = db[COLECCION_TURNOS]
 
-    turno_activo = col_turnos.find_one({
+    filtro_turno = {
         "servicio": SERVICIO_ID,
         "ventanilla": codigo_norm,
         "estado": {"$in": [ESTADO_LLAMADO, ESTADO_EN_ATENCION]},
-    })
+    }
+    if sucursal:
+        filtro_turno["sucursal"] = sucursal
+
+    turno_activo = col_turnos.find_one(filtro_turno)
     if turno_activo:
         raise VentanillaError(
             f"No se puede desactivar la ventanilla {codigo_norm} porque tiene el turno "
@@ -153,14 +166,19 @@ def desactivar_ventanilla(db: Database, codigo: str) -> dict:
 
     col_ventanillas = db[COLECCION_VENTANILLAS]
     ahora = datetime.now(timezone.utc)
+    filtro_v = {"codigo": codigo_norm}
+    if sucursal:
+        filtro_v["sucursal"] = sucursal
+
     res = col_ventanillas.update_one(
-        {"codigo": codigo_norm},
+        filtro_v,
         {"$set": {"estado": "inactiva", "actualizado_en": ahora}},
     )
 
     if res.matched_count == 0:
         # Si no existía en colección, la crea como inactiva
         col_ventanillas.insert_one({
+            "sucursal": sucursal or "central",
             "codigo": codigo_norm,
             "nombre": f"Ventanilla {codigo_norm}",
             "tipo": "general",
@@ -177,15 +195,30 @@ def desactivar_ventanilla(db: Database, codigo: str) -> dict:
     }
 
 
-def reactivar_ventanilla(db: Database, codigo: str) -> dict:
+def reactivar_ventanilla(db: Database, codigo: str, sucursal: Optional[str] = None) -> dict:
     """Reactiva una ventanilla que estaba en estado 'inactiva'."""
     codigo_norm = validar_codigo_ventanilla(codigo)
     col = db[COLECCION_VENTANILLAS]
     ahora = datetime.now(timezone.utc)
 
+    filtro = {"codigo": codigo_norm}
+    if sucursal:
+        filtro["sucursal"] = sucursal
+
     col.update_one(
-        {"codigo": codigo_norm},
-        {"$set": {"estado": "activa", "actualizado_en": ahora}},
+        filtro,
+        {
+            "$set": {
+                "estado": "activa",
+                "actualizado_en": ahora,
+            },
+            "$setOnInsert": {
+                "sucursal": sucursal or "central",
+                "nombre": f"Ventanilla {codigo_norm}",
+                "tipo": "general",
+                "creado_en": ahora,
+            },
+        },
         upsert=True,
     )
     return {
@@ -196,21 +229,33 @@ def reactivar_ventanilla(db: Database, codigo: str) -> dict:
     }
 
 
-def listar_ventanillas(db: Optional[Database] = None, solo_activas: bool = False) -> list[dict]:
+def listar_ventanillas(
+    db: Optional[Database] = None,
+    solo_activas: bool = False,
+    sucursal: Optional[str] = None,
+) -> list[dict]:
     """
     Devuelve la lista de ventanillas registradas con su estado y metadatos.
-    Si la base de datos no tiene la colección poblada, devuelve las ventanillas
-    base predeterminadas.
+    Si se especifica sucursal, filtra por dicha sede (con fallback canónico a 'central').
     """
     if db is not None:
         try:
             col = db[COLECCION_VENTANILLAS]
-            filtro = {"estado": "activa"} if solo_activas else {}
+            filtro = {}
+            if solo_activas:
+                filtro["estado"] = "activa"
+            if sucursal:
+                if sucursal == "central":
+                    filtro["$or"] = [{"sucursal": "central"}, {"sucursal": {"$exists": False}}]
+                else:
+                    filtro["sucursal"] = sucursal
+
             docs = list(col.find(filtro).sort("codigo", 1))
             if docs:
                 resultado = []
                 for d in docs:
                     resultado.append({
+                        "sucursal": d.get("sucursal", "central"),
                         "codigo": d.get("codigo"),
                         "nombre": d.get("nombre", f"Ventanilla {d.get('codigo')}"),
                         "tipo": d.get("tipo", "general"),
@@ -223,6 +268,7 @@ def listar_ventanillas(db: Optional[Database] = None, solo_activas: bool = False
     # Fallback predeterminado a las constantes del sistema
     return [
         {
+            "sucursal": "central",
             "codigo": v,
             "nombre": f"Ventanilla {v.split('-')[-1]}",
             "tipo": "general",
@@ -232,7 +278,12 @@ def listar_ventanillas(db: Optional[Database] = None, solo_activas: bool = False
     ]
 
 
-def obtener_codigos_ventanillas(db: Optional[Database] = None, solo_activas: bool = True) -> list[str]:
+def obtener_codigos_ventanillas(
+    db: Optional[Database] = None,
+    solo_activas: bool = True,
+    sucursal: Optional[str] = None,
+) -> list[str]:
     """Devuelve únicamente la lista de strings con los códigos de ventanilla."""
-    ventanillas = listar_ventanillas(db=db, solo_activas=solo_activas)
+    ventanillas = listar_ventanillas(db=db, solo_activas=solo_activas, sucursal=sucursal)
     return [v["codigo"] for v in ventanillas]
+

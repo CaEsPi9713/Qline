@@ -25,8 +25,55 @@
 
   {% if not coleccion %}
   <div class="card">
-    <h2>Panel de Administración de Datos</h2>
-    <p>Seleccione una colección en el menú izquierdo (por ejemplo, <strong>turnos</strong>) para visualizar, insertar, editar o eliminar documentos.</p>
+    <div class="card-cabecera">
+      <div>
+        <h2>Panel de Administración de Datos</h2>
+        <p class="sub" style="margin:4px 0 0">Gestión de colecciones y estructura documental en MongoDB.</p>
+      </div>
+      <a href="{{ base }}/admin/sucursales" class="btn">Mantenimiento de Sucursales</a>
+    </div>
+    <p>Seleccione una colección en el menú izquierdo (por ejemplo, <strong>turnos</strong> o <strong>sucursales</strong>) para visualizar, insertar, editar o eliminar documentos.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-cabecera">
+      <div>
+        <h2>Sucursales del Sistema (RFC-004)</h2>
+        <p class="sub" style="margin:4px 0 0">Sedes institucionales registradas con capacidad parametrizable de ventanillas.</p>
+      </div>
+      <a href="{{ base }}/admin/sucursales" class="btn btn-secundario">Administrar Sedes</a>
+    </div>
+    <div class="tabla-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th class="num">Ventanillas</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sucursales_gestion %}
+          <tr>
+            <td class="codigo">{{ s.codigo }}</td>
+            <td><strong>{{ s.nombre }}</strong></td>
+            <td class="num">{{ s.ventanillas_activas }} / {{ s.ventanillas_totales }}</td>
+            <td>
+              {% if s.estado == 'activa' %}
+              <span class="badge badge-atendido">Activa</span>
+              {% else %}
+              <span class="badge badge-abandonado">Inactiva</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not sucursales_gestion %}
+          <tr><td colspan="4" class="vacio">No hay sucursales registradas.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="card">
