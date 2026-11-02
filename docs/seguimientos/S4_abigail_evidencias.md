@@ -8,12 +8,12 @@ TT-022 (README final) · P06 (Acerca de) · UI-01 (sistema de diseño) · UI-02 
 ## Entregables y estado
 | Tarea | Archivos | Estado | Evidencia (commit/PR/captura) |
 |---|---|---|---|
-| UI-01 | `static/style.css`, `base.html`, `base_publico.html`, `docs/diseno/design-system.md` | | |
+| UI-01 | `static/style.css`, `base.html`, `base_publico.html`, `docs/diseno/design-system.md` | `realizado`| |
 | UI-02 | `index.html`, `base_publico.html` | | |
 | P06 | `acerca.html` | | |
-| UI-03 | `quiosco.html`, `quiosco_confirmado.html`, `emitir.html`, `turno_confirmado.html`, `consultar.html`, `turno_qr.html` | | |
-| UI-06 | `static/style.css`, `403.html`, `404.html`, `500.html`, `app/errores.py`, checklist | | |
-| TT-022 | `README.md` | | |
+| UI-03 | `quiosco.html`, `quiosco_confirmado.html`, `emitir.html`, `turno_confirmado.html`, `consultar.html`, `turno_qr.html` | `realizado` | |
+| UI-06 | `static/style.css`, `403.html`, `404.html`, `500.html`, `app/errores.py`, checklist | `realizado` | |
+| TT-022 | `README.md` | `realizado` | |
 
 ## Pruebas realizadas
 (Escribir: qué se probó, en qué navegador/dispositivo, resultado, defectos abiertos y a quién se asignaron.)
