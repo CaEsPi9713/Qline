@@ -754,10 +754,12 @@ def api_historial(
     ventanilla: str = "",
     prioridad: str = "",
     codigo: str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
     limite: int = 100,
     salto: int = 0,
 ):
-    """Consulta turnos históricos con filtros y métricas calculadas (HU-010)."""
+    """Consulta turnos históricos con filtros, rango de fechas y métricas calculadas (HU-010 / S4-M04)."""
     try:
         return obtener_historial_turnos(
             get_db(),
@@ -765,6 +767,8 @@ def api_historial(
             ventanilla=ventanilla.strip() or None,
             prioridad=prioridad.strip() or None,
             codigo=codigo.strip() or None,
+            fecha_desde=fecha_desde.strip() or None,
+            fecha_hasta=fecha_hasta.strip() or None,
             limite=limite,
             salto=salto,
         )
@@ -778,19 +782,31 @@ def api_descargar_historial(
     ventanilla: str = "",
     prioridad: str = "",
     codigo: str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
 ):
-    """Descarga en archivo JSON todos los registros del historial filtrados (HU-010)."""
+    """Descarga en archivo JSON todos los registros del historial filtrados por estado, ventanilla, prioridad o rango de fechas (HU-010 / S4-M04)."""
     try:
+        f_desde = fecha_desde.strip() or None
+        f_hasta = fecha_hasta.strip() or None
         datos = exportar_historial_turnos(
             get_db(),
             estado=estado.strip() or None,
             ventanilla=ventanilla.strip() or None,
             prioridad=prioridad.strip() or None,
             codigo=codigo.strip() or None,
+            fecha_desde=f_desde,
+            fecha_hasta=f_hasta,
         )
         contenido = json.dumps(datos, indent=2, ensure_ascii=False)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        nombre_archivo = f"historial_turnos_{timestamp}.json"
+        partes_nombre = ["historial_turnos"]
+        if f_desde:
+            partes_nombre.append(f"desde_{f_desde.replace('-', '')}")
+        if f_hasta:
+            partes_nombre.append(f"hasta_{f_hasta.replace('-', '')}")
+        partes_nombre.append(timestamp)
+        nombre_archivo = f"{'_'.join(partes_nombre)}.json"
         return Response(
             content=contenido,
             media_type="application/json; charset=utf-8",
@@ -810,16 +826,25 @@ def vista_historial(
     ventanilla: str = "",
     prioridad: str = "",
     codigo: str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
+    limite: int = 50,
+    salto: int = 0,
 ):
-    """Vista de supervisión y auditoría del historial de turnos (HU-010)."""
+    """Vista de supervisión y auditoría del historial de turnos con paginación y filtros por rango de fechas (HU-010 / S4-M04)."""
     try:
+        limite = max(10, min(limite, 200))
+        salto = max(0, salto)
         res = obtener_historial_turnos(
             get_db(),
             estado=estado.strip() or None,
             ventanilla=ventanilla.strip() or None,
             prioridad=prioridad.strip() or None,
             codigo=codigo.strip() or None,
-            limite=100,
+            fecha_desde=fecha_desde.strip() or None,
+            fecha_hasta=fecha_hasta.strip() or None,
+            limite=limite,
+            salto=salto,
         )
         return templates.TemplateResponse(
             request,
@@ -828,6 +853,10 @@ def vista_historial(
                 "base": BASE,
                 "turnos": res["turnos"],
                 "total": res["total"],
+                "limite": limite,
+                "salto": salto,
+                "pagina_actual": res.get("pagina_actual", 1),
+                "total_paginas": res.get("total_paginas", 1),
                 "filtros": res["filtros"],
                 "estados_disponibles": ESTADOS,
                 "ventanillas_disponibles": VENTANILLAS,
@@ -843,7 +872,18 @@ def vista_historial(
                 "base": BASE,
                 "turnos": [],
                 "total": 0,
-                "filtros": {"estado": estado, "ventanilla": ventanilla, "prioridad": prioridad, "codigo": codigo},
+                "limite": limite,
+                "salto": salto,
+                "pagina_actual": 1,
+                "total_paginas": 1,
+                "filtros": {
+                    "estado": estado,
+                    "ventanilla": ventanilla,
+                    "prioridad": prioridad,
+                    "codigo": codigo,
+                    "fecha_desde": fecha_desde,
+                    "fecha_hasta": fecha_hasta,
+                },
                 "estados_disponibles": ESTADOS,
                 "ventanillas_disponibles": VENTANILLAS,
                 "prioridades_disponibles": PRIORIDADES,
