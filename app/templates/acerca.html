@@ -1,0 +1,26 @@
+{# P06 · Acerca de: propósito, equipo y repositorio. No inventar perfiles ni datos institucionales. #}
+{% extends "base_publico.html" %}
+{% block titulo %}Acerca de{% endblock %}
+
+{% block contenido %}
+{# COMPLETAR: pegar la URL REAL y verificada del repositorio. Si queda vacía, el enlace no se muestra. #}
+{% set repo_url = "https://github.com/CaEsPi9713/Qline." %}
+<div class="contenedor--estrecho pila">
+  <h1>Acerca de QLine</h1>
+  <p>QLine gestiona filas y turnos: emisión de turnos con prioridad, llamado por ventanilla, seguimiento por QR, historial y estadísticas de atención.</p>
+  <p>Es el proyecto final del curso Tópicos Avanzados de Bases de Datos de la Universidad Nacional. Usa FastAPI, MongoDB y Redis.</p>
+
+  <h2>Equipo Query Logic (Grupo 2)</h2>
+  <ul class="lista-equipo">
+    <li><strong>Aaron Benavides</strong><span>Mensajes al cliente, ticket y documentación de release</span></li>
+    <li><strong>Abigail Urbina</strong><span>Diseño visual, accesibilidad y README</span></li>
+    <li><strong>Alessandro Cambronero</strong><span>Operación, Redis, salud del sistema y demo</span></li>
+    <li><strong>Carlos Espinoza</strong><span>Ventanillas, Mongo, métricas e historial</span></li>
+  </ul>
+
+  {% if repo_url %}
+  <h2>Repositorio</h2>
+  <p><a href="{{ repo_url }}">Ver el código en el repositorio</a></p>
+  {% endif %}
+</div>
+{% endblock %}

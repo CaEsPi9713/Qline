@@ -1,131 +1,39 @@
-{% extends "base.html" %}
-{% block titulo %}CRUD MongoDB{% endblock %}
-{% block lead %}Administración técnica de la base <strong>{{ base_datos }}</strong> (usuario <strong>{{ usuario }}</strong>). El CRUD de <code>turnos</code> valida contra el JSON Schema; no es el flujo operativo normal.{% endblock %}
+{# UI-02 · Portada. Solo enlaces públicos; la protección Apache/.htaccess del CRUD no se toca. #}
+{% extends "base_publico.html" %}
+{% block titulo %}Inicio{% endblock %}
+{% block clase_main %}{% endblock %}
+
 {% block contenido %}
-<div class="contenedor">
-<aside class="sidebar">
-  <h3>Colecciones</h3>
-  {% for nombre in colecciones %}
-  <a href="{{ base }}/?coleccion={{ nombre|urlencode }}" class="{{ 'activa' if nombre == coleccion else '' }}">
-    {{ nombre }} {% if nombre == "turnos" %}&#9733;{% endif %}
-  </a>
-  {% endfor %}
-  {% if not colecciones %}<p class="nota">No existen colecciones.</p>{% endif %}
-  <hr class="separador">
-  <h4>Nueva colección</h4>
-  <form method="post" action="{{ base }}/crear_coleccion">
-    <input type="text" name="nombre_coleccion" placeholder="Nombre de colección" required>
-    <button type="submit" class="btn-secundario btn-bloque" style="margin-top:10px">Crear</button>
-  </form>
-</aside>
-
-<div class="contenido">
-  {% if mensaje %}<div class="ok">{{ mensaje }}</div>{% endif %}
-  {% if error %}<div class="error">{{ error }}</div>{% endif %}
-
-  {% if not coleccion %}
-  <div class="card">
-    <h2>Panel de Administración de Datos</h2>
-    <p>Seleccione una colección en el menú izquierdo (por ejemplo, <strong>turnos</strong>) para visualizar, insertar, editar o eliminar documentos.</p>
-  </div>
-  {% else %}
-
-  <!-- Formulario de Inserción / Edición -->
-  <div class="card">
-    {% if doc_editar %}
-    <h2>Editar documento en '{{ coleccion }}' (TT-003)</h2>
-    <form method="post" action="{{ base }}/actualizar?coleccion={{ coleccion|urlencode }}">
-      <input type="hidden" name="id" value="{{ id_editar }}">
-      <textarea name="json" spellcheck="false">{{ doc_editar }}</textarea>
-      <br><br>
-      <button type="submit">Guardar cambios</button> &nbsp;
-      <a href="{{ base }}/?coleccion={{ coleccion|urlencode }}" class="btn btn-secundario">Cancelar</a>
-    </form>
-    {% else %}
-    <h2>Insertar documento en '{{ coleccion }}' (TT-003)</h2>
-    <form method="post" action="{{ base }}/insertar?coleccion={{ coleccion|urlencode }}">
-      <textarea name="json" spellcheck="false">{% if json_texto is not none %}{{ json_texto }}{% elif coleccion == "turnos" %}{{ plantilla_turnos }}{% else %}{
-  "nombre": "Ejemplo",
-  "activo": true
-}{% endif %}</textarea>
-      <br><br>
-      <button type="submit">Insertar documento</button>
-      {% if coleccion == "turnos" %}
-      <span class="nota" style="margin-left:12px">* Se valida con el JSON Schema oficial (TT-002) antes de insertar.</span>
-      {% endif %}
-    </form>
-    {% endif %}
-  </div>
-
-  <!-- Listado de Documentos -->
-  <div class="card">
-    <div class="card-cabecera">
-      <h2>Colección: {{ coleccion }}</h2>
-      {% if coleccion == "turnos" %}
-      <!-- Filtro por Estado para Turnos -->
-      <form method="get" action="{{ base }}/" class="fila">
-        <input type="hidden" name="coleccion" value="turnos">
-        <label for="filtro_estado" style="margin:0">Estado</label>
-        <select id="filtro_estado" name="filtro_estado" onchange="this.form.submit()" class="select-auto">
-          <option value="">Todos los estados</option>
-          <option value="pendiente" {% if filtro_estado == "pendiente" %}selected{% endif %}>pendiente</option>
-          <option value="llamado" {% if filtro_estado == "llamado" %}selected{% endif %}>llamado</option>
-          <option value="en_atencion" {% if filtro_estado == "en_atencion" %}selected{% endif %}>en_atencion</option>
-          <option value="atendido" {% if filtro_estado == "atendido" %}selected{% endif %}>atendido</option>
-          <option value="abandonado" {% if filtro_estado == "abandonado" %}selected{% endif %}>abandonado</option>
-        </select>
-      </form>
-      {% endif %}
-    </div>
-
-    <p class="nota" style="margin-top:0">Mostrando hasta <strong>50 documentos</strong> ordenados por ID reciente.</p>
-
-    <div class="tabla-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>_id</th>
-          <th>Contenido del Documento</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in documentos %}
-        <tr>
-          <td class="codigo">{{ d.id }}</td>
-          <td>
-            {% if d.resumen_turno %}
-              <div style="margin-bottom:8px">
-                <span class="codigo">{{ d.resumen_turno.codigo }}</span> &nbsp;
-                <span class="badge badge-{{ d.resumen_turno.prioridad }}">{{ d.resumen_turno.prioridad }}</span> &nbsp;
-                <span class="badge badge-{{ d.resumen_turno.estado }}">{{ d.resumen_turno.estado }}</span>
-                {% if d.resumen_turno.ventanilla %}
-                  &nbsp; Ventanilla: <strong>{{ d.resumen_turno.ventanilla }}</strong>
-                {% endif %}
-              </div>
-            {% endif %}
-            <pre>{{ d.json }}</pre>
-          </td>
-          <td class="acciones">
-            <a class="editar" href="{{ base }}/?coleccion={{ coleccion|urlencode }}&editar={{ d.id|urlencode }}">Editar</a>
-            <br><br>
-            <form method="post" action="{{ base }}/eliminar?coleccion={{ coleccion|urlencode }}" onsubmit="return confirm('¿Eliminar este documento definitivamente?');">
-              <input type="hidden" name="id" value="{{ d.id }}">
-              <button type="submit" class="borrar">Eliminar</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-        {% if not documentos %}
-        <tr>
-          <td colspan="3" class="vacio">No existen documentos en esta colección.</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
+<section class="heroe" aria-labelledby="titulo-portada">
+  <div class="contenedor">
+    <h1 id="titulo-portada">Turnos claros, sin hacer fila de pie.</h1>
+    <p>Saque su turno en el quiosco y siga su estado desde el teléfono con el código QR.</p>
+    <div class="fila">
+      <a class="boton boton--grande" href="/quiosco">Sacar un turno</a>
+      <a class="boton boton--grande boton--contorno" href="/consultar">Consultar mi turno</a>
     </div>
   </div>
-  {% endif %}
-</div>
+</section>
+
+<div class="contenedor principal">
+  <h2>Cómo funciona</h2>
+  <div class="rejilla">
+    <div class="tarjeta paso">
+      <span class="paso__num" aria-hidden="true">1</span>
+      <div><h3>Elija el tipo de turno</h3><p>Regular o preferencial, en la pantalla del quiosco.</p></div>
+    </div>
+    <div class="tarjeta paso">
+      <span class="paso__num" aria-hidden="true">2</span>
+      <div><h3>Reciba su código</h3><p>Se muestra un ticket con su código y un QR.</p></div>
+    </div>
+    <div class="tarjeta paso">
+      <span class="paso__num" aria-hidden="true">3</span>
+      <div><h3>Siga su estado</h3><p>Escanee el QR y la página se actualiza cuando lo llamen.</p></div>
+    </div>
+  </div>
+
+  <h2 style="margin-top: var(--e7)">Sobre el proyecto</h2>
+  <p>QLine es un proyecto académico que combina MongoDB para el historial y Redis para la cola en tiempo real.</p>
+  <a class="boton boton--oscuro" href="/acerca">Conocer al equipo</a>
 </div>
 {% endblock %}

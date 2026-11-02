@@ -1,35 +1,22 @@
-{% extends "base.html" %}
-{% set ancho = "estrecha" %}
-{% block titulo %}Emitir turno{% endblock %}
-{% block lead %}Elija el tipo de atención para ingresar a la fila de {{ servicio }}. El turno queda registrado en MongoDB y entra a la cola de Redis.{% endblock %}
+{# UI-03 · Emisión (formulario cliente). Superficies sólidas, sin vidrio.
+   ADAPTAR: conservar action/method/name de los campos reales. #}
+{% extends "base_publico.html" %}
+{% block titulo %}Sacar turno{% endblock %}
+
 {% block contenido %}
-{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
-
-<div class="card">
-  <h2>Solicitar un turno</h2>
-  <p class="sub">Servicio: <strong>{{ servicio }}</strong></p>
-  <form method="post" action="{{ base }}/emitir">
-    <div class="opciones">
-      <label class="opcion">
-        <input type="radio" name="prioridad" value="normal" {% if prioridad_seleccionada != 'preferencial' %}checked{% endif %}>
-        <span>
-          <span class="opcion-titulo">Atención Regular (Normal)</span>
-          <span class="opcion-desc">Para todo público y trámites generales.</span>
-        </span>
-      </label>
-      <label class="opcion">
-        <input type="radio" name="prioridad" value="preferencial" {% if prioridad_seleccionada == 'preferencial' %}checked{% endif %}>
-        <span>
-          <span class="opcion-titulo">Atención Preferencial</span>
-          <span class="opcion-desc">Adultos mayores, personas embarazadas o con discapacidad.</span>
-        </span>
-      </label>
+<div class="contenedor--estrecho">
+  <h1>Sacar un turno</h1>
+  {% if error %}<p class="mensaje mensaje--error" role="alert">{{ error }}</p>{% endif %}
+  <form class="tarjeta" method="post" action="/emitir">   {# ADAPTAR #}
+    <div class="campo">
+      <label for="prioridad">Tipo de turno</label>
+      <select id="prioridad" name="prioridad" required>
+        <option value="regular">Regular</option>
+        <option value="preferencial">Preferencial</option>
+      </select>
+      <span class="campo__ayuda">El turno preferencial se atiende con prioridad.</span>
     </div>
-    <button type="submit" class="btn-grande btn-bloque">Emitir mi turno</button>
+    <button class="boton boton--grande" type="submit">Emitir turno</button>
   </form>
-</div>
-
-<div class="info">
-  <strong>Nota operativa:</strong> los turnos preferenciales se atienden con prioridad en las ventanillas activas, respetando el orden de llegada dentro de cada grupo.
 </div>
 {% endblock %}

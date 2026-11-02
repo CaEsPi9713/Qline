@@ -1,42 +1,271 @@
 /* ==========================================================================
-   QLine · Sistema de diseño
-   Una sola hoja de estilos para todas las páginas. Sin estilos en línea en las
-   plantillas: si se necesita algo nuevo, se agrega aquí como componente.
+   QLine · static/style.css
+   UI-01 (design system) + UI-06 (accesibilidad, responsive, errores)
+   Responsable: Abigail Urbina · Seguimiento 4
+   Paleta de referencia: Fintech Dashboard UI (Md Iqbal Hasan), ajustada solo
+   donde el contraste WCAG AA lo exige (ver docs/diseno/design-system.md).
+   Regla única de vidrio: SOLO .opcion-turno dentro de .quiosco-escena.
+   Los módulos de Alessandro (UI-04) y Carlos (UI-05) añaden estilos propios
+   con prefijo .cola-* / .panel-* / .dash-*; el CSS compartido se coordina
+   con Abigail.
    ========================================================================== */
 
+/* ---------- 1. Tokens ---------- */
 :root {
-  --c-fondo: #f3f5f9;
-  --c-superficie: #ffffff;
-  --c-borde: #e2e8f0;
-  --c-borde-fuerte: #cbd5e1;
-  --c-texto: #0f172a;
-  --c-texto-suave: #475569;
-  --c-texto-tenue: #94a3b8;
+  /* Paleta base */
+  --azul-marino: #0B111C;
+  --azul-marino-2: #16202F;       /* superficie oscura secundaria */
+  --azul-grisaceo: #B8CBD8;
+  --turquesa: #5BB6C5;
+  --verde: #538573;
+  --blanco: #F7F7F7;
+  --superficie: #FFFFFF;
 
-  --c-marca: #2563eb;
-  --c-marca-oscuro: #1d4ed8;
-  --c-marca-claro: #eff6ff;
-  --c-nav: #0f172a;
-  --c-nav-2: #1e293b;
+  /* Variantes ajustadas para texto (contraste >= 4.5:1 sobre --blanco) */
+  --verde-texto: #3D6858;
+  --texto: #0B111C;
+  --texto-suave: #46576A;
+  --borde: #D5DFE7;
+  --peligro: #9B2C2C;
+  --peligro-fondo: #FBEAEA;
+  --aviso: #7A5200;
+  --aviso-fondo: #FFF3D6;
 
-  --c-ok: #059669;
-  --c-ok-fondo: #ecfdf5;
-  --c-error: #dc2626;
-  --c-error-fondo: #fef2f2;
-  --c-aviso: #b45309;
-  --c-aviso-fondo: #fffbeb;
-  --c-info-fondo: #eff6ff;
+  /* Tipografía: pila del sistema (funciona sin internet en la demo) */
+  --fuente: "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --fuente-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --t-xs: 0.8125rem;
+  --t-sm: 0.9375rem;
+  --t-base: 1.0625rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.625rem;
+  --t-2xl: 2.25rem;
+  --t-3xl: 3rem;
 
-  --radio: 10px;
-  --radio-sm: 6px;
-  --sombra: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .06);
-  --sombra-lg: 0 10px 30px rgba(15, 23, 42, .10);
-  --fuente: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Consolas, Monaco, monospace;
+  /* Espaciado y forma */
+  --e1: 0.25rem; --e2: 0.5rem; --e3: 0.75rem; --e4: 1rem;
+  --e5: 1.5rem; --e6: 2rem; --e7: 3rem; --e8: 4rem;
+  --radio-s: 6px; --radio-m: 12px; --radio-l: 20px;
+  --sombra: 0 1px 2px rgba(11, 17, 28, .08), 0 4px 12px rgba(11, 17, 28, .06);
+  --tactil: 2.75rem;               /* 44 px mínimo */
+  --tactil-quiosco: 4.5rem;
 }
 
+/* ---------- 2. Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* ---- Diseño UI-01 (rama aurbina) ---- */
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  font-size: var(--t-base);
+  line-height: 1.55;
+  color: var(--texto);
+  background: var(--blanco);
+}
+h1, h2, h3 { line-height: 1.2; margin: 0 0 var(--e3); font-weight: 700; letter-spacing: -0.01em; }
+h1 { font-size: var(--t-2xl); }
+h2 { font-size: var(--t-xl); }
+h3 { font-size: var(--t-lg); }
+p { margin: 0 0 var(--e4); max-width: 68ch; }
+a { color: var(--azul-marino); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--turquesa); }
+img, svg { max-width: 100%; height: auto; }
+.solo-lectores {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Foco visible (UI-06) */
+:focus-visible {
+  outline: 3px solid var(--azul-marino);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(91, 182, 197, .55);
+  border-radius: var(--radio-s);
+}
+.enlace-salto {
+  position: absolute; left: var(--e4); top: -4rem; z-index: 100;
+  background: var(--azul-marino); color: var(--blanco);
+  padding: var(--e3) var(--e4); border-radius: var(--radio-s);
+}
+.enlace-salto:focus { top: var(--e3); }
+
+/* ---------- 3. Estructura ---------- */
+.contenedor { width: min(100% - 2rem, 72rem); margin-inline: auto; }
+.contenedor--estrecho { width: min(100% - 2rem, 44rem); margin-inline: auto; }
+.principal { padding-block: var(--e6) var(--e8); min-height: 60vh; }
+.rejilla { display: grid; gap: var(--e5); grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.pila > * + * { margin-top: var(--e4); }
+.fila { display: flex; flex-wrap: wrap; gap: var(--e3); align-items: center; }
+
+/* ---------- 4. Cabecera y navegación ---------- */
+.barra { background: var(--azul-marino); color: var(--blanco); }
+.barra__interior {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: var(--e3) var(--e5);
+  padding-block: var(--e3);
+}
+.marca { display: inline-flex; align-items: center; gap: var(--e3); color: var(--blanco); text-decoration: none; }
+.marca__sello {
+  width: 2.5rem; height: 2.5rem; border-radius: var(--radio-m);
+  background: var(--turquesa); color: var(--azul-marino);
+  display: grid; place-items: center; font-weight: 800; font-size: var(--t-lg);
+}
+.marca__logo { height: 2.5rem; width: auto; }          /* solo si hay recurso aprobado (P04) */
+.marca__nombre { font-weight: 800; font-size: var(--t-lg); line-height: 1.1; display: block; }
+.marca__sub { font-size: var(--t-xs); color: var(--azul-grisaceo); display: block; }
+.nav { display: flex; flex-wrap: wrap; gap: var(--e1) var(--e2); list-style: none; margin: 0; padding: 0; }
+.nav a {
+  display: inline-flex; align-items: center; min-height: var(--tactil);
+  padding: 0 var(--e4); color: var(--blanco); text-decoration: none;
+  border-radius: var(--radio-m); font-weight: 600;
+}
+.nav a:hover { background: var(--azul-marino-2); }
+.nav a[aria-current="page"] { background: var(--turquesa); color: var(--azul-marino); }
+.barra :focus-visible { outline-color: var(--blanco); }
+
+.pie { background: var(--azul-marino); color: var(--azul-grisaceo); padding-block: var(--e5); font-size: var(--t-sm); }
+.pie a { color: var(--blanco); }
+.pie p { margin-bottom: var(--e2); }
+
+/* ---------- 5. Componentes ---------- */
+.tarjeta {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-m); padding: var(--e5); box-shadow: var(--sombra);
+}
+.tarjeta--destacada { border-top: 6px solid var(--turquesa); }
+.tarjeta h2, .tarjeta h3 { margin-bottom: var(--e2); }
+
+.boton {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--e2);
+  min-height: var(--tactil); padding: 0 var(--e5);
+  font: inherit; font-weight: 700; text-decoration: none; cursor: pointer;
+  border-radius: var(--radio-m); border: 2px solid transparent;
+  background: var(--turquesa); color: var(--azul-marino);
+}
+.boton:hover { background: #7CC6D2; }
+.boton--oscuro { background: var(--azul-marino); color: var(--blanco); }
+.boton--oscuro:hover { background: var(--azul-marino-2); }
+.boton--contorno { background: transparent; border-color: var(--azul-marino); color: var(--azul-marino); }
+.boton--contorno:hover { background: var(--azul-grisaceo); }
+.boton--grande { min-height: 3.5rem; font-size: var(--t-lg); padding-inline: var(--e6); }
+.boton[disabled], .boton[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+
+.campo { display: grid; gap: var(--e2); margin-bottom: var(--e4); }
+.campo label { font-weight: 700; }
+.campo__ayuda { color: var(--texto-suave); font-size: var(--t-sm); }
+.campo input, .campo select, .campo textarea {
+  font: inherit; min-height: var(--tactil); padding: var(--e2) var(--e3);
+  border: 2px solid var(--texto-suave); border-radius: var(--radio-s);
+  background: var(--superficie); color: var(--texto); width: 100%;
+}
+.campo__error { color: var(--peligro); font-weight: 600; }
+
+.tabla-contenedor { overflow-x: auto; }
+.tabla { width: 100%; border-collapse: collapse; background: var(--superficie); }
+.tabla caption { text-align: left; font-weight: 700; padding: var(--e3) 0; }
+.tabla th, .tabla td { padding: var(--e3) var(--e4); text-align: left; border-bottom: 1px solid var(--borde); }
+.tabla thead th { background: var(--azul-marino); color: var(--blanco); font-size: var(--t-sm); }
+
+.mensaje { padding: var(--e4); border-radius: var(--radio-m); border-left: 6px solid var(--turquesa); background: #E6F4F7; margin-bottom: var(--e4); }
+.mensaje--error { border-color: var(--peligro); background: var(--peligro-fondo); }
+.mensaje--aviso { border-color: var(--aviso); background: var(--aviso-fondo); }
+.mensaje--ok { border-color: var(--verde-texto); background: #E5F1EC; }
+
+/* Estados de turno: texto + símbolo + color (nunca solo color) */
+.estado {
+  display: inline-flex; align-items: center; gap: var(--e2);
+  padding: var(--e1) var(--e3); border-radius: 999px;
+  font-size: var(--t-sm); font-weight: 700; border: 2px solid currentColor;
+}
+.estado::before { content: "●"; font-size: .8em; }
+.estado--pendiente   { color: var(--texto-suave); background: #EEF3F7; }
+.estado--pendiente::before   { content: "○"; }
+.estado--llamado     { color: var(--aviso); background: var(--aviso-fondo); }
+.estado--llamado::before     { content: "▲"; }
+.estado--en_atencion { color: #1F6F7E; background: #E1F2F5; }
+.estado--en_atencion::before { content: "●"; }
+.estado--atendido    { color: var(--verde-texto); background: #E5F1EC; }
+.estado--atendido::before    { content: "✓"; }
+.estado--abandonado  { color: var(--peligro); background: var(--peligro-fondo); }
+.estado--abandonado::before  { content: "✕"; }
+
+/* Prioridad: texto + borde distinto */
+.prioridad { display: inline-block; padding: var(--e1) var(--e3); border-radius: var(--radio-s); font-size: var(--t-sm); font-weight: 700; border: 2px solid var(--azul-marino); }
+.prioridad--preferencial { background: var(--azul-marino); color: var(--blanco); }
+.prioridad--regular { background: var(--superficie); color: var(--azul-marino); }
+
+/* Ticket y código (superficie sólida, sin vidrio) */
+.ticket { background: var(--superficie); border: 2px solid var(--azul-marino); border-radius: var(--radio-l); padding: var(--e6); text-align: center; max-width: 26rem; margin-inline: auto; }
+.ticket__codigo { font-family: var(--fuente-mono); font-size: var(--t-3xl); font-weight: 800; letter-spacing: .06em; margin: var(--e3) 0; }
+.ticket__qr { display: block; margin: var(--e4) auto; width: 11rem; height: 11rem; background: #fff; padding: var(--e2); }
+.ticket__meta { color: var(--texto-suave); font-size: var(--t-sm); }
+/* S4-M02 (Aaron): las reglas @media print del ticket van en su propio bloque al final. */
+
+/* ---------- 6. Portada (UI-02) ---------- */
+.heroe { background: var(--azul-marino); color: var(--blanco); padding-block: var(--e8); }
+.heroe h1 { font-size: clamp(2rem, 5vw, var(--t-3xl)); max-width: 20ch; }
+.heroe p { color: var(--azul-grisaceo); font-size: var(--t-lg); }
+.heroe .boton--contorno { border-color: var(--blanco); color: var(--blanco); }
+.heroe .boton--contorno:hover { background: var(--azul-marino-2); }
+.heroe :focus-visible { outline-color: var(--blanco); }
+.paso { display: grid; grid-template-columns: auto 1fr; gap: var(--e4); align-items: start; }
+.paso__num { width: 2.5rem; height: 2.5rem; border-radius: 50%; background: var(--azul-marino); color: var(--blanco); display: grid; place-items: center; font-weight: 800; }
+.lista-equipo { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--e4); grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.lista-equipo li { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-m); padding: var(--e4); }
+.lista-equipo strong { display: block; }
+.lista-equipo span { color: var(--texto-suave); font-size: var(--t-sm); }
+
+/* ---------- 7. Quiosco (UI-03): único lugar con vidrio ---------- */
+.quiosco-escena { background: var(--azul-marino); color: var(--blanco); min-height: 100vh; padding-block: var(--e6); }
+.quiosco-escena :focus-visible { outline-color: var(--blanco); box-shadow: 0 0 0 6px rgba(91, 182, 197, .8); }
+.quiosco-panel {                 /* «Bienvenido»: 100 % sólido */
+  background: var(--superficie); color: var(--texto);
+  border-radius: var(--radio-l); padding: var(--e7) var(--e6);
+  margin-bottom: var(--e6); border-top: 8px solid var(--turquesa);
+}
+.quiosco-panel h1 { font-size: clamp(2rem, 5vw, var(--t-3xl)); }
+.quiosco-panel p { font-size: var(--t-lg); color: var(--texto-suave); }
+.quiosco-opciones { display: grid; gap: var(--e5); grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.opcion-turno {                  /* ~15 % vidrio: leve transparencia, difuminado discreto */
+  display: flex; flex-direction: column; justify-content: center; gap: var(--e2);
+  min-height: 11rem; padding: var(--e5); text-align: left; cursor: pointer;
+  font: inherit; color: var(--blanco);
+  background: rgba(184, 203, 216, .16);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  border: 1.5px solid rgba(184, 203, 216, .55);
+  border-radius: var(--radio-l);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+}
+.opcion-turno:hover { background: rgba(184, 203, 216, .26); }
+.opcion-turno__titulo { font-size: var(--t-xl); font-weight: 800; }
+.opcion-turno__texto { color: var(--azul-grisaceo); font-size: var(--t-base); }
+.opcion-turno[disabled] { opacity: .6; cursor: not-allowed; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .opcion-turno { background: var(--azul-marino-2); }   /* respaldo sólido */
+}
+.quiosco-escena .boton { min-height: var(--tactil-quiosco); font-size: var(--t-lg); }
+
+/* ---------- 8. Páginas de error (UI-06) ---------- */
+.error-pagina { text-align: center; padding-block: var(--e8); }
+.error-pagina__codigo { font-family: var(--fuente-mono); font-size: clamp(4rem, 14vw, 7rem); font-weight: 800; line-height: 1; color: var(--azul-marino); margin: 0 0 var(--e3); }
+.error-pagina p { margin-inline: auto; }
+
+/* ---------- 9. Responsive y preferencias del usuario ---------- */
+@media (max-width: 40rem) {
+  :root { --t-2xl: 1.75rem; --t-3xl: 2.25rem; }
+  .barra__interior { flex-direction: column; align-items: flex-start; }
+  .tarjeta { padding: var(--e4); }
+  .quiosco-panel { padding: var(--e5) var(--e4); }
+  .heroe { padding-block: var(--e6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  .estado, .prioridad, .boton { border: 2px solid ButtonText; }
+
+/* ---- Estilos de la aplicación (acambronero): van al final para conservar su apariencia ---- */
 body { margin: 0; font-family: var(--fuente); font-size: 15px; line-height: 1.5; color: var(--c-texto); background: var(--c-fondo); }
 a { color: var(--c-marca); }
 a:hover { color: var(--c-marca-oscuro); }
