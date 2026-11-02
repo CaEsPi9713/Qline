@@ -159,7 +159,7 @@ Todo lo que no es del cliente exige usuario y contraseña de Apache (`.htaccess`
 | Sala | `/pantalla` | Turnos llamados y en atención, con aviso sonoro opcional |
 | Operador | `/cola`, `/panel` | Cola con prioridad; llamado, inicio y fin de la atención (con motivo y nota opcionales) |
 | Supervisor | `/historial`, `/dashboard` | Historial con filtros y descarga JSON; KPI y SLA |
-| Administración | `/administracion` | Administrador técnico de MongoDB |
+| Administración | `/administracion`, `/admin/sucursales` | Administrador técnico de MongoDB; alta y baja de ventanillas (P09); mantenimiento de sucursales (RFC-004) |
 | Equipo | `/demo`, `/salud`, `/acerca` | Guía de demostración; estado de la aplicación, Redis y MongoDB; equipo del proyecto |
 
 `/salud` responde `{estado, app, redis, mongo, barrido}` con **200** si Redis y MongoDB responden y **503** si falla alguno, sin ningún dato de infraestructura (decisión D-29).

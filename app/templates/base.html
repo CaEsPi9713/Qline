@@ -9,7 +9,7 @@
   {"n": 4, "rol": "Operador", "nombre": "Panel de atención", "ruta": "/panel", "prefijos": ["/panel"]},
   {"n": 5, "rol": "Supervisor", "nombre": "Historial", "ruta": "/historial", "prefijos": ["/historial"]},
   {"n": 6, "rol": "Supervisor", "nombre": "Dashboard SLA", "ruta": "/dashboard", "prefijos": ["/dashboard"]},
-  {"n": 7, "rol": "Administración", "nombre": "Administración", "ruta": "/administracion", "prefijos": ["/insertar", "/actualizar", "/eliminar", "/crear_coleccion"], "exacta": "/administracion"}
+  {"n": 7, "rol": "Administración", "nombre": "Administración", "ruta": "/administracion", "prefijos": ["/administracion", "/admin/", "/ventanillas/", "/insertar", "/actualizar", "/eliminar", "/crear_coleccion"], "exacta": "/administracion"}
 ] -%}
 {%- set ruta_actual = request.url.path -%}
 {%- set ns = namespace(actual=none) -%}

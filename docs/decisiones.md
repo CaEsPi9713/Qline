@@ -259,7 +259,7 @@ Aprobadas en el punto de decisión G0 del plan alternativo de S4. Cada una indic
 |---|---|
 | **Decisión (propuesta)** | El catálogo vive en MongoDB (colección `ventanillas`); una función `ventanillas_activas(db)` con caché corta y último catálogo conocido si MongoDB no responde. Identificador `V-NN`, validado con expresión regular. El `enum` de `ventanilla` en el esquema pasa a un patrón y se aplica con `collMod`, verificado en el servidor antes de crear la primera. Redis no guarda el catálogo; la clave `ventanilla:{id}:actual` y el `SET NX` no cambian. |
 | **Por qué** | Las claves de Redis ya se construyen con el identificador, así que lo único que cambia es quién valida que exista. El servidor no actualiza el validador de una colección existente por sí solo (lección de `qr_token`). |
-| **Estado** | **Sin implementar.** Depende del contrato de Carlos (P09) y de la verificación de `collMod`. |
+| **Estado** | **Parcial (01/11/2026).** Carlos implementó el catálogo (colección `ventanillas`, `app/ventanillas.py`, alta, baja y reactivación desde `/administracion`) y lo usa el dashboard. **No está conectado a la operación**: llamar, el panel, la atención y el historial siguen usando `V-01` a `V-03` (`VENTANILLAS`), y el esquema de `turnos` (en memoria, en `turnos_schema.py` y en el servidor) sigue limitando `ventanilla` a esas tres; las pruebas de S2 y S3 fijan `V-99` como inválida. Además el servidor no permite `collMod`, por lo que el motor rechazaría un turno con una ventanilla nueva. Una ventanilla nueva sirve hoy como catálogo y reporte, no para atender. Hace falta una decisión del equipo para completarlo (ver `S4.md`). |
 
 ### D-31 · Cierre de turno: campo raíz `cierre` con motivo cerrado y nota corta (S4-M03)
 
