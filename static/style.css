@@ -180,6 +180,33 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-size: 12px;
 .kpi-sla-cumplido { border-left-color: #10b981; } .kpi-sla-cumplido .valor { color: #059669; }
 .kpi-sla-incumplido { border-left-color: #ef4444; } .kpi-sla-incumplido .valor { color: #dc2626; }
 
+/* ---------- Gráficos y analítica visual (dashboard P02) ----------------- */
+.grafico-caja { margin-top: 14px; }
+.grafico-barras-v { display: flex; align-items: flex-end; gap: 8px; height: 180px; padding: 16px 8px 0; border-bottom: 2px solid var(--c-borde); }
+.columna-hora { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+.columna-barra { width: 100%; max-width: 32px; background: linear-gradient(180deg, #3b82f6, #1d4ed8); border-radius: 4px 4px 0 0; transition: height .3s, background .2s; min-height: 4px; position: relative; }
+.columna-barra:hover { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+.columna-valor { font-size: 11px; font-weight: 700; color: var(--c-texto-suave); margin-bottom: 4px; }
+.columna-etiqueta { font-size: 11px; color: var(--c-texto-tenue); margin-top: 6px; white-space: nowrap; }
+
+.grafico-barras-h { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.fila-barra-h { display: grid; grid-template-columns: 80px 1fr 140px; gap: 12px; align-items: center; }
+.pista-barra { background: #f1f5f9; height: 20px; border-radius: 999px; overflow: hidden; }
+.llenado-barra { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2563eb, #3b82f6); transition: width .3s; }
+.llenado-barra.verde { background: linear-gradient(90deg, #059669, #10b981); }
+.llenado-barra.naranja { background: linear-gradient(90deg, #d97706, #f59e0b); }
+.llenado-barra.rojo { background: linear-gradient(90deg, #dc2626, #ef4444); }
+.metrica-barra-h { font-size: 12px; color: var(--c-texto-suave); text-align: right; }
+
+.barra-segmentada { height: 22px; border-radius: 999px; display: flex; overflow: hidden; background: #f1f5f9; margin: 12px 0 16px; }
+.seg-rapido { background: #10b981; }
+.seg-moderado { background: #3b82f6; }
+.seg-extendido { background: #f59e0b; }
+.seg-critico { background: #ef4444; }
+.leyenda-segmentos { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; }
+.item-leyenda { display: inline-flex; align-items: center; gap: 6px; }
+.punto-leyenda { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
 /* ---------- Panel de atención -------------------------------------------- */
 .ventanillas { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px; }
 .ventanilla { background: #fff; border: 1px solid var(--c-borde); border-radius: var(--radio); box-shadow: var(--sombra); overflow: hidden; display: flex; flex-direction: column; }

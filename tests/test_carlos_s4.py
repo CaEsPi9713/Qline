@@ -298,5 +298,100 @@ class TestHistorialEndpointsFastAPI(unittest.TestCase):
         self.assertIn('Siguiente', html)
 
 
+class TestDashboardGraficos(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app)
+        try:
+            import mongomock
+            self.db = mongomock.MongoClient().db
+        except ImportError:
+            self.skipTest("mongomock no disponible")
+
+        # Cargar datos de prueba con turnos en distintos estados, horas y ventanillas
+        from app.dashboard import COLECCION_TURNOS, calcular_metricas_dashboard
+        self.calcular_metricas_dashboard = calcular_metricas_dashboard
+        col = self.db[COLECCION_TURNOS]
+        col.insert_many([
+            {
+                "codigo": "A-001",
+                "servicio": SERVICIO_ID,
+                "estado": ESTADO_ATENDIDO,
+                "prioridad": PRIORIDAD_NORMAL,
+                "ventanilla": "V-01",
+                "timestamps": {
+                    "creado": datetime(2026, 10, 25, 14, 0, 0, tzinfo=timezone.utc),  # 8:00 AM local
+                    "llamado": datetime(2026, 10, 25, 14, 1, 30, tzinfo=timezone.utc),
+                    "inicio_atencion": datetime(2026, 10, 25, 14, 2, 0, tzinfo=timezone.utc),
+                    "finalizado": datetime(2026, 10, 25, 14, 5, 0, tzinfo=timezone.utc),
+                    "abandonado": None,
+                },
+                "metricas": {
+                    "espera_seg": 90,   # <= 120 (rango rápido)
+                    "atencion_seg": 180,
+                },
+            },
+            {
+                "codigo": "A-002",
+                "servicio": SERVICIO_ID,
+                "estado": ESTADO_ATENDIDO,
+                "prioridad": PRIORIDAD_PREFERENCIAL,
+                "ventanilla": "V-02",
+                "timestamps": {
+                    "creado": datetime(2026, 10, 25, 15, 0, 0, tzinfo=timezone.utc),  # 9:00 AM local
+                    "llamado": datetime(2026, 10, 25, 15, 4, 0, tzinfo=timezone.utc),
+                    "inicio_atencion": datetime(2026, 10, 25, 15, 4, 30, tzinfo=timezone.utc),
+                    "finalizado": datetime(2026, 10, 25, 15, 9, 0, tzinfo=timezone.utc),
+                    "abandonado": None,
+                },
+                "metricas": {
+                    "espera_seg": 240,  # 121-300 (rango moderado)
+                    "atencion_seg": 270,
+                },
+            },
+        ])
+
+    def test_calcular_metricas_dashboard_graficos(self):
+        """Verifica que calcular_metricas_dashboard genera métricas de afluencia, ventanillas y distribución."""
+        res = self.calcular_metricas_dashboard(self.db, sla_espera_max_seg=300)
+        self.assertTrue(res["ok"])
+        self.assertIn("graficos", res)
+        graficos = res["graficos"]
+
+        # 1. Afluencia horaria
+        self.assertIn("afluencia_horaria", graficos)
+        horas = graficos["afluencia_horaria"]
+        self.assertTrue(len(horas) >= 12)  # 7:00 a 18:00
+        # 8:00 y 9:00 deben tener turnos
+        totales_por_hora = {h["hora"]: h["total"] for h in horas}
+        self.assertEqual(totales_por_hora.get("08:00"), 1)
+        self.assertEqual(totales_por_hora.get("09:00"), 1)
+
+        # 2. Desglose de espera
+        self.assertIn("distribucion_espera", graficos)
+        dist_esp = graficos["distribucion_espera"]
+        self.assertEqual(dist_esp["hasta_2min"], 1)   # A-001 (90s)
+        self.assertEqual(dist_esp["de_2_a_5min"], 1)  # A-002 (240s)
+
+        # 3. Rendimiento ventanillas
+        self.assertIn("rendimiento_ventanillas", graficos)
+        rend = {v["ventanilla"]: v for v in graficos["rendimiento_ventanillas"]}
+        self.assertEqual(rend["V-01"]["total_atendidos"], 1)
+        self.assertEqual(rend["V-02"]["total_atendidos"], 1)
+
+    @patch("app.main.get_db")
+    def test_vista_dashboard_html_con_graficos(self, mock_get_db):
+        """Verifica que /dashboard renderiza los bloques gráficos de afluencia, espera y ventanillas."""
+        mock_get_db.return_value = self.db
+        resp = self.client.get("/dashboard")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.text
+        self.assertIn("Afluencia horaria de turnos", html)
+        self.assertIn("Desglose de tiempos de espera", html)
+        self.assertIn("Productividad y atenciones por ventanilla", html)
+        self.assertIn("grafico-barras-v", html)
+        self.assertIn("barra-segmentada", html)
+        self.assertIn("grafico-barras-h", html)
+
+
 if __name__ == "__main__":
     unittest.main()

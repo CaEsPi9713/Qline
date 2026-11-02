@@ -61,6 +61,63 @@
   </div>
 </div>
 
+<div class="grid grid-2" style="margin-bottom: 20px;">
+  <div class="card">
+    <h2>Afluencia horaria de turnos</h2>
+    <p class="sub">Distribución de turnos registrados por hora a lo largo de la jornada.</p>
+    <div class="grafico-barras-v">
+      {% for h in metricas.graficos.afluencia_horaria %}
+      <div class="columna-hora" title="{{ h.hora }}: {{ h.total }} turno{% if h.total != 1 %}s{% endif %}">
+        <div class="columna-valor">{% if h.total > 0 %}{{ h.total }}{% endif %}</div>
+        <div class="columna-barra" style="height: {{ [h.porcentaje_pico, 4]|max }}%;"></div>
+        <div class="columna-etiqueta">{{ h.hora }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Desglose de tiempos de espera</h2>
+    <p class="sub">Distribución analítica de los turnos según el tiempo transcurrido hasta su llamada.</p>
+    {% set de = metricas.graficos.distribucion_espera %}
+    {% set total_esp = metricas.sla.total_evaluados %}
+    <div class="barra-segmentada" title="Distribución de espera">
+      {% if total_esp > 0 %}
+      <div class="seg-rapido" style="width: {{ (de.hasta_2min / total_esp * 100)|round(1) }}%;" title="<= 2 min: {{ de.hasta_2min }} ({{ (de.hasta_2min / total_esp * 100)|round(1) }}%)"></div>
+      <div class="seg-moderado" style="width: {{ (de.de_2_a_5min / total_esp * 100)|round(1) }}%;" title="2 a 5 min: {{ de.de_2_a_5min }} ({{ (de.de_2_a_5min / total_esp * 100)|round(1) }}%)"></div>
+      <div class="seg-extendido" style="width: {{ (de.de_5_a_10min / total_esp * 100)|round(1) }}%;" title="5 a 10 min: {{ de.de_5_a_10min }} ({{ (de.de_5_a_10min / total_esp * 100)|round(1) }}%)"></div>
+      <div class="seg-critico" style="width: {{ (de.mas_de_10min / total_esp * 100)|round(1) }}%;" title="> 10 min: {{ de.mas_de_10min }} ({{ (de.mas_de_10min / total_esp * 100)|round(1) }}%)"></div>
+      {% else %}
+      <div style="width: 100%; text-align: center; color: var(--c-texto-tenue); font-size: 11px; line-height: 22px;">Sin turnos con espera registrada</div>
+      {% endif %}
+    </div>
+    <div class="leyenda-segmentos">
+      <div class="item-leyenda"><span class="punto-leyenda seg-rapido"></span> &le; 2 min: <strong>{{ de.hasta_2min }}</strong></div>
+      <div class="item-leyenda"><span class="punto-leyenda seg-moderado"></span> 2 - 5 min: <strong>{{ de.de_2_a_5min }}</strong></div>
+      <div class="item-leyenda"><span class="punto-leyenda seg-extendido"></span> 5 - 10 min: <strong>{{ de.de_5_a_10min }}</strong></div>
+      <div class="item-leyenda"><span class="punto-leyenda seg-critico"></span> &gt; 10 min: <strong>{{ de.mas_de_10min }}</strong></div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+  <h2>Productividad y atenciones por ventanilla</h2>
+  <p class="sub">Volumen de turnos completados y tiempo promedio de atención por módulo de servicio.</p>
+  <div class="grafico-barras-h">
+    {% for rv in metricas.graficos.rendimiento_ventanillas %}
+    <div class="fila-barra-h">
+      <span class="codigo">{{ rv.ventanilla }}</span>
+      <div class="pista-barra">
+        <div class="llenado-barra" style="width: {{ [rv.porcentaje_max, 4]|max }}%;"></div>
+      </div>
+      <div class="metrica-barra-h">
+        <strong>{{ rv.total_atendidos }}</strong> turnos · <strong>{{ rv.promedio_atencion_seg }}</strong> s prom.
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
 <div class="grid grid-2">
   <div class="card">
     <h2>Distribución por estados</h2>
