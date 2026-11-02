@@ -5,6 +5,7 @@ Módulo: Historial de turnos con filtro por rango de fechas, paginación y expor
 """
 from datetime import datetime, timezone
 import json
+from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -391,6 +392,40 @@ class TestDashboardGraficos(unittest.TestCase):
         self.assertIn("grafico-barras-v", html)
         self.assertIn("barra-segmentada", html)
         self.assertIn("grafico-barras-h", html)
+
+
+class TestReporteDiarioScript(unittest.TestCase):
+    def test_script_reporte_diario_cli_simulado(self):
+        """Verifica ejecución del script reporte_diario.py en modo simulado con exportación a archivos temporales."""
+        import tempfile
+        from scripts.reporte_diario import main
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_path = Path(tmpdir) / "reporte.json"
+            md_path = Path(tmpdir) / "reporte.md"
+
+            code = main([
+                "--simulado",
+                "--fecha", "2026-10-25",
+                "--sla-espera", "300",
+                "--salida-json", str(json_path),
+                "--salida-md", str(md_path),
+            ])
+            self.assertEqual(code, 0)
+            self.assertTrue(json_path.exists())
+            self.assertTrue(md_path.exists())
+
+            datos_json = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertTrue(datos_json["ok"])
+            self.assertEqual(datos_json["fecha_reporte"], "2026-10-25")
+            self.assertIn("resumen_operacional", datos_json)
+            self.assertIn("tiempos_servicio", datos_json)
+            self.assertIn("analisis_sla", datos_json)
+
+            contenido_md = md_path.read_text(encoding="utf-8")
+            self.assertIn("# Reporte Diario de Operaciones y Auditoría SLA", contenido_md)
+            self.assertIn("Resumen Operacional de Turnos", contenido_md)
+            self.assertIn("Productividad por Ventanilla", contenido_md)
 
 
 if __name__ == "__main__":
