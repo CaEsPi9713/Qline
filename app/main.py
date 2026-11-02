@@ -34,8 +34,8 @@ from app.redis_client import verificar_conexion as verificar_redis
 from app.turnos_schema import TurnoValidationError, validar_documento_turno
 from app.historial import obtener_historial_turnos
 from app.dashboard import calcular_metricas_dashboard
-
-
+from app.errores import registrar_errores
+  registrar_errores(app, templates)
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR.parent / ".env")
 
