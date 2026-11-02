@@ -28,6 +28,80 @@
     <h2>Panel de Administración de Datos</h2>
     <p>Seleccione una colección en el menú izquierdo (por ejemplo, <strong>turnos</strong>) para visualizar, insertar, editar o eliminar documentos.</p>
   </div>
+
+  <div class="card">
+    <div class="card-cabecera">
+      <h2>Ventanillas del Sistema (P09)</h2>
+      <span class="nota">Gestión dinámica de módulos de atención institucional.</span>
+    </div>
+    <div class="tabla-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in ventanillas_gestion %}
+          <tr>
+            <td class="codigo">{{ v.codigo }}</td>
+            <td>{{ v.nombre }}</td>
+            <td><span class="badge badge-normal">{{ v.tipo }}</span></td>
+            <td>
+              {% if v.estado == 'activa' %}
+              <span class="badge badge-atendido">Activa</span>
+              {% else %}
+              <span class="badge badge-abandonado">Inactiva</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if v.estado == 'activa' %}
+              <form method="post" action="{{ base }}/ventanillas/desactivar" style="display:inline">
+                <input type="hidden" name="codigo" value="{{ v.codigo }}">
+                <button type="submit" class="btn btn-secundario btn-sm">Desactivar</button>
+              </form>
+              {% else %}
+              <form method="post" action="{{ base }}/ventanillas/reactivar" style="display:inline">
+                <input type="hidden" name="codigo" value="{{ v.codigo }}">
+                <button type="submit" class="btn btn-ok btn-sm">Activar</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not ventanillas_gestion %}
+          <tr><td colspan="5" class="vacio">No hay ventanillas registradas.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <hr class="separador">
+
+    <h3>Registrar nueva ventanilla (P09)</h3>
+    <form method="post" action="{{ base }}/ventanillas/crear" class="barra-filtros" style="align-items:flex-end">
+      <div class="grupo">
+        <label for="codigo_v">Código</label>
+        <input type="text" id="codigo_v" name="codigo" placeholder="Ej. V-04" required pattern="^V-[0-9]{2,}$">
+      </div>
+      <div class="grupo">
+        <label for="nombre_v">Nombre descriptivo</label>
+        <input type="text" id="nombre_v" name="nombre" placeholder="Ej. Ventanilla 4 - Rápida">
+      </div>
+      <div class="grupo">
+        <label for="tipo_v">Tipo</label>
+        <select id="tipo_v" name="tipo">
+          <option value="general">General</option>
+          <option value="preferencial">Preferencial</option>
+        </select>
+      </div>
+      <button type="submit">Dar de alta</button>
+    </form>
+  </div>
   {% else %}
 
   <!-- Formulario de Inserción / Edición -->

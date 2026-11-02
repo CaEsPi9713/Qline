@@ -13,6 +13,7 @@ from starlette.testclient import TestClient
 
 from app.constantes import (
     ESTADO_ATENDIDO,
+    ESTADO_EN_ATENCION,
     ESTADO_PENDIENTE,
     PRIORIDAD_NORMAL,
     PRIORIDAD_PREFERENCIAL,
@@ -426,6 +427,103 @@ class TestReporteDiarioScript(unittest.TestCase):
             self.assertIn("# Reporte Diario de Operaciones y Auditoría SLA", contenido_md)
             self.assertIn("Resumen Operacional de Turnos", contenido_md)
             self.assertIn("Productividad por Ventanilla", contenido_md)
+
+
+class TestVentanillasDinamicas(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app)
+        try:
+            import mongomock
+            self.db = mongomock.MongoClient().db
+        except ImportError:
+            self.skipTest("mongomock no disponible")
+
+    def test_validar_codigo_ventanilla(self):
+        """Valida que los códigos cumplan el formato 'V-XX' y rechace formatos inválidos."""
+        from app.ventanillas import VentanillaError, validar_codigo_ventanilla
+
+        self.assertEqual(validar_codigo_ventanilla("v-01"), "V-01")
+        self.assertEqual(validar_codigo_ventanilla("V-04"), "V-04")
+        self.assertEqual(validar_codigo_ventanilla("V-10"), "V-10")
+
+        with self.assertRaises(VentanillaError):
+            validar_codigo_ventanilla("CAJA-1")
+        with self.assertRaises(VentanillaError):
+            validar_codigo_ventanilla("")
+        with self.assertRaises(VentanillaError):
+            validar_codigo_ventanilla(None)
+
+    def test_onboarding_ventanilla_ciclo_completo(self):
+        """Verifica registro, listado, desactivación y reactivación dinámica en MongoDB."""
+        from app.ventanillas import (
+            COLECCION_TURNOS,
+            VentanillaError,
+            desactivar_ventanilla,
+            listar_ventanillas,
+            reactivar_ventanilla,
+            registrar_ventanilla,
+        )
+
+        # 1. Registrar nueva ventanilla V-04
+        res = registrar_ventanilla(self.db, codigo="V-04", nombre="Ventanilla Rápida", tipo="preferencial")
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["accion"], "creada")
+        self.assertEqual(res["codigo"], "V-04")
+
+        # 2. Listar
+        lista = listar_ventanillas(self.db, solo_activas=True)
+        codigos = [v["codigo"] for v in lista]
+        self.assertIn("V-04", codigos)
+
+        # 3. Desactivar sin turno activo -> Exitoso
+        res_desact = desactivar_ventanilla(self.db, codigo="V-04")
+        self.assertTrue(res_desact["ok"])
+        self.assertEqual(res_desact["estado"], "inactiva")
+
+        # Ahora en solo_activas no debe aparecer V-04
+        activas = [v["codigo"] for v in listar_ventanillas(self.db, solo_activas=True)]
+        self.assertNotIn("V-04", activas)
+
+        # 4. Reactivar
+        res_react = reactivar_ventanilla(self.db, codigo="V-04")
+        self.assertTrue(res_react["ok"])
+        self.assertEqual(res_react["estado"], "activa")
+
+        # 5. Intentar desactivar cuando tiene un turno activo en atención -> Falla con VentanillaError
+        self.db[COLECCION_TURNOS].insert_one({
+            "codigo": "A-050",
+            "servicio": SERVICIO_ID,
+            "ventanilla": "V-04",
+            "estado": ESTADO_EN_ATENCION,
+        })
+        with self.assertRaises(VentanillaError):
+            desactivar_ventanilla(self.db, codigo="V-04")
+
+    @patch("app.main.get_db")
+    def test_endpoints_ventanillas_fastapi(self, mock_get_db):
+        """Verifica los endpoints /api/ventanillas y los formularios de administración."""
+        mock_get_db.return_value = self.db
+
+        # GET API
+        resp = self.client.get("/api/ventanillas")
+        self.assertEqual(resp.status_code, 200)
+        datos = resp.json()
+        self.assertTrue(datos["ok"])
+
+        # POST API registrar
+        resp_post = self.client.post("/api/ventanillas", data={"codigo": "V-05", "nombre": "Módulo 5"})
+        self.assertEqual(resp_post.status_code, 200)
+        self.assertEqual(resp_post.json()["codigo"], "V-05")
+
+        # Formulario web crear
+        resp_web_crear = self.client.post("/ventanillas/crear", data={"codigo": "V-06", "nombre": "Módulo 6"}, follow_redirects=False)
+        self.assertEqual(resp_web_crear.status_code, 303)
+        self.assertIn("ok=ventanilla_creada", resp_web_crear.headers.get("location", ""))
+
+        # Formulario web desactivar
+        resp_web_desact = self.client.post("/ventanillas/desactivar", data={"codigo": "V-06"}, follow_redirects=False)
+        self.assertEqual(resp_web_desact.status_code, 303)
+        self.assertIn("ok=ventanilla_desactivada", resp_web_desact.headers.get("location", ""))
 
 
 if __name__ == "__main__":

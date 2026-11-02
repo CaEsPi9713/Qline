@@ -62,6 +62,9 @@ MENSAJES = {
     "insertado": "Documento insertado correctamente.",
     "actualizado": "Documento actualizado correctamente.",
     "eliminado": "Documento eliminado correctamente.",
+    "ventanilla_creada": "Ventanilla registrada y activada correctamente (P09).",
+    "ventanilla_desactivada": "Ventanilla desactivada correctamente (P09).",
+    "ventanilla_reactivada": "Ventanilla reactivada correctamente (P09).",
 }
 
 
@@ -224,6 +227,8 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
     try:
         db = get_db()
         contexto["colecciones"] = sorted(db.list_collection_names())
+        from app.ventanillas import listar_ventanillas
+        contexto["ventanillas_gestion"] = listar_ventanillas(db, solo_activas=False)
         if coleccion and editar:
             try:
                 doc = db[coleccion].find_one({"_id": a_object_id(editar)})
@@ -744,6 +749,79 @@ def eliminar(request: Request, coleccion: str = "", id: str = Form("")):
         return ir(coleccion, ok="eliminado")
     except Exception as e:
         return render(request, coleccion, error=f"Error eliminando: {e}")
+
+
+# --- P09: Onboarding y Gestión Dinámica de Ventanillas (Carlos Espinoza) -----
+
+@app.get("/api/ventanillas")
+def api_listar_ventanillas(solo_activas: bool = False):
+    """Lista las ventanillas registradas en el sistema institucional (P09)."""
+    try:
+        from app.ventanillas import listar_ventanillas
+        return {"ok": True, "ventanillas": listar_ventanillas(get_db(), solo_activas=solo_activas)}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/ventanillas")
+def api_registrar_ventanilla(
+    codigo: str = Form(...),
+    nombre: str = Form(""),
+    tipo: str = Form("general"),
+):
+    """Registra o actualiza una ventanilla dinámicamente en MongoDB (P09)."""
+    try:
+        from app.ventanillas import VentanillaError, registrar_ventanilla
+        res = registrar_ventanilla(get_db(), codigo=codigo, nombre=nombre, tipo=tipo)
+        return res
+    except VentanillaError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/ventanillas/crear")
+def web_crear_ventanilla(
+    request: Request,
+    codigo: str = Form(""),
+    nombre: str = Form(""),
+    tipo: str = Form("general"),
+):
+    """Endpoint web para dar de alta una ventanilla desde la interfaz de administración (P09)."""
+    try:
+        from app.ventanillas import registrar_ventanilla
+        registrar_ventanilla(get_db(), codigo=codigo, nombre=nombre, tipo=tipo)
+        return RedirectResponse(f"{BASE}/?ok=ventanilla_creada", status_code=303)
+    except Exception as e:
+        return render(request, error=f"Error registrando ventanilla: {e}")
+
+
+@app.post("/ventanillas/desactivar")
+def web_desactivar_ventanilla(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Endpoint web para desactivar una ventanilla validando que no tenga turnos activos (P09)."""
+    try:
+        from app.ventanillas import desactivar_ventanilla
+        desactivar_ventanilla(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/?ok=ventanilla_desactivada", status_code=303)
+    except Exception as e:
+        return render(request, error=f"Error desactivando ventanilla: {e}")
+
+
+@app.post("/ventanillas/reactivar")
+def web_reactivar_ventanilla(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Endpoint web para reactivar una ventanilla inactiva (P09)."""
+    try:
+        from app.ventanillas import reactivar_ventanilla
+        reactivar_ventanilla(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/?ok=ventanilla_reactivada", status_code=303)
+    except Exception as e:
+        return render(request, error=f"Error reactivando ventanilla: {e}")
 
 
 # --- HU-010: Historial y Auditoría (Carlos Espinoza) -------------------------
