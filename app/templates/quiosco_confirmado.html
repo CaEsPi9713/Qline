@@ -1,0 +1,22 @@
+{# UI-03 · Confirmación en el quiosco. Superficie sólida. ADAPTAR variables al contexto real (turno, qr_url). #}
+{% extends "base_publico.html" %}
+{% block titulo %}Turno emitido{% endblock %}
+{% block clase_body %}quiosco{% endblock %}
+{% block cabecera %}{% endblock %}
+{% block pie %}{% endblock %}
+{% block clase_main %}quiosco-escena{% endblock %}
+
+{% block contenido %}
+<div class="contenedor--estrecho">
+  <section class="quiosco-panel" aria-labelledby="listo">
+    <h1 id="listo">Su turno está listo</h1>
+    <div class="ticket">
+      <span class="prioridad prioridad--{{ turno.prioridad }}">{{ turno.prioridad|capitalize }}</span>
+      <p class="ticket__codigo">{{ turno.codigo }}</p>
+      {% if qr_url %}<img class="ticket__qr" src="{{ qr_url }}" alt="Código QR para consultar el turno {{ turno.codigo }}">{% endif %}
+      <p class="ticket__meta">Escanee el QR para seguir su turno desde el teléfono.</p>
+    </div>
+    <p><a class="boton boton--oscuro boton--grande" href="/quiosco">Nuevo turno</a></p>
+  </section>
+</div>
+{% endblock %}

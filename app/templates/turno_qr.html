@@ -1,0 +1,30 @@
+{# UI-03 · Estado del turno vía QR. Superficie sólida; estado por texto + símbolo.
+   ADAPTAR: variables (turno.codigo/estado/prioridad) y CONSERVAR el <script> de actualización en vivo actual
+   (bloque scripts). P01 y P05 son contenido de Aaron: solo se estiliza aquí. #}
+{% extends "base_publico.html" %}
+{% block titulo %}Turno {{ turno.codigo }}{% endblock %}
+
+{% block contenido %}
+<div class="contenedor--estrecho pila">
+  <h1>Su turno</h1>
+  <div class="ticket">
+    <span class="prioridad prioridad--{{ turno.prioridad }}">{{ turno.prioridad|capitalize }}</span>
+    <p class="ticket__codigo">{{ turno.codigo }}</p>
+    <div aria-live="polite" id="estado-turno">                      {# ADAPTAR: el JS actual debe seguir escribiendo aquí #}
+      <span class="estado estado--{{ turno.estado }}">{{ turno.estado|replace('_', ' ')|capitalize }}</span>
+    </div>
+  </div>
+
+  {# P01 (Aaron): aviso de atención finalizada #}
+  {% if turno.estado == 'atendido' %}
+  <p class="mensaje mensaje--ok" role="status">Su atención terminó. Puede cerrar esta pestaña.</p>
+  {% endif %}
+
+  {# P05 (Aaron): indicaciones sobre esta página #}
+  <p class="mensaje">Conserve esta página para recibir actualizaciones de su turno.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{# CONSERVAR aquí el script de actualización en vivo existente #}
+{% endblock %}

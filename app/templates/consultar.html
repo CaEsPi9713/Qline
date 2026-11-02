@@ -1,40 +1,23 @@
-{% extends "base.html" %}
-{% set ancho = "estrecha" %}
+{# UI-03 · Consulta de turno por código. P05 (Aaron) define el texto de indicaciones en el bloque marcado.
+   ADAPTAR: name/action reales del formulario. #}
+{% extends "base_publico.html" %}
 {% block titulo %}Consultar turno{% endblock %}
-{% block lead %}Ingrese el código de su turno de {{ servicio }} para conocer su estado y su posición en la fila.{% endblock %}
-{% block contenido %}
-<div class="card">
-  <h2>Consultar mi turno</h2>
-  <form action="{{ base }}/consultar" method="get">
-    <div class="campo">
-      <label for="codigo">Código de turno</label>
-      <input id="codigo" name="codigo" type="text" value="{{ codigo }}"
-             placeholder="A-001" pattern="[aA]-[0-9]{3,}" maxlength="32" required
-             autocomplete="off" aria-describedby="formato">
-      <p id="formato" class="campo-ayuda">Ejemplo: A-001</p>
-    </div>
-    <button type="submit">Consultar turno</button>
-  </form>
-  {% if error %}<div class="error" role="alert" style="margin-top:16px">{{ error }}</div>{% endif %}
-</div>
 
-{% if turno %}
-<div class="card" aria-live="polite">
-  <h2>Resultado de la consulta</h2>
-  <div class="codigo-grande">{{ turno.codigo }}</div>
-  <dl class="datos">
-    <dt>Estado</dt><dd><span class="badge badge-{{ turno.estado }}">{{ turno.estado|replace('_', ' ')|title }}</span></dd>
-    <dt>Prioridad</dt><dd><span class="badge badge-{{ turno.prioridad }}">{{ turno.prioridad|capitalize }}</span></dd>
-    {% if turno.ventanilla %}
-      <dt>Ventanilla</dt><dd>{{ turno.ventanilla }}</dd>
-    {% endif %}
-    {% if turno.turnos_antes is not none %}
-      <dt>Turnos por delante</dt><dd>{{ turno.turnos_antes }}</dd>
-      <dt>Posición en la cola</dt><dd>{{ turno.posicion }}</dd>
-    {% endif %}
-  </dl>
-  {% if turno.aviso %}<div class="aviso" role="status" style="margin-top:16px">{{ turno.aviso }}</div>{% endif %}
-  <p class="nota" style="margin-bottom:0">Actualice esta página para consultar el estado más reciente.</p>
+{% block contenido %}
+<div class="contenedor--estrecho pila">
+  <h1>Consultar mi turno</h1>
+
+  {# P05 (Aaron): indicaciones sobre conservar la página y recibir actualizaciones #}
+  <p class="mensaje">Conserve esta página abierta: el estado de su turno se actualiza solo.</p>
+
+  {% if error %}<p class="mensaje mensaje--error" role="alert">{{ error }}</p>{% endif %}
+  <form class="tarjeta" method="get" action="/consultar">   {# ADAPTAR #}
+    <div class="campo">
+      <label for="codigo">Código del turno</label>
+      <input id="codigo" name="codigo" type="text" inputmode="text" autocomplete="off" required value="{{ codigo|default('') }}">
+      <span class="campo__ayuda">Aparece en su ticket.</span>
+    </div>
+    <button class="boton" type="submit">Consultar</button>
+  </form>
 </div>
-{% endif %}
 {% endblock %}

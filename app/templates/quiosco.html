@@ -1,0 +1,28 @@
+{# UI-03 · Quiosco. Panel «Bienvenido» 100 % sólido; vidrio discreto (~15 %) SOLO en .opcion-turno.
+   ADAPTAR: conservar action, method, name y value del formulario actual (no cambiar rutas ni generación de turnos). #}
+{% extends "base_publico.html" %}
+{% block titulo %}Sacar turno{% endblock %}
+{% block clase_body %}quiosco{% endblock %}
+{% block cabecera %}{% endblock %}
+{% block pie %}{% endblock %}
+{% block clase_main %}quiosco-escena{% endblock %}
+
+{% block contenido %}
+<div class="contenedor">
+  <section class="quiosco-panel" aria-labelledby="bienvenida">
+    <h1 id="bienvenida">Bienvenido</h1>
+    <p>Elija el tipo de turno. Recibirá un ticket con su código y un QR para seguir su estado.</p>
+  </section>
+
+  <form method="post" action="/quiosco" class="quiosco-opciones">   {# ADAPTAR #}
+    <button class="opcion-turno" type="submit" name="prioridad" value="regular">
+      <span class="opcion-turno__titulo">Turno regular</span>
+      <span class="opcion-turno__texto">Atención en orden de llegada.</span>
+    </button>
+    <button class="opcion-turno" type="submit" name="prioridad" value="preferencial">
+      <span class="opcion-turno__titulo">Turno preferencial</span>
+      <span class="opcion-turno__texto">Para quienes tienen prioridad de atención.</span>
+    </button>
+  </form>
+</div>
+{% endblock %}

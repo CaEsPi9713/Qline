@@ -1,0 +1,51 @@
+{# UI-01/UI-02 · Base para pantallas públicas (cliente). Solo enlaces públicos: nunca CRUD ni administración. #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}QLine{% endblock %} · QLine</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block clase_body %}{% endblock %}">
+  <a class="enlace-salto" href="#contenido">Saltar al contenido</a>
+  {% block cabecera %}
+  <header class="barra">
+    <div class="contenedor barra__interior">
+      <a class="marca" href="/">
+        {# P04 (Aaron): nombre institucional; añadir <img class="marca__logo"> solo con recurso aprobado #}
+        <span class="marca__sello" aria-hidden="true">Q</span>
+        <span>
+          <span class="marca__nombre">QLine</span>
+          <span class="marca__sub">{% block marca_sub %}Gestión de filas y turnos{% endblock %}</span>
+        </span>
+      </a>
+      <nav aria-label="Navegación principal">
+        <ul class="nav">
+          {% set ruta = request.url.path %}
+          <li><a href="/" {% if ruta == '/' %}aria-current="page"{% endif %}>Inicio</a></li>
+          <li><a href="/quiosco" {% if ruta.startswith('/quiosco') %}aria-current="page"{% endif %}>Sacar turno</a></li>
+          <li><a href="/consultar" {% if ruta.startswith('/consultar') %}aria-current="page"{% endif %}>Consultar turno</a></li>
+          <li><a href="/acerca" {% if ruta == '/acerca' %}aria-current="page"{% endif %}>Acerca de</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+  {% endblock %}
+
+  <main id="contenido" class="{% block clase_main %}principal{% endblock %}" tabindex="-1">
+    {% block contenido %}{% endblock %}
+  </main>
+
+  {% block pie %}
+  <footer class="pie">
+    <div class="contenedor">
+      <p>QLine · Proyecto final de Tópicos Avanzados de Bases de Datos · Grupo 2 / Query Logic.</p>
+      <p><a href="/acerca">Acerca de QLine</a></p>
+    </div>
+  </footer>
+  {% endblock %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>
