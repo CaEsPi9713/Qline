@@ -13,7 +13,7 @@ from urllib.parse import quote_plus
 from bson import ObjectId, json_util
 from bson.errors import InvalidId
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request
+from fastapi import Body, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -62,6 +62,13 @@ MENSAJES = {
     "insertado": "Documento insertado correctamente.",
     "actualizado": "Documento actualizado correctamente.",
     "eliminado": "Documento eliminado correctamente.",
+    "ventanilla_creada": "Ventanilla registrada y activada correctamente (P09).",
+    "ventanilla_desactivada": "Ventanilla desactivada correctamente (P09).",
+    "ventanilla_reactivada": "Ventanilla reactivada correctamente (P09).",
+    "sucursal_creada": "Sucursal y ventanillas aprovisionadas correctamente.",
+    "sucursal_actualizada": "Sucursal y capacidad de ventanillas actualizadas correctamente.",
+    "sucursal_desactivada": "Sucursal desactivada correctamente.",
+    "sucursal_reactivada": "Sucursal reactivada correctamente.",
 }
 
 
@@ -224,6 +231,10 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
     try:
         db = get_db()
         contexto["colecciones"] = sorted(db.list_collection_names())
+        from app.ventanillas import listar_ventanillas
+        contexto["ventanillas_gestion"] = listar_ventanillas(db, solo_activas=False)
+        from app.sucursales import listar_sucursales
+        contexto["sucursales_gestion"] = listar_sucursales(db, solo_activas=False)
         if coleccion and editar:
             try:
                 doc = db[coleccion].find_one({"_id": a_object_id(editar)})
@@ -746,6 +757,278 @@ def eliminar(request: Request, coleccion: str = "", id: str = Form("")):
         return render(request, coleccion, error=f"Error eliminando: {e}")
 
 
+# --- P09: Onboarding y Gestión Dinámica de Ventanillas (Carlos Espinoza) -----
+
+@app.get("/api/ventanillas")
+def api_listar_ventanillas(solo_activas: bool = False):
+    """Lista las ventanillas registradas en el sistema institucional (P09)."""
+    try:
+        from app.ventanillas import listar_ventanillas
+        return {"ok": True, "ventanillas": listar_ventanillas(get_db(), solo_activas=solo_activas)}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/ventanillas")
+def api_registrar_ventanilla(
+    codigo: str = Form(...),
+    nombre: str = Form(""),
+    tipo: str = Form("general"),
+):
+    """Registra o actualiza una ventanilla dinámicamente en MongoDB (P09)."""
+    try:
+        from app.ventanillas import VentanillaError, registrar_ventanilla
+        res = registrar_ventanilla(get_db(), codigo=codigo, nombre=nombre, tipo=tipo)
+        return res
+    except VentanillaError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/ventanillas/crear")
+def web_crear_ventanilla(
+    request: Request,
+    codigo: str = Form(""),
+    nombre: str = Form(""),
+    tipo: str = Form("general"),
+):
+    """Endpoint web para dar de alta una ventanilla desde la interfaz de administración (P09)."""
+    try:
+        from app.ventanillas import registrar_ventanilla
+        registrar_ventanilla(get_db(), codigo=codigo, nombre=nombre, tipo=tipo)
+        return RedirectResponse(f"{BASE}/?ok=ventanilla_creada", status_code=303)
+    except Exception as e:
+        return render(request, error=f"Error registrando ventanilla: {e}")
+
+
+@app.post("/ventanillas/desactivar")
+def web_desactivar_ventanilla(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Endpoint web para desactivar una ventanilla validando que no tenga turnos activos (P09)."""
+    try:
+        from app.ventanillas import desactivar_ventanilla
+        desactivar_ventanilla(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/?ok=ventanilla_desactivada", status_code=303)
+    except Exception as e:
+        return render(request, error=f"Error desactivando ventanilla: {e}")
+
+
+@app.post("/ventanillas/reactivar")
+def web_reactivar_ventanilla(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Endpoint web para reactivar una ventanilla inactiva (P09)."""
+    try:
+        from app.ventanillas import reactivar_ventanilla
+        reactivar_ventanilla(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/?ok=ventanilla_reactivada", status_code=303)
+    except Exception as e:
+        return render(request, error=f"Error reactivando ventanilla: {e}")
+
+
+# --- Mantenimiento de Sucursales y Capacidad (RFC-004) -----------------------
+
+@app.get("/api/admin/sucursales")
+def api_listar_sucursales(solo_activas: bool = False):
+    """Retorna el catálogo de sucursales con métricas de capacidad (RFC-004)."""
+    try:
+        from app.sucursales import listar_sucursales
+        sucursales = listar_sucursales(get_db(), solo_activas=solo_activas)
+        return {"ok": True, "sucursales": sucursales}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/admin/sucursales/{codigo}")
+def api_obtener_sucursal(codigo: str):
+    """Detalle de una sucursal y el estado de sus ventanillas (RFC-004)."""
+    try:
+        from app.sucursales import obtener_sucursal
+        res = obtener_sucursal(get_db(), codigo=codigo)
+        if not res:
+            return JSONResponse({"ok": False, "error": f"Sucursal '{codigo}' no encontrada."}, status_code=404)
+        return {"ok": True, "sucursal": res}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/admin/sucursales")
+def api_crear_sucursal(payload: dict = Body(...)):
+    """Crea una sucursal y aprovisiona automáticamente sus ventanillas en MongoDB (RFC-004)."""
+    try:
+        from app.sucursales import crear_sucursal_con_ventanillas
+        res = crear_sucursal_con_ventanillas(
+            get_db(),
+            codigo=payload.get("codigo", ""),
+            nombre=payload.get("nombre", ""),
+            direccion=payload.get("direccion", ""),
+            telefono=payload.get("telefono", ""),
+            cantidad_ventanillas=int(payload.get("cantidad_ventanillas", 3)),
+            prefijo_ventanilla=payload.get("prefijo_ventanilla", "V"),
+            objetivo_max_espera_seg=int(payload.get("objetivo_max_espera_seg", 300)),
+            tasa_minima_cumplimiento=float(payload.get("tasa_minima_cumplimiento", 80.0)),
+        )
+        return JSONResponse(res, status_code=201)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.put("/api/admin/sucursales/{codigo}")
+def api_actualizar_sucursal(codigo: str, payload: dict = Body(...)):
+    """Modifica parámetros de la sucursal o ajusta la capacidad de ventanillas (RFC-004)."""
+    try:
+        from app.sucursales import actualizar_sucursal
+        res = actualizar_sucursal(
+            get_db(),
+            codigo=codigo,
+            nombre=payload.get("nombre"),
+            direccion=payload.get("direccion"),
+            telefono=payload.get("telefono"),
+            cantidad_ventanillas=payload.get("cantidad_ventanillas"),
+            estado=payload.get("estado"),
+            objetivo_max_espera_seg=payload.get("objetivo_max_espera_seg"),
+            tasa_minima_cumplimiento=payload.get("tasa_minima_cumplimiento"),
+        )
+        return res
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.post("/api/admin/sucursales/{codigo}/desactivar")
+def api_desactivar_sucursal(codigo: str):
+    """Desactiva una sucursal validando previamente que no tenga turnos en atención (RFC-004)."""
+    try:
+        from app.sucursales import desactivar_sucursal_segura
+        res = desactivar_sucursal_segura(get_db(), codigo=codigo)
+        return res
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.post("/api/admin/sucursales/{codigo}/activar")
+def api_activar_sucursal(codigo: str):
+    """Reactiva una sucursal previamente inactiva (RFC-004)."""
+    try:
+        from app.sucursales import reactivar_sucursal
+        res = reactivar_sucursal(get_db(), codigo=codigo)
+        return res
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.get("/admin/sucursales", response_class=HTMLResponse)
+def vista_admin_sucursales(request: Request, ok: str = "", error: str = ""):
+    """Pantalla administrativa para gestionar sucursales y ventanillas configurables (RFC-004)."""
+    try:
+        from app.sucursales import listar_sucursales
+        db = get_db()
+        sucursales = listar_sucursales(db)
+        return templates.TemplateResponse(
+            request,
+            "admin_sucursales.html",
+            {
+                "base": BASE,
+                "sucursales": sucursales,
+                "mensaje": MENSAJES.get(ok, ""),
+                "error": error,
+            },
+        )
+    except Exception as e:
+        return templates.TemplateResponse(
+            request,
+            "admin_sucursales.html",
+            {
+                "base": BASE,
+                "sucursales": [],
+                "mensaje": "",
+                "error": f"Error cargando catálogo de sucursales: {e}",
+            },
+            status_code=500,
+        )
+
+
+@app.post("/admin/sucursales/crear")
+def web_crear_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+    nombre: str = Form(""),
+    direccion: str = Form(""),
+    telefono: str = Form(""),
+    cantidad_ventanillas: int = Form(3),
+    prefijo_ventanilla: str = Form("V"),
+    objetivo_max_espera_seg: int = Form(300),
+):
+    """Acción web para crear sucursal y aprovisionar ventanillas."""
+    try:
+        from app.sucursales import crear_sucursal_con_ventanillas
+        crear_sucursal_con_ventanillas(
+            get_db(),
+            codigo=codigo,
+            nombre=nombre,
+            direccion=direccion,
+            telefono=telefono,
+            cantidad_ventanillas=int(cantidad_ventanillas),
+            prefijo_ventanilla=prefijo_ventanilla,
+            objetivo_max_espera_seg=int(objetivo_max_espera_seg),
+        )
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_creada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
+
+
+@app.post("/admin/sucursales/actualizar")
+def web_actualizar_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+    nombre: str = Form(""),
+    cantidad_ventanillas: int = Form(3),
+):
+    """Acción web para actualizar metadatos o capacidad de ventanillas de una sucursal."""
+    try:
+        from app.sucursales import actualizar_sucursal
+        actualizar_sucursal(
+            get_db(),
+            codigo=codigo,
+            nombre=nombre or None,
+            cantidad_ventanillas=int(cantidad_ventanillas) if cantidad_ventanillas else None,
+        )
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_actualizada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
+
+
+@app.post("/admin/sucursales/desactivar")
+def web_desactivar_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Acción web para pausar o desactivar una sucursal."""
+    try:
+        from app.sucursales import desactivar_sucursal_segura
+        desactivar_sucursal_segura(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_desactivada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
+
+
+@app.post("/admin/sucursales/activar")
+def web_activar_sucursal(
+    request: Request,
+    codigo: str = Form(""),
+):
+    """Acción web para reactivar una sucursal inactiva."""
+    try:
+        from app.sucursales import reactivar_sucursal
+        reactivar_sucursal(get_db(), codigo=codigo)
+        return RedirectResponse(f"{BASE}/admin/sucursales?ok=sucursal_reactivada", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
+
+
 # --- HU-010: Historial y Auditoría (Carlos Espinoza) -------------------------
 
 @app.get("/api/historial")
@@ -754,10 +1037,12 @@ def api_historial(
     ventanilla: str = "",
     prioridad: str = "",
     codigo: str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
     limite: int = 100,
     salto: int = 0,
 ):
-    """Consulta turnos históricos con filtros y métricas calculadas (HU-010)."""
+    """Consulta turnos históricos con filtros, rango de fechas y métricas calculadas (HU-010 / S4-M04)."""
     try:
         return obtener_historial_turnos(
             get_db(),
@@ -765,6 +1050,8 @@ def api_historial(
             ventanilla=ventanilla.strip() or None,
             prioridad=prioridad.strip() or None,
             codigo=codigo.strip() or None,
+            fecha_desde=fecha_desde.strip() or None,
+            fecha_hasta=fecha_hasta.strip() or None,
             limite=limite,
             salto=salto,
         )
@@ -778,19 +1065,31 @@ def api_descargar_historial(
     ventanilla: str = "",
     prioridad: str = "",
     codigo: str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
 ):
-    """Descarga en archivo JSON todos los registros del historial filtrados (HU-010)."""
+    """Descarga en archivo JSON todos los registros del historial filtrados por estado, ventanilla, prioridad o rango de fechas (HU-010 / S4-M04)."""
     try:
+        f_desde = fecha_desde.strip() or None
+        f_hasta = fecha_hasta.strip() or None
         datos = exportar_historial_turnos(
             get_db(),
             estado=estado.strip() or None,
             ventanilla=ventanilla.strip() or None,
             prioridad=prioridad.strip() or None,
             codigo=codigo.strip() or None,
+            fecha_desde=f_desde,
+            fecha_hasta=f_hasta,
         )
         contenido = json.dumps(datos, indent=2, ensure_ascii=False)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        nombre_archivo = f"historial_turnos_{timestamp}.json"
+        partes_nombre = ["historial_turnos"]
+        if f_desde:
+            partes_nombre.append(f"desde_{f_desde.replace('-', '')}")
+        if f_hasta:
+            partes_nombre.append(f"hasta_{f_hasta.replace('-', '')}")
+        partes_nombre.append(timestamp)
+        nombre_archivo = f"{'_'.join(partes_nombre)}.json"
         return Response(
             content=contenido,
             media_type="application/json; charset=utf-8",
@@ -810,16 +1109,25 @@ def vista_historial(
     ventanilla: str = "",
     prioridad: str = "",
     codigo: str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
+    limite: int = 50,
+    salto: int = 0,
 ):
-    """Vista de supervisión y auditoría del historial de turnos (HU-010)."""
+    """Vista de supervisión y auditoría del historial de turnos con paginación y filtros por rango de fechas (HU-010 / S4-M04)."""
     try:
+        limite = max(10, min(limite, 200))
+        salto = max(0, salto)
         res = obtener_historial_turnos(
             get_db(),
             estado=estado.strip() or None,
             ventanilla=ventanilla.strip() or None,
             prioridad=prioridad.strip() or None,
             codigo=codigo.strip() or None,
-            limite=100,
+            fecha_desde=fecha_desde.strip() or None,
+            fecha_hasta=fecha_hasta.strip() or None,
+            limite=limite,
+            salto=salto,
         )
         return templates.TemplateResponse(
             request,
@@ -828,6 +1136,10 @@ def vista_historial(
                 "base": BASE,
                 "turnos": res["turnos"],
                 "total": res["total"],
+                "limite": limite,
+                "salto": salto,
+                "pagina_actual": res.get("pagina_actual", 1),
+                "total_paginas": res.get("total_paginas", 1),
                 "filtros": res["filtros"],
                 "estados_disponibles": ESTADOS,
                 "ventanillas_disponibles": VENTANILLAS,
@@ -843,7 +1155,18 @@ def vista_historial(
                 "base": BASE,
                 "turnos": [],
                 "total": 0,
-                "filtros": {"estado": estado, "ventanilla": ventanilla, "prioridad": prioridad, "codigo": codigo},
+                "limite": limite,
+                "salto": salto,
+                "pagina_actual": 1,
+                "total_paginas": 1,
+                "filtros": {
+                    "estado": estado,
+                    "ventanilla": ventanilla,
+                    "prioridad": prioridad,
+                    "codigo": codigo,
+                    "fecha_desde": fecha_desde,
+                    "fecha_hasta": fecha_hasta,
+                },
                 "estados_disponibles": ESTADOS,
                 "ventanillas_disponibles": VENTANILLAS,
                 "prioridades_disponibles": PRIORIDADES,
@@ -904,6 +1227,9 @@ def vista_dashboard(request: Request, sla_espera: int = 300):
             "promedios": {"espera_seg": 0.0, "atencion_seg": 0.0},
             "ventanillas": {"total_configuradas": len(VENTANILLAS), "activas": 0, "detalle": [{"ventanilla": v, "ocupada": False, "turnos_en_proceso": 0} for v in VENTANILLAS]},
             "sla": {"objetivo_max_espera_seg": sla_espera, "total_evaluados": 0, "cumplen": 0, "incumplen": 0, "porcentaje_cumplimiento": 100.0, "tasa_minima_requerida": 80.0, "estado": "CUMPLIDO"},
+            "graficos": {"afluencia_horaria": [], "rendimiento_ventanillas": [], "distribucion_espera": {"hasta_2min": 0, "de_2_a_5min": 0, "de_5_a_10min": 0, "mas_de_10min": 0}, "porcentajes_espera": {}, "cumplimiento_5min_pct": 100.0},
+            "kpis_avanzados": {"tasa_abandono": 0.0, "tasa_atencion": 0.0, "turnos_en_proceso": 0, "ocupacion_ventanillas_pct": 0.0, "max_espera_seg": 0.0, "min_espera_seg": 0.0, "max_espera_formateada": "0s", "min_espera_formateada": "0s", "promedio_espera_formateado": "0s", "promedio_atencion_formateado": "0s"},
+            "diagnostico": {"semaforo": "verde", "estado_operativo": "FLUIDO", "alertas": [], "recomendaciones": [], "hora_pico": None, "ventanilla_lider": None, "cumplimiento_5min_pct": 100.0},
         }
         return templates.TemplateResponse(
             request,

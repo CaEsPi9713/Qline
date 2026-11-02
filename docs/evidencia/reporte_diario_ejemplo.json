@@ -1,0 +1,103 @@
+{
+  "ok": true,
+  "servicio": "atencion_general",
+  "fecha_reporte": "2026-10-25",
+  "generado_en": "2026-11-02T04:10:10.762407+00:00",
+  "resumen_operacional": {
+    "total_turnos": 12,
+    "atendidos": 12,
+    "en_espera": 0,
+    "en_atencion": 0,
+    "llamados": 0,
+    "abandonados": 0,
+    "tasa_abandono": 0.0
+  },
+  "tiempos_servicio": {
+    "promedio_espera_seg": 157.5,
+    "promedio_atencion_seg": 185.0,
+    "maximo_espera_seg": 240,
+    "minimo_espera_seg": 75,
+    "distribucion_rangos": {
+      "hasta_2min": 4,
+      "de_2_a_5min": 8,
+      "de_5_a_10min": 0,
+      "mas_de_10min": 0
+    }
+  },
+  "analisis_sla": {
+    "objetivo_max_espera_seg": 300,
+    "tasa_minima_requerida": 80.0,
+    "porcentaje_cumplimiento": 100.0,
+    "estado": "CUMPLIDO",
+    "evaluados": 12,
+    "cumplen": 12,
+    "incumplen": 0
+  },
+  "productividad_ventanillas": [
+    {
+      "ventanilla": "V-01",
+      "atendidos": 4,
+      "promedio_atencion_seg": 195.0
+    },
+    {
+      "ventanilla": "V-02",
+      "atendidos": 4,
+      "promedio_atencion_seg": 175.0
+    },
+    {
+      "ventanilla": "V-03",
+      "atendidos": 4,
+      "promedio_atencion_seg": 185.0
+    }
+  ],
+  "afluencia_horaria": [
+    {
+      "hora": "07:00",
+      "total": 0
+    },
+    {
+      "hora": "08:00",
+      "total": 12
+    },
+    {
+      "hora": "09:00",
+      "total": 0
+    },
+    {
+      "hora": "10:00",
+      "total": 0
+    },
+    {
+      "hora": "11:00",
+      "total": 0
+    },
+    {
+      "hora": "12:00",
+      "total": 0
+    },
+    {
+      "hora": "13:00",
+      "total": 0
+    },
+    {
+      "hora": "14:00",
+      "total": 0
+    },
+    {
+      "hora": "15:00",
+      "total": 0
+    },
+    {
+      "hora": "16:00",
+      "total": 0
+    },
+    {
+      "hora": "17:00",
+      "total": 0
+    },
+    {
+      "hora": "18:00",
+      "total": 0
+    }
+  ]
+}

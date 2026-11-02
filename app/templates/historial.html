@@ -8,6 +8,15 @@
 {%- endmacro %}
 {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 
+{%- set qparams = [] -%}
+{%- if filtros.codigo %}{% set _ = qparams.append("codigo=" ~ filtros.codigo) %}{% endif -%}
+{%- if filtros.estado %}{% set _ = qparams.append("estado=" ~ filtros.estado) %}{% endif -%}
+{%- if filtros.ventanilla %}{% set _ = qparams.append("ventanilla=" ~ filtros.ventanilla) %}{% endif -%}
+{%- if filtros.prioridad %}{% set _ = qparams.append("prioridad=" ~ filtros.prioridad) %}{% endif -%}
+{%- if filtros.fecha_desde %}{% set _ = qparams.append("fecha_desde=" ~ filtros.fecha_desde) %}{% endif -%}
+{%- if filtros.fecha_hasta %}{% set _ = qparams.append("fecha_hasta=" ~ filtros.fecha_hasta) %}{% endif -%}
+{%- set qstr = qparams|join("&") -%}
+
 <div class="card">
   <h2>Filtrar turnos</h2>
   <form method="get" action="{{ base }}/historial" class="barra-filtros">
@@ -42,6 +51,14 @@
         {% endfor %}
       </select>
     </div>
+    <div class="grupo">
+      <label for="fecha_desde">Fecha desde</label>
+      <input type="date" id="fecha_desde" name="fecha_desde" value="{{ filtros.fecha_desde or '' }}">
+    </div>
+    <div class="grupo">
+      <label for="fecha_hasta">Fecha hasta</label>
+      <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ filtros.fecha_hasta or '' }}">
+    </div>
     <div class="fila">
       <button type="submit">Aplicar filtros</button>
       <a href="{{ base }}/historial" class="btn btn-secundario">Limpiar</a>
@@ -53,8 +70,8 @@
   <div class="card-cabecera">
     <h2>Registros históricos ({{ total }} encontrados)</h2>
     <div class="fila" style="gap:8px">
-      <a href="{{ base }}/api/historial/descargar?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" class="btn">Descargar JSON</a>
-      <a href="{{ base }}/api/historial?{% if filtros.estado %}estado={{ filtros.estado }}&{% endif %}{% if filtros.ventanilla %}ventanilla={{ filtros.ventanilla }}&{% endif %}{% if filtros.prioridad %}prioridad={{ filtros.prioridad }}&{% endif %}{% if filtros.codigo %}codigo={{ filtros.codigo }}{% endif %}" target="_blank" class="btn btn-secundario">Ver JSON</a>
+      <a href="{{ base }}/api/historial/descargar{% if qstr %}?{{ qstr }}{% endif %}" class="btn">Descargar JSON</a>
+      <a href="{{ base }}/api/historial{% if qstr %}?{{ qstr }}{% endif %}" target="_blank" class="btn btn-secundario">Ver JSON</a>
     </div>
   </div>
   <p class="nota" style="margin:0 0 8px">Fechas y horas en {{ etiqueta_zona() }}. Pase el cursor sobre una fecha para ver el valor exacto en UTC.</p>
@@ -86,6 +103,31 @@
         {% endif %}
       </tbody>
     </table>
+    {% if total > 0 %}
+    <div class="paginacion-wrap">
+      <div class="paginacion-info">
+        Mostrando {{ salto + 1 }} - {{ [salto + turnos|length, total]|min }} de {{ total }} turnos
+        (Página {{ pagina_actual }} de {{ total_paginas }})
+      </div>
+      {% if total_paginas > 1 %}
+      <div class="paginacion-controles">
+        {% if pagina_actual > 1 %}
+        <a href="{{ base }}/historial?salto={{ [0, salto - limite]|max }}&limite={{ limite }}{% if qstr %}&{{ qstr }}{% endif %}" class="btn btn-secundario btn-sm">&laquo; Anterior</a>
+        {% else %}
+        <span class="btn btn-secundario btn-sm btn-deshabilitado">&laquo; Anterior</span>
+        {% endif %}
+
+        <span style="font-weight:600; padding: 0 8px;">{{ pagina_actual }} / {{ total_paginas }}</span>
+
+        {% if pagina_actual < total_paginas %}
+        <a href="{{ base }}/historial?salto={{ salto + limite }}&limite={{ limite }}{% if qstr %}&{{ qstr }}{% endif %}" class="btn btn-secundario btn-sm">Siguiente &raquo;</a>
+        {% else %}
+        <span class="btn btn-secundario btn-sm btn-deshabilitado">Siguiente &raquo;</span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
