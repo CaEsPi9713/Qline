@@ -5,6 +5,7 @@
 {% if mensaje %}<div class="ok" role="status">{{ mensaje }}</div>{% endif %}
 {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 
+<div class="op op-cola">
 <div class="grid grid-2">
   <div class="card">
     <h2>Llamar siguiente turno</h2>
@@ -18,8 +19,8 @@
       </select>
       <button type="submit" {% if not libres %}disabled{% endif %}>Llamar siguiente</button>
     </form>
-    {% if not libres %}<p class="nota" style="margin:12px 0 0">Todas las ventanillas tienen un turno en curso. Finalícelo en el <a href="{{ base }}/panel">panel de atención</a> para llamar otro.</p>{% endif %}
-    <p class="nota" style="margin:14px 0 0">Después de llamar, continúe en el <a href="{{ base }}/panel">panel de atención</a>.</p>
+    {% if not libres %}<p class="nota op-nota">Todas las ventanillas tienen un turno en curso. Finalícelo en el <a href="{{ base }}/panel">panel de atención</a> para llamar otro.</p>{% endif %}
+    <p class="nota op-nota">Después de llamar, continúe en el <a href="{{ base }}/panel">panel de atención</a>.</p>
   </div>
 
   <div class="card">
@@ -39,8 +40,9 @@
       </table>
     </div>
     {% elif not error %}
-    <p class="texto-suave" style="margin:0">No hay turnos en espera.</p>
+    <p class="texto-suave op-vacio">No hay turnos en espera.</p>
     {% endif %}
   </div>
+</div>
 </div>
 {% endblock %}

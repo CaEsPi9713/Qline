@@ -49,7 +49,7 @@ class PruebasHtaccess(unittest.TestCase):
                      f"{BASE}/api/historial/descargar", f"{BASE}/api/dashboard/descargar",
                      f"{BASE}/ws/eventos", f"{BASE}/ws-prueba", f"{BASE}/redis/estado",
                      f"{BASE}/insertar", f"{BASE}/eliminar", f"{BASE}/crear_coleccion", f"{BASE}/demo",
-                     f"{BASE}/salud"):
+                     f"{BASE}/salud", f"{BASE}/administracion"):
             self.assertFalse(es_publica(ruta), ruta)
 
     def test_el_token_debe_tener_forma_de_uuid(self):

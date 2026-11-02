@@ -18,6 +18,16 @@ PRIORIDAD_NORMAL = "normal"
 PRIORIDAD_PREFERENCIAL = "preferencial"
 PRIORIDADES = (PRIORIDAD_NORMAL, PRIORIDAD_PREFERENCIAL)
 
+# --- Cierre de la atención (S4-M03) ----------------------------------------
+# Motivo opcional al finalizar: clave -> etiqueta. La nota es libre, opcional y corta.
+MOTIVOS_CIERRE = {
+    "resuelto": "Resuelto",
+    "derivado": "Derivado a otra área",
+    "documentacion_incompleta": "Documentación incompleta",
+    "otro": "Otro",
+}
+NOTA_CIERRE_MAX = 200
+
 # --- Estados del turno ---------------------------------------------------
 ESTADO_PENDIENTE = "pendiente"
 ESTADO_LLAMADO = "llamado"

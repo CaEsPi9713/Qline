@@ -28,3 +28,5 @@ class TurnoFinalizado(BaseModel):
     atencion_seg: int
     # None: sin gancho; False: MongoDB quedó correcto pero no se pudo limpiar Redis.
     redis_liberado: bool | None = None
+    # Motivo y nota opcionales del cierre (S4-M03); None si no se informaron.
+    cierre: dict | None = None

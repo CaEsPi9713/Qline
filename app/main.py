@@ -35,9 +35,11 @@ from app.schemas import TurnoEnAtencion, TurnoFinalizado
 from app.emitir import EmisionError, emitir_turno
 from app.consultar import ConsultaError, consultar_turno
 from app.llamado import LlamadoError, llamar_siguiente_turno
-from app.constantes import ESTADOS, PRIORIDADES, SERVICIO_ID, SERVICIO_NOMBRE, VENTANILLAS
+from app.constantes import (ESTADOS, MOTIVOS_CIERRE, NOTA_CIERRE_MAX, PRIORIDADES, SERVICIO_ID, SERVICIO_NOMBRE,
+                            VENTANILLAS)
 from app.redis_client import get_redis, verificar_conexion as verificar_redis
 from app import salud as salud_app
+from app.errores import registrar_errores
 from app.turnos_schema import TurnoValidationError, validar_documento_turno
 from app.historial import exportar_historial_turnos, obtener_historial_turnos
 from app.dashboard import calcular_metricas_dashboard, exportar_metricas_dashboard
@@ -111,6 +113,10 @@ def _version_css() -> int:
 
 
 templates.env.globals["css_version"] = _version_css()
+templates.env.globals["motivos_cierre"] = MOTIVOS_CIERRE
+templates.env.globals["nota_cierre_max"] = NOTA_CIERRE_MAX
+templates.env.globals["base"] = BASE   # las páginas de error no reciben contexto
+registrar_errores(app, templates)
 formato.registrar(templates.env)             # filtros de fecha y hora para las pantallas
 
 registrar_rutas_eventos(app, get_db=lambda: get_db())
@@ -165,7 +171,7 @@ def a_object_id(valor: str) -> ObjectId:
 
 def ir(coleccion: str, **params) -> RedirectResponse:
     extra = "".join(f"&{k}={quote_plus(v)}" for k, v in params.items())
-    return RedirectResponse(f"{BASE}/?coleccion={quote_plus(coleccion)}{extra}", status_code=303)
+    return RedirectResponse(f"{BASE}/administracion?coleccion={quote_plus(coleccion)}{extra}", status_code=303)
 
 
 
@@ -257,7 +263,7 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
             contexto["documentos"] = documentos
     except Exception as e:
         contexto["error"] = contexto["error"] or f"Error de MongoDB: {e}"
-    return templates.TemplateResponse(request, "index.html", contexto)
+    return templates.TemplateResponse(request, "administracion.html", contexto)
 
 
 
@@ -641,11 +647,13 @@ def api_iniciar_atencion(codigo: str = Form(...), ventanilla: str = Form(...)):
 
 
 @app.post("/api/atencion/finalizar", response_model=TurnoFinalizado)
-def api_finalizar_atencion(codigo: str = Form(...), ventanilla: str = Form(...)):
+def api_finalizar_atencion(codigo: str = Form(...), ventanilla: str = Form(...),
+                           motivo: str = Form(""), nota: str = Form("")):
     """Finalizar la atención: en_atencion -> atendido y liberar Redis (HU-007)."""
     resultado = atencion.finalizar_atencion(
         get_db()["turnos"], codigo, ventanilla,
         al_finalizar=lambda c: liberar_turno(c, ventanilla.strip()),
+        motivo=motivo, nota=nota,
     )
     _publicar_evento(eventos.ATENCION_FINALIZADA, resultado["codigo"], "atendido", resultado.get("ventanilla"))
     return resultado
@@ -683,11 +691,13 @@ def panel_iniciar(codigo: str = Form(...), ventanilla: str = Form(...)):
 
 
 @app.post("/panel/finalizar")
-def panel_finalizar(codigo: str = Form(...), ventanilla: str = Form(...)):
+def panel_finalizar(codigo: str = Form(...), ventanilla: str = Form(...),
+                    motivo: str = Form(""), nota: str = Form("")):
     try:
         r = atencion.finalizar_atencion(
             get_db()["turnos"], codigo, ventanilla,
             al_finalizar=lambda c: liberar_turno(c, ventanilla.strip()),
+            motivo=motivo, nota=nota,
         )
     except ErrorAtencion as e:
         return _redirigir_panel(error=e.mensaje)
@@ -699,7 +709,19 @@ def panel_finalizar(codigo: str = Form(...), ventanilla: str = Form(...)):
 
 
 @app.get("/", response_class=HTMLResponse)
-def inicio(request: Request, coleccion: str = "", editar: str = "", ok: str = "", filtro_estado: str = ""):
+def inicio(request: Request):
+    """Portada (UI-02). La administración de MongoDB vive en /administracion."""
+    return templates.TemplateResponse(request, "index.html", {"base": BASE})
+
+
+@app.get("/acerca", response_class=HTMLResponse)
+def acerca(request: Request):
+    """Propósito del proyecto, equipo y repositorio (P06)."""
+    return templates.TemplateResponse(request, "acerca.html", {"base": BASE})
+
+
+@app.get("/administracion", response_class=HTMLResponse)
+def administracion(request: Request, coleccion: str = "", editar: str = "", ok: str = "", filtro_estado: str = ""):
     return render(request, coleccion.strip(), editar.strip(), ok=ok, filtro_estado=filtro_estado.strip())
 
 

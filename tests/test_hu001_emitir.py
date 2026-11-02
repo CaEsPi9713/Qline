@@ -258,6 +258,7 @@ class TestHU001EmitirTurno(unittest.IsolatedAsyncioTestCase):
     def test_existing_route_regression_checks(self):
         rutas_esperadas = {
             "/",
+            "/administracion",
             "/crear_coleccion",
             "/insertar",
             "/actualizar",

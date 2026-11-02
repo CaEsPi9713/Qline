@@ -2,6 +2,8 @@
    ADAPTAR: name/action reales del formulario. #}
 {% extends "base_publico.html" %}
 {% block titulo %}Consultar turno{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
 
 {% block contenido %}
 <div class="contenedor--estrecho pila">
@@ -11,7 +13,7 @@
   <p class="mensaje">Conserve esta página abierta: el estado de su turno se actualiza solo.</p>
 
   {% if error %}<p class="mensaje mensaje--error" role="alert">{{ error }}</p>{% endif %}
-  <form class="tarjeta" method="get" action="/consultar">   {# ADAPTAR #}
+  <form class="tarjeta" method="get" action="{{ base }}/consultar">   {# ADAPTAR #}
     <div class="campo">
       <label for="codigo">Código del turno</label>
       <input id="codigo" name="codigo" type="text" inputmode="text" autocomplete="off" required value="{{ codigo|default('') }}">

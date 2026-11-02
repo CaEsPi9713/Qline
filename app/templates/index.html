@@ -1,39 +1,83 @@
 {# UI-02 · Portada. Solo enlaces públicos; la protección Apache/.htaccess del CRUD no se toca. #}
 {% extends "base_publico.html" %}
 {% block titulo %}Inicio{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
 {% block clase_main %}{% endblock %}
 
 {% block contenido %}
 <section class="heroe" aria-labelledby="titulo-portada">
-  <div class="contenedor">
+  <div class="heroe__texto">
+    <span class="heroe__etiqueta">Gestión de filas y turnos</span>
     <h1 id="titulo-portada">Turnos claros, sin hacer fila de pie.</h1>
-    <p>Saque su turno en el quiosco y siga su estado desde el teléfono con el código QR.</p>
+    <p>Saque su turno en el quiosco y siga su estado desde el teléfono con el código QR. La prioridad se respeta y la sala se entera al instante.</p>
     <div class="fila">
-      <a class="boton boton--grande" href="/quiosco">Sacar un turno</a>
-      <a class="boton boton--grande boton--contorno" href="/consultar">Consultar mi turno</a>
+      <a class="boton boton--grande" href="{{ base }}/quiosco">Sacar un turno</a>
+      <a class="boton boton--grande boton--contorno" href="{{ base }}/consultar">Consultar mi turno</a>
+    </div>
+  </div>
+  <ul class="heroe__datos" aria-label="El sistema en cifras">
+    <li><strong>2</strong><span>prioridades: normal y preferencial</span></li>
+    <li><strong>3</strong><span>ventanillas atendiendo a la vez</span></li>
+    <li><strong>180 s</strong><span>para presentarse antes del abandono</span></li>
+    <li><strong>5</strong><span>estados con seguimiento en vivo</span></li>
+  </ul>
+</section>
+
+<section class="seccion" aria-labelledby="como-funciona">
+  <h2 id="como-funciona" class="seccion__titulo">Cómo funciona</h2>
+  <p class="seccion__sub">Tres pasos, sin instalar nada ni dar datos personales.</p>
+  <div class="rejilla">
+    <div class="tarjeta paso-inicio paso-inicio--1">
+      <span class="paso-inicio__num" aria-hidden="true">1</span>
+      <div><h3>Elija el tipo de turno</h3><p>Regular o preferencial, en la pantalla del quiosco.</p></div>
+    </div>
+    <div class="tarjeta paso-inicio paso-inicio--2">
+      <span class="paso-inicio__num" aria-hidden="true">2</span>
+      <div><h3>Reciba su código</h3><p>Se muestra un ticket con su código y un QR.</p></div>
+    </div>
+    <div class="tarjeta paso-inicio paso-inicio--3">
+      <span class="paso-inicio__num" aria-hidden="true">3</span>
+      <div><h3>Siga su estado</h3><p>Escanee el QR y la página se actualiza cuando lo llamen.</p></div>
     </div>
   </div>
 </section>
 
-<div class="contenedor principal">
-  <h2>Cómo funciona</h2>
-  <div class="rejilla">
-    <div class="tarjeta paso">
-      <span class="paso__num" aria-hidden="true">1</span>
-      <div><h3>Elija el tipo de turno</h3><p>Regular o preferencial, en la pantalla del quiosco.</p></div>
-    </div>
-    <div class="tarjeta paso">
-      <span class="paso__num" aria-hidden="true">2</span>
-      <div><h3>Reciba su código</h3><p>Se muestra un ticket con su código y un QR.</p></div>
-    </div>
-    <div class="tarjeta paso">
-      <span class="paso__num" aria-hidden="true">3</span>
-      <div><h3>Siga su estado</h3><p>Escanee el QR y la página se actualiza cuando lo llamen.</p></div>
-    </div>
+<section class="seccion" aria-labelledby="que-incluye">
+  <h2 id="que-incluye" class="seccion__titulo">Qué incluye</h2>
+  <p class="seccion__sub">Lo que ve el cliente y lo que usa el equipo de atención.</p>
+  <div class="funciones">
+    <article class="funcion funcion--teal">
+      <span class="funcion__icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 0 0 0 6v3h18v-3a2 2 0 0 0 0-6V6H3z"/><path d="M13 6v12" stroke-dasharray="2 3"/></svg></span>
+      <h3>Prioridad justa</h3>
+      <p>Los turnos preferenciales pasan primero; a igual prioridad, se atiende por orden de llegada.</p>
+    </article>
+    <article class="funcion funcion--azul">
+      <span class="funcion__icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M20 20v.01M17 20h.01"/></svg></span>
+      <h3>Seguimiento por QR</h3>
+      <p>Cada ticket trae un QR para ver en el celular cuántos turnos faltan y cuándo le toca.</p>
+    </article>
+    <article class="funcion funcion--verde">
+      <span class="funcion__icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+      <h3>Pantalla de sala</h3>
+      <p>El turno llamado y su ventanilla aparecen en la sala al instante, con aviso sonoro opcional.</p>
+    </article>
+    <article class="funcion funcion--ambar">
+      <span class="funcion__icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+      <h3>Historial y estadísticas</h3>
+      <p>Tiempos de espera y de atención, abandono y cumplimiento del objetivo de servicio.</p>
+    </article>
   </div>
+</section>
 
-  <h2 style="margin-top: var(--e7)">Sobre el proyecto</h2>
-  <p>QLine es un proyecto académico que combina MongoDB para el historial y Redis para la cola en tiempo real.</p>
-  <a class="boton boton--oscuro" href="/acerca">Conocer al equipo</a>
-</div>
+<section class="banda-cta" aria-labelledby="cta">
+  <div>
+    <h2 id="cta">¿Listo para sacar su turno?</h2>
+    <p>QLine es un proyecto académico: MongoDB conserva el historial y Redis controla la cola en tiempo real.</p>
+  </div>
+  <div class="fila">
+    <a class="boton boton--grande" href="{{ base }}/quiosco">Sacar un turno</a>
+    <a class="boton boton--grande boton--contorno" href="{{ base }}/acerca">Conocer al equipo</a>
+  </div>
+</section>
 {% endblock %}

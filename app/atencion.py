@@ -14,6 +14,7 @@ NO se debe cambiar a "leer, validar en Python y luego escribir".
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -21,6 +22,8 @@ from app.constantes import (
     ESTADO_ATENDIDO,
     ESTADO_EN_ATENCION,
     ESTADO_LLAMADO,
+    MOTIVOS_CIERRE,
+    NOTA_CIERRE_MAX,
     VENTANILLAS,
 )
 from app.excepciones import (
@@ -48,6 +51,28 @@ def validar_ventanilla(ventanilla: Any) -> str:
             f"Ventanilla inválida. Valores permitidos: {', '.join(VENTANILLAS)}"
         )
     return ventanilla
+
+
+def validar_cierre(motivo: Any = None, nota: Any = None) -> dict | None:
+    """Motivo y nota opcionales del cierre (S4-M03). ``None`` si no se informó ninguno.
+
+    El motivo debe ser uno de ``MOTIVOS_CIERRE``. La nota se limpia (sin caracteres de control,
+    espacios recortados y colapsados) y no puede superar ``NOTA_CIERRE_MAX`` caracteres; una nota
+    demasiado larga se rechaza, no se corta en silencio. Se valida antes de escribir en MongoDB.
+    """
+    if motivo is not None and not isinstance(motivo, str):
+        raise DatosInvalidos("El motivo de cierre debe ser texto")
+    motivo = (motivo or "").strip()
+    if motivo and motivo not in MOTIVOS_CIERRE:
+        raise DatosInvalidos(f"Motivo de cierre inválido. Valores permitidos: {', '.join(MOTIVOS_CIERRE)}")
+    if nota is not None and not isinstance(nota, str):
+        raise DatosInvalidos("La nota de cierre debe ser texto")
+    limpia = " ".join("".join(" " if unicodedata.category(c) == "Cc" else c for c in (nota or "")).split())
+    if len(limpia) > NOTA_CIERRE_MAX:
+        raise DatosInvalidos(f"La nota de cierre admite hasta {NOTA_CIERRE_MAX} caracteres")
+    if not motivo and not limpia:
+        return None
+    return {"motivo": motivo or None, "nota": limpia or None}
 
 
 def _ahora() -> datetime:
@@ -147,6 +172,8 @@ def finalizar_atencion(
     ventanilla: str,
     ahora: datetime | None = None,
     al_finalizar: Callable[[str], Any] | None = None,
+    motivo: str | None = None,
+    nota: str | None = None,
 ) -> dict:
     """Finaliza la atención de un turno ``en_atencion`` (HU-007).
 
@@ -161,12 +188,16 @@ def finalizar_atencion(
             el turno queda igualmente ``atendido`` en MongoDB y el resultado
             indica ``redis_liberado: False``.
 
+        motivo, nota: cierre opcional (S4-M03). Se guarda en el campo raíz ``cierre`` dentro del
+            mismo ``update_one`` de la finalización: nunca en una segunda escritura.
+
     Raises:
         DatosInvalidos, TurnoNoEncontrado, TransicionNoPermitida,
         VentanillaNoCoincide, TurnoInconsistente, ServicioNoDisponible.
     """
     codigo = validar_codigo(codigo)
     ventanilla = validar_ventanilla(ventanilla)
+    cierre = validar_cierre(motivo, nota)
     momento = ahora or _ahora()
 
     try:
@@ -189,6 +220,14 @@ def finalizar_atencion(
 
     atencion_seg = calcular_atencion_seg(inicio, momento)
 
+    cambios = {
+        "estado": ESTADO_ATENDIDO,
+        "timestamps.finalizado": momento,
+        "metricas.atencion_seg": atencion_seg,
+    }
+    if cierre is not None:
+        cambios["cierre"] = cierre
+
     try:
         resultado = coleccion.update_one(
             {
@@ -197,13 +236,7 @@ def finalizar_atencion(
                 "ventanilla": ventanilla,
                 "timestamps.inicio_atencion": inicio,
             },
-            {
-                "$set": {
-                    "estado": ESTADO_ATENDIDO,
-                    "timestamps.finalizado": momento,
-                    "metricas.atencion_seg": atencion_seg,
-                }
-            },
+            {"$set": cambios},
         )
     except Exception as exc:
         raise ServicioNoDisponible() from exc
@@ -220,6 +253,7 @@ def finalizar_atencion(
         "finalizado": _iso(momento),
         "atencion_seg": atencion_seg,
         "redis_liberado": None,
+        "cierre": cierre,
     }
     if al_finalizar is not None:
         try:

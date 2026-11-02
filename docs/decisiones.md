@@ -240,6 +240,54 @@ Registro de las decisiones tomadas durante el desarrollo, con las alternativas q
 
 ---
 
+## Operación, salud y administración (Alessandro)
+
+Aprobadas en el punto de decisión G0 del plan alternativo de S4. Cada una indica su estado real.
+
+### D-29 · `/salud` y `/redis/estado` responden solo estados, sin datos de infraestructura (S4-M06)
+
+| | |
+|---|---|
+| **Decisión** | `GET /salud` devuelve `{estado, app, redis, mongo, barrido}`: 200 si Redis y MongoDB responden, 503 si falla alguno, nunca 500. No incluye texto de excepciones, servidores, puertos, usuarios ni versiones; el detalle va al registro del servidor. `GET /redis/estado` queda en `{"ok": true\|false}`. Ambas rutas siguen protegidas por Apache (no se agregan a las públicas). |
+| **Por qué** | Una comprobación de estado útil para la demo no debe revelar cómo está montada la infraestructura. El tiempo de respuesta con un servicio caído lo fijan los tiempos de espera de los clientes (3 s en Redis, 5 s en MongoDB). |
+| **Alternativas** | *Devolver el error de cada servicio*: ayuda a depurar, pero expone host y puerto. *Dejar `/salud` pública*: permitiría a cualquiera sondear el sistema. |
+| **Estado** | `/salud` **verificado en el servidor** (`docs/evidencia/salud.md`: normal, Redis, MongoDB y ambos inalcanzables, y 401 sin credenciales). La limitación de `/redis/estado` solo tiene prueba automática. |
+
+### D-30 · Catálogo de ventanillas dinámicas (P09, con Carlos)
+
+| | |
+|---|---|
+| **Decisión (propuesta)** | El catálogo vive en MongoDB (colección `ventanillas`); una función `ventanillas_activas(db)` con caché corta y último catálogo conocido si MongoDB no responde. Identificador `V-NN`, validado con expresión regular. El `enum` de `ventanilla` en el esquema pasa a un patrón y se aplica con `collMod`, verificado en el servidor antes de crear la primera. Redis no guarda el catálogo; la clave `ventanilla:{id}:actual` y el `SET NX` no cambian. |
+| **Por qué** | Las claves de Redis ya se construyen con el identificador, así que lo único que cambia es quién valida que exista. El servidor no actualiza el validador de una colección existente por sí solo (lección de `qr_token`). |
+| **Estado** | **Sin implementar.** Depende del contrato de Carlos (P09) y de la verificación de `collMod`. |
+
+### D-31 · Cierre de turno: campo raíz `cierre` con motivo cerrado y nota corta (S4-M03)
+
+| | |
+|---|---|
+| **Decisión** | Al finalizar, el operador puede indicar un motivo (`resuelto`, `derivado`, `documentacion_incompleta`, `otro`) y una nota de hasta 200 caracteres, ambos opcionales. Se guardan en `cierre: {motivo, nota}` en la raíz del documento, dentro del mismo `update_one` de la finalización; si no se informa nada, el campo no existe. Un motivo o una nota inválidos se rechazan (422) antes de escribir. La nota se limpia de caracteres de control y nunca se corta en silencio. Los cinco estados, `timestamps` y `metricas` no cambian, y Redis tampoco. |
+| **Por qué** | `timestamps` y `metricas` no admiten campos extra, pero la raíz sí; así los turnos anteriores siguen validando sin migrar y una finalización repetida no puede sobrescribir el cierre (el filtro exige `en_atencion`). La nota se muestra siempre escapada y no se usa `innerHTML` ni `|safe`. |
+| **Alternativas** | *Un estado nuevo (`cancelado`)*: el plan fija cinco estados. *Texto libre sin límite*: abre la puerta a datos personales y a abuso. *Segunda escritura para el cierre*: dejaría turnos atendidos sin su cierre si falla entre ambas. |
+| **Estado** | Implementado con 22 pruebas automáticas. **Verificado en el servidor (01/11/2026): `init_mongo` informa que el usuario del curso no tiene permiso para `collMod`**, así que el validador del servidor no se actualiza para `cierre`. No hace falta: la raíz admite campos extra, MongoDB acepta el campo y la aplicación valida el motivo y el largo de la nota antes de escribir. Se descartó `--recrear` porque borraría los 562 turnos. `python -m scripts.probar_cierre` deja la evidencia en `docs/evidencia/cierre.md`. **Verificado en el servidor con ese script (7 casos OK).** **Pendiente:** traer `cierre.md` al repositorio, y que Carlos valide el esquema (y, si quiere validación en el motor, que un administrador ejecute `collMod`). El historial no muestra todavía el motivo (decisión de Carlos). |
+
+### D-32 · Estimación de espera (S4-M01): no ejecutada
+
+| | |
+|---|---|
+| **Decisión** | No se programa. El Plan Maestro excluye la predicción de espera y no hay autorización escrita del equipo. |
+| **Estado** | Queda fuera del release salvo acuerdo documentado. No bloquea ninguna otra tarea. |
+
+### D-33 · La administración de MongoDB vive en `/administracion`; `/` es la portada
+
+| | |
+|---|---|
+| **Hallazgo** | Al integrar la portada de UI-02, `index.html` (que era el administrador de MongoDB) quedó reemplazado y la ruta `/` dejó de mostrar colecciones y formularios; las altas, ediciones y borrados redirigían a la portada. |
+| **Decisión** | La portada conserva `index.html`. El administrador pasa a `administracion.html`, en `/administracion`; las rutas de escritura (`/crear_coleccion`, `/insertar`, `/actualizar`, `/eliminar`) redirigen allí. No cambia el `.htaccess`: todo lo que no es del cliente sigue protegido. |
+| **Por qué** | El CRUD es una herramienta técnica necesaria (y la base para P09); mezclarla con la portada pública fue lo que la rompió. |
+| **Estado** | Implementado con prueba automática; pendiente comprobarlo bajo Apache. |
+
+---
+
 ## Despliegue e integración (equipo)
 
 ### D-22 · El seguimiento del turno por QR no pide contraseña de Apache; el resto sí

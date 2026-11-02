@@ -9,7 +9,7 @@
   {"n": 4, "rol": "Operador", "nombre": "Panel de atención", "ruta": "/panel", "prefijos": ["/panel"]},
   {"n": 5, "rol": "Supervisor", "nombre": "Historial", "ruta": "/historial", "prefijos": ["/historial"]},
   {"n": 6, "rol": "Supervisor", "nombre": "Dashboard SLA", "ruta": "/dashboard", "prefijos": ["/dashboard"]},
-  {"n": 7, "rol": "Administración", "nombre": "CRUD MongoDB", "ruta": "/", "prefijos": ["/insertar", "/actualizar", "/eliminar", "/crear_coleccion"], "exacta": "/"}
+  {"n": 7, "rol": "Administración", "nombre": "Administración", "ruta": "/administracion", "prefijos": ["/insertar", "/actualizar", "/eliminar", "/crear_coleccion"], "exacta": "/administracion"}
 ] -%}
 {%- set ruta_actual = request.url.path -%}
 {%- set ns = namespace(actual=none) -%}
@@ -57,7 +57,7 @@
 <main class="pagina {{ ancho or '' }}">
   <div class="page-head">
     {% if actual %}<div class="paso-pill">Paso {{ actual.n }} de {{ pasos|length }} · {{ actual.rol }}</div>
-    {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 3 · Guía de demostración</div>{% endif %}
+    {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 4 · Guía de demostración</div>{% endif %}
     <h1>{% block h1 %}{{ self.titulo() }}{% endblock %}</h1>
     {% block lead_bloque %}<p class="lead">{% block lead %}{% endblock %}</p>{% endblock %}
   </div>

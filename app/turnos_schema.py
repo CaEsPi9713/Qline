@@ -8,6 +8,8 @@ corruptas en los timestamps.
 """
 from app.constantes import (
     ESTADOS,
+    MOTIVOS_CIERRE,
+    NOTA_CIERRE_MAX,
     PRIORIDADES,
     SERVICIO_ID,
     VENTANILLAS,
@@ -65,6 +67,23 @@ SCHEMA_TURNOS = {
                 "bsonType": ["string", "null"],
                 "pattern": PATRON_UUID_V4,
                 "description": "Token UUID v4 único para acceso y consulta móvil por QR (HU-003, HU-013)",
+            },
+            "cierre": {
+                "bsonType": "object",
+                "additionalProperties": False,
+                "description": "Motivo y nota opcionales del cierre de la atención (S4-M03); ausente en turnos anteriores",
+                "properties": {
+                    "motivo": {
+                        "bsonType": ["string", "null"],
+                        "enum": list(MOTIVOS_CIERRE) + [None],
+                        "description": "Motivo del cierre (lista cerrada) o null",
+                    },
+                    "nota": {
+                        "bsonType": ["string", "null"],
+                        "maxLength": NOTA_CIERRE_MAX,
+                        "description": "Nota libre y corta del operador o null",
+                    },
+                },
             },
             "timestamps": {
                 "bsonType": "object",
@@ -187,6 +206,16 @@ def validar_documento_turno(doc: dict) -> bool:
     if qr_token is not None:
         if not isinstance(qr_token, str) or not re.fullmatch(PATRON_UUID_V4, qr_token):
             raise TurnoValidationError(f"qr_token inválido: {qr_token!r}. Debe ser UUID v4 o null.")
+
+    cierre = doc.get("cierre")
+    if cierre is not None:
+        if not isinstance(cierre, dict) or set(cierre) - {"motivo", "nota"}:
+            raise TurnoValidationError("El campo 'cierre' debe ser un objeto con 'motivo' y 'nota'.")
+        if cierre.get("motivo") is not None and cierre["motivo"] not in MOTIVOS_CIERRE:
+            raise TurnoValidationError(f"Motivo de cierre inválido: {cierre['motivo']!r}. Opciones: {tuple(MOTIVOS_CIERRE)}")
+        nota = cierre.get("nota")
+        if nota is not None and (not isinstance(nota, str) or len(nota) > NOTA_CIERRE_MAX):
+            raise TurnoValidationError(f"'cierre.nota' debe ser texto de hasta {NOTA_CIERRE_MAX} caracteres o null.")
 
     ts = doc.get("timestamps")
     if not isinstance(ts, dict) or "creado" not in ts or ts["creado"] is None:

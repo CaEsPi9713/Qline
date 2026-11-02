@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block titulo %}Guía de demo{% endblock %}
-{% block lead %}Recorrido paso a paso del Seguimiento 3: del turno que emite el cliente hasta la evidencia generada en el servidor. Cada paso abre la pantalla correspondiente y dice qué debe verse; marque los pasos a medida que los comprueba.{% endblock %}
+{% block lead %}Recorrido paso a paso del Seguimiento 4: del turno que emite el cliente hasta la evidencia generada en el servidor. Cada paso abre la pantalla correspondiente y dice qué debe verse; marque los pasos a medida que los comprueba.{% endblock %}
 {% block contenido %}
 
 <div class="estado-sistema" aria-label="Estado del sistema">
@@ -21,16 +21,18 @@
     <h2>Antes de empezar</h2>
   </div>
   <p class="sub"><strong>Necesita:</strong> esta guía en una pantalla, <code>/pantalla</code> en una <strong>segunda pantalla</strong> y un <strong>celular</strong> para escanear los códigos QR. Duración aproximada: 25 minutos, sin contar la evidencia del bloque 7.</p>
-  <p class="sub">Deje el entorno en cero para que el primer turno sea <code>A-001</code>. Solo se tocan las claves <code>grupo2:qline:</code>; nunca <code>FLUSHALL</code>.</p>
+  <p class="sub"><strong>1. Compruebe el entorno</strong> (no borra nada; repetirlo no cambia nada). Revisa MongoDB, Redis, los índices, los datos sintéticos, la dirección de los QR y la zona horaria, y puede dejar turnos en la cola:</p>
+  <div class="terminal" data-copiar>python -m scripts.preparar_demo --cargar-sinteticos --en-espera 4</div>
+  <p class="sub"><strong>2. Opcional, solo en un entorno de pruebas:</strong> deje el entorno en cero para que el primer turno sea <code>A-001</code>. Solo se tocan las claves <code>grupo2:qline:</code>; nunca <code>FLUSHALL</code>. Este paso <strong>borra los turnos</strong>; sin él la demo funciona igual, con otros códigos.</p>
   <div class="terminal" data-copiar>python scripts/init_mongo.py --recrear --confirmar</div>
   <div class="terminal" data-copiar>python scripts/generar_datos_sinteticos.py --cargar</div>
   <div class="terminal" data-copiar>redis-cli del grupo2:qline:contador:atencion_general grupo2:qline:cola:atencion_general grupo2:qline:ventanilla:V-01:actual grupo2:qline:ventanilla:V-02:actual grupo2:qline:ventanilla:V-03:actual</div>
-  <p class="nota" style="margin:8px 0 0">El primer comando <strong>borra</strong> y recrea la colección <code>turnos</code> con su JSON Schema y todos sus índices (incluido el del barrido de abandono y el del <code>qr_token</code>); el segundo carga el historial sintético (serie <code>S-</code>); el tercero reinicia el contador y la cola de la demo. Las fichas de arriba deben quedar en verde: el QR apunta al dominio público y el abandono automático está encendido.</p>
+  <p class="nota" style="margin:8px 0 0">El primer comando <strong>borra</strong> y recrea la colección <code>turnos</code> con su JSON Schema y todos sus índices (incluido el del barrido de abandono y el del <code>qr_token</code>); el segundo carga el historial sintético (serie <code>S-</code>); el tercero reinicia el contador y la cola de la demo. Las fichas de arriba deben quedar en verde: el QR apunta al dominio público y el abandono automático está encendido. <strong>Plan B</strong> si falla la red: use los turnos precargados con <code>--en-espera</code> y las capturas de <code>docs/evidencia/capturas/</code>.</p>
 </div>
 
 <div class="card-cabecera" style="margin-top:28px">
   <h2 style="margin:0">Recorrido</h2>
-  <span class="nota"><span id="avance-texto">0 de 24 pasos</span></span>
+  <span class="nota"><span id="avance-texto">0 de 25 pasos</span></span>
 </div>
 <div class="progreso" aria-hidden="true"><span id="avance-barra"></span></div>
 
@@ -163,8 +165,8 @@
     <div>
       <div class="rol">Operador · MongoDB + Redis</div>
       <h3>Finalizar la atención</h3>
-      <p>Pulse <em>Finalizar atención</em>. MongoDB registra el cierre y Redis libera la ventanilla.</p>
-      <div class="esperado"><strong>Debe verse:</strong> el mensaje con los segundos de atención, V-01 «Sin turno asignado» y <code>A-002</code> retirado de la pantalla de sala. Si pulsa el botón otra vez desde una pestaña vieja, el error es controlado.</div>
+      <p>Despliegue <em>Motivo y nota (opcional)</em>, elija un motivo, escriba una nota corta y pulse <em>Finalizar atención</em>. MongoDB registra el cierre y Redis libera la ventanilla.</p>
+      <div class="esperado"><strong>Debe verse:</strong> el mensaje con los segundos de atención, V-01 «Sin turno asignado» y <code>A-002</code> retirado de la pantalla de sala. Si pulsa el botón otra vez desde una pestaña vieja, el error es controlado y el cierre original no se sobrescribe. El motivo y la nota quedan en el campo <code>cierre</code> del turno (visible en la administración).</div>
     </div>
     <div class="paso-acciones">
       <a class="btn" href="{{ base }}/panel">Abrir Panel</a>
@@ -297,7 +299,7 @@
       <div class="esperado"><strong>Debe verse:</strong> los dos inválidos son rechazados por MongoDB con un mensaje de validación (prioridad fuera de las opciones y token que no es UUID v4); el válido se inserta y se puede editar y eliminar (bórrelo al terminar).</div>
     </div>
     <div class="paso-acciones">
-      <a class="btn" href="{{ base }}/?coleccion=turnos">Abrir CRUD turnos</a>
+      <a class="btn" href="{{ base }}/administracion?coleccion=turnos">Abrir CRUD turnos</a>
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>
@@ -364,6 +366,19 @@
       <div class="esperado"><strong>Debe verse:</strong> la prueba con todas sus verificaciones en «cumple» y resultado <em>CORRECTO</em>; y las medianas de rehidratar, reconciliar y abandonar con 50, 200 y 500 turnos (5 ejecuciones cada una, todas correctas). Usan datos propios (series R y M) y no tocan los turnos reales.</div>
     </div>
     <div class="paso-acciones">
+      <label class="marcar"><input type="checkbox"> Hecho</label>
+    </div>
+  </li>
+  <li class="paso" data-paso="25">
+    <div>
+      <div class="rol">Operación · Salud del sistema y cierre con nota (S4-M06, S4-M03)</div>
+      <h3>Comprobar <code>/salud</code> y el cierre con nota</h3>
+      <div class="terminal" data-copiar>python -m scripts.probar_salud --informe docs/evidencia/salud.md --url-publica https://grupo2.crnube.net/proyecto/qline</div>
+      <div class="terminal" data-copiar>python -m scripts.probar_cierre --informe docs/evidencia/cierre.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> en <code>/salud</code>, <code>estado: ok</code> con Redis y MongoDB en «ok» y sin ningún dato de infraestructura; en el primer informe, los cinco casos «OK» (servicios caídos dan 503 y sin credenciales Apache responde 401); en el segundo, los siete casos «OK» y la nota de que el servidor no valida <code>cierre</code> (lo valida la aplicación).</div>
+    </div>
+    <div class="paso-acciones">
+      <a class="btn" href="{{ base }}/salud">Abrir /salud</a>
       <label class="marcar"><input type="checkbox"> Hecho</label>
     </div>
   </li>

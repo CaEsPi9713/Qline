@@ -1,4 +1,4 @@
-"""La guía /demo cubre el recorrido de la demo del Seguimiento 3, de la emisión a la evidencia."""
+"""La guía /demo cubre el recorrido de la demo del Seguimiento 4, de la emisión a la evidencia."""
 import re
 import unittest
 from unittest import mock
@@ -23,10 +23,10 @@ class PruebasGuiaDemo(BaseDemo):
         super().setUp()
         self.html = self.pedir(PUBLIC_BASE_URL="https://grupo2.crnube.net", BASE_PATH="")
 
-    def test_tiene_los_24_pasos_numerados_sin_repetir(self):
+    def test_tiene_los_25_pasos_numerados_sin_repetir(self):
         numeros = re.findall(r'data-paso="(\d+)"', self.html)
-        self.assertEqual(numeros, [str(i) for i in range(1, 25)])
-        self.assertIn("0 de 24 pasos", self.html)
+        self.assertEqual(numeros, [str(i) for i in range(1, 26)])
+        self.assertIn("0 de 25 pasos", self.html)
 
     def test_esta_organizada_en_siete_bloques_en_orden(self):
         titulos = re.findall(r"<h2>(\d) · ", self.html)
@@ -58,6 +58,16 @@ class PruebasGuiaDemo(BaseDemo):
         informes = re.findall(r"--informe (docs/evidencia/[\w.]+\.md)", self.html)
         self.assertGreaterEqual(len(informes), 8)
         self.assertEqual(len(informes), len(set(informes)))
+
+    def test_incluye_la_preparacion_no_destructiva_y_el_plan_b(self):
+        self.assertIn("scripts.preparar_demo", self.html)
+        self.assertLess(self.html.index("scripts.preparar_demo"), self.html.index("init_mongo.py --recrear"))
+        self.assertIn("borra los turnos", self.html)
+        self.assertIn("Plan B", self.html)
+
+    def test_cubre_salud_y_el_cierre_con_nota(self):
+        for texto in ("/salud", "scripts.probar_salud", "scripts.probar_cierre", "Motivo y nota (opcional)"):
+            self.assertIn(texto, self.html, texto)
 
     def test_conserva_la_marca_de_cada_paso_en_su_propia_clave(self):
         self.assertIn("qline-demo-s3", self.html)

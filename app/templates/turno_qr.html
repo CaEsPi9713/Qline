@@ -20,7 +20,7 @@
   <div class="turno-cuerpo">
     <div class="estado-etiqueta">Su turno</div>
     <div class="estado-codigo" id="codigo">{{ turno.codigo }}</div>
-    <div class="fila" style="justify-content:center">
+    <div class="fila fila--centro">
       <span class="badge badge-{{ turno.estado }}" id="estado-badge">{{ "en atención" if turno.estado == "en_atencion" else turno.estado }}</span>
       <span class="badge badge-{{ turno.prioridad }}" id="prioridad-badge">{{ turno.prioridad }}</span>
     </div>
@@ -35,8 +35,8 @@
 
     <p class="estado-mensaje" id="mensaje">{% if turno.estado == "pendiente" %}Su turno está en espera.{% if turno.posicion is none %} Pronto sabremos su posición.{% endif %}{% elif turno.estado == "llamado" %}¡Es su turno! Diríjase a la ventanilla {{ turno.ventanilla or "indicada" }}.{% elif turno.estado == "en_atencion" %}Está siendo atendido{% if turno.ventanilla %} en la ventanilla {{ turno.ventanilla }}{% endif %}.{% elif turno.estado == "atendido" %}Su atención finalizó. Puede cerrar esta pestaña. ¡Gracias por su visita!{% elif turno.estado == "abandonado" %}Este turno se canceló porque no se presentó a tiempo. Puede solicitar uno nuevo.{% endif %}</p>
 
-    <div class="turno-instrucciones" id="instrucciones-espera" role="note" aria-label="Instrucciones de espera" style="margin-top: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid var(--c-borde, #e2e8f0); border-radius: 10px; font-size: 13px; color: var(--c-texto-suave, #475569); text-align: left; line-height: 1.4;">
-      <strong style="display: block; color: var(--c-texto, #0f172a); margin-bottom: 3px;">ℹ️ Instrucciones de espera:</strong>
+    <div class="turno-instrucciones" id="instrucciones-espera" role="note" aria-label="Instrucciones de espera">
+      <strong>ℹ️ Instrucciones de espera:</strong>
       Conserve esta página abierta en su navegador mientras espera su turno. La pantalla se actualiza automáticamente en tiempo real; no es necesario recargarla manualmente. Si cierra esta página, su turno sigue activo en el sistema.
     </div>
 
@@ -47,7 +47,7 @@
       {% if turno.ventanilla and turno.estado in ("llamado", "en_atencion") %}<dt>Ventanilla</dt><dd>{{ turno.ventanilla }}</dd>{% endif %}
       {% if turno.estado == "llamado" and turno.segundos_restantes is not none %}<dt>Tiempo para presentarse</dt><dd id="restante">{{ turno.segundos_restantes }} s</dd>{% endif %}
     </dl>
-    <p class="aviso" id="aviso"{% if not turno.aviso %} style="display:none"{% endif %}>{{ turno.aviso or "" }}</p>
+    <p class="aviso" id="aviso"{% if not turno.aviso %} hidden{% endif %}>{{ turno.aviso or "" }}</p>
   </div>
 </section>
 
@@ -192,7 +192,7 @@
     restanteDesde = Date.now();
     actualizarAnillo(restante);
     var aviso = $("aviso");
-    if (t.aviso) { aviso.textContent = t.aviso; aviso.style.display = ""; } else { aviso.style.display = "none"; }
+    if (t.aviso) { aviso.textContent = t.aviso; aviso.hidden = false; } else { aviso.hidden = true; }
     if (t.estado === "llamado") { if (cambio) avisarLlamado(); else document.title = "¡Es su turno! · QLine"; }
     else document.title = TITULO_BASE;
     if (cambio) { tarjeta.classList.remove("cambio"); void tarjeta.offsetWidth; tarjeta.classList.add("cambio"); }

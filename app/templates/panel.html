@@ -1,12 +1,25 @@
 {% extends "base.html" %}
 {% block titulo %}Panel de atención{% endblock %}
 {% block lead %}Turno actual de cada ventanilla. Para obtener un turno use <em>Llamar siguiente</em> en la <a href="{{ base }}/cola">cola activa</a>; aquí se inicia y se finaliza la atención.{% endblock %}
+{% macro campos_cierre(id) %}
+<details class="op-cierre">
+  <summary>Motivo y nota (opcional)</summary>
+  <label for="motivo-{{ id }}">Motivo</label>
+  <select name="motivo" id="motivo-{{ id }}">
+    <option value="">Sin motivo</option>
+    {% for clave, etiqueta in motivos_cierre.items() %}<option value="{{ clave }}">{{ etiqueta }}</option>{% endfor %}
+  </select>
+  <label for="nota-{{ id }}">Nota (hasta {{ nota_cierre_max }} caracteres)</label>
+  <input type="text" name="nota" id="nota-{{ id }}" maxlength="{{ nota_cierre_max }}" autocomplete="off">
+</details>
+{% endmacro %}
 {% block contenido %}
 {% if mensaje %}<div class="ok" role="status">{{ mensaje }}</div>{% endif %}
 {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 {% for a in avisos %}<div class="aviso">{{ a }}</div>{% endfor %}
 
-<div class="fila" style="margin-bottom:18px">
+<div class="op op-panel">
+<div class="fila op-barra">
   <a href="{{ base }}/panel" class="btn btn-secundario">Actualizar</a>
   <a href="{{ base }}/cola" class="btn btn-secundario">Ir a la cola activa</a>
 </div>
@@ -22,7 +35,7 @@
     <div class="ventanilla-cuerpo">
       <div class="turno-grande">{{ v.turno.codigo }}</div>
       <span class="badge badge-{{ v.turno.prioridad }}">{{ v.turno.prioridad }}</span>
-      {% if v.turno.segundos_restantes is not none %}<p class="nota" style="margin:12px 0 0">Si no se presenta, se marcará como abandonado en <strong>{{ v.turno.segundos_restantes }} s</strong>.</p>{% endif %}
+      {% if v.turno.segundos_restantes is not none %}<p class="nota op-nota">Si no se presenta, se marcará como abandonado en <strong>{{ v.turno.segundos_restantes }} s</strong>.</p>{% endif %}
     </div>
     <div class="ventanilla-pie">
       {% if v.turno.puede_iniciar %}
@@ -35,6 +48,7 @@
       <form method="post" action="{{ base }}/panel/finalizar">
         <input type="hidden" name="codigo" value="{{ v.turno.codigo }}">
         <input type="hidden" name="ventanilla" value="{{ v.id }}">
+        {{ campos_cierre(v.turno.codigo) }}
         <button type="submit" class="btn-ok btn-bloque btn-grande">Finalizar atención</button>
       </form>
       {% endif %}
@@ -61,6 +75,7 @@
         <form method="post" action="{{ base }}/panel/finalizar">
           <input type="hidden" name="codigo" value="{{ t.codigo }}">
           <input type="hidden" name="ventanilla" value="{{ v.id }}">
+          {{ campos_cierre(t.codigo) }}
           <button type="submit" class="btn-ok">Finalizar atención</button>
         </form>
         {% endif %}
@@ -70,5 +85,6 @@
     {% endif %}
   </section>
 {% endfor %}
+</div>
 </div>
 {% endblock %}
