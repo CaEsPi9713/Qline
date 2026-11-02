@@ -526,5 +526,46 @@ class TestVentanillasDinamicas(unittest.TestCase):
         self.assertIn("ok=ventanilla_desactivada", resp_web_desact.headers.get("location", ""))
 
 
+class TestCargarDatosRelease(unittest.TestCase):
+    def test_dataset_release_valido_contra_json_schema(self):
+        """Verifica que todos los documentos generados cumplan estrictamente con el JSON Schema oficial."""
+        from app.turnos_schema import validar_documento_turno
+        from scripts.cargar_datos_release import generar_dataset_release
+
+        docs = generar_dataset_release(cantidad=30)
+        self.assertEqual(len(docs), 30)
+        for doc in docs:
+            # Debe validar sin excepciones
+            validar_documento_turno(doc)
+
+    def test_cargar_datos_release_idempotencia(self):
+        """Verifica que la carga sea reproducible y no genere duplicados al ejecutarse múltiples veces."""
+        try:
+            import mongomock
+            db = mongomock.MongoClient().db
+        except ImportError:
+            self.skipTest("mongomock no disponible")
+
+        from scripts.cargar_datos_release import cargar_datos_release
+
+        res1 = cargar_datos_release(db, cantidad=25, limpiar=False)
+        self.assertTrue(res1["ok"])
+        self.assertEqual(res1["insertados"], 25)
+        self.assertEqual(res1["total_en_coleccion"], 25)
+
+        # Segunda ejecución: debe actualizar y mantener total en 25
+        res2 = cargar_datos_release(db, cantidad=25, limpiar=False)
+        self.assertTrue(res2["ok"])
+        self.assertEqual(res2["insertados"], 0)
+        self.assertEqual(res2["actualizados"], 25)
+        self.assertEqual(res2["total_en_coleccion"], 25)
+
+    def test_cargar_datos_release_cli_simulado(self):
+        """Verifica ejecución de la CLI con salida JSON."""
+        from scripts.cargar_datos_release import main
+        code = main(["--simulado", "--turnos", "15", "--json"])
+        self.assertEqual(code, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
