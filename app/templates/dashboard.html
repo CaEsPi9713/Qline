@@ -27,8 +27,8 @@
       {% endfor %}
     </div>
 
-    <button type="button" id="btn-toggle-refresh" class="btn-autorefresh activo" title="Activar/desactivar auto-actualización cada 15 segundos">
-      <span id="icono-refresh">&#x21bb;</span> <span id="texto-refresh">Auto 15s</span>
+    <button type="button" id="btn-toggle-refresh" class="btn-autorefresh activo" title="Activar o pausar actualización automática cada 15 segundos">
+      <span id="texto-refresh">Auto 15s</span>
     </button>
 
     <a href="{{ base }}/api/dashboard/descargar?sla_espera={{ metricas.sla.objetivo_max_espera_seg }}" class="btn" title="Descargar informe analítico de auditoría en JSON">Descargar JSON</a>
@@ -36,22 +36,20 @@
   </div>
 </div>
 
-<!-- Panel de Diagnóstico Operativo Inteligente para el Supervisor -->
+<!-- Panel de Diagnóstico Operativo para el Supervisor -->
 {% if metricas.diagnostico %}
 <div class="panel-diagnostico">
   <div class="panel-diagnostico-cab">
-    <h2>
-      <span>&#x1F4CA;</span> Diagnóstico Operativo en Tiempo Real
-    </h2>
-    <span class="nota">Evaluación automática del servicio institutional <code>{{ metricas.servicio }}</code></span>
+    <h2>Diagnóstico operativo en tiempo real</h2>
+    <span class="nota">Evaluación analítica del servicio institutional <code>{{ metricas.servicio }}</code></span>
   </div>
   <div class="diagnostico-grid">
     <div class="diag-tarjeta">
-      <h4><span>&#x1F6A6;</span> Estado de Cola y Sala</h4>
+      <h4>Estado de cola y sala</h4>
       {% if metricas.diagnostico.alertas %}
         {% for al in metricas.diagnostico.alertas %}
         <div class="diag-item">
-          <span class="diag-icono">&#x2022;</span>
+          <span class="diag-icono">&bull;</span>
           <span>{{ al }}</span>
         </div>
         {% endfor %}
@@ -61,11 +59,11 @@
     </div>
 
     <div class="diag-tarjeta">
-      <h4><span>&#x1F4A1;</span> Recomendación de Gestión</h4>
+      <h4>Recomendación de gestión</h4>
       {% if metricas.diagnostico.recomendaciones %}
         {% for rec in metricas.diagnostico.recomendaciones %}
         <div class="diag-item">
-          <span class="diag-icono">&#x2714;</span>
+          <span class="diag-icono">&bull;</span>
           <span>{{ rec }}</span>
         </div>
         {% endfor %}
@@ -75,18 +73,18 @@
     </div>
 
     <div class="diag-tarjeta">
-      <h4><span>&#x1F3AF;</span> Hitos Operacionales</h4>
+      <h4>Hitos operacionales</h4>
       <div class="diag-lista">
         <div class="diag-item">
-          <span class="diag-icono">&#x1F552;</span>
+          <span class="diag-icono">&bull;</span>
           <span><strong>Hora pico:</strong> {% if metricas.diagnostico.hora_pico and metricas.diagnostico.hora_pico.total > 0 %}{{ metricas.diagnostico.hora_pico.hora }} ({{ metricas.diagnostico.hora_pico.total }} turnos){% else %}Sin pico registrado{% endif %}</span>
         </div>
         <div class="diag-item">
-          <span class="diag-icono">&#x1F3C6;</span>
+          <span class="diag-icono">&bull;</span>
           <span><strong>Ventanilla líder:</strong> {% if metricas.diagnostico.ventanilla_lider and metricas.diagnostico.ventanilla_lider.total > 0 %}<code>{{ metricas.diagnostico.ventanilla_lider.ventanilla }}</code> ({{ metricas.diagnostico.ventanilla_lider.total }} atendidos){% else %}En balance{% endif %}</span>
         </div>
         <div class="diag-item">
-          <span class="diag-icono">&#x26A1;</span>
+          <span class="diag-icono">&bull;</span>
           <span><strong>Respuesta en &le; 5 min:</strong> {{ metricas.graficos.cumplimiento_5min_pct }}% de turnos</span>
         </div>
       </div>
@@ -101,7 +99,6 @@
   <div class="card-metrica kpi-esperando">
     <div class="card-metrica-cab">
       <div class="titulo">Turnos esperando</div>
-      <div class="card-metrica-icono">&#x23F3;</div>
     </div>
     <div class="valor">{{ metricas.totales.esperando }}</div>
     <div class="subtitulo">Clientes en cola activa</div>
@@ -121,7 +118,6 @@
   <div class="card-metrica kpi-atendidos">
     <div class="card-metrica-cab">
       <div class="titulo">Turnos atendidos</div>
-      <div class="card-metrica-icono">&#x2705;</div>
     </div>
     <div class="valor">{{ metricas.totales.atendidos }}</div>
     <div class="subtitulo">Atenciones completadas</div>
@@ -135,16 +131,15 @@
   <div class="card-metrica kpi-prom-espera">
     <div class="card-metrica-cab">
       <div class="titulo">Promedio de espera</div>
-      <div class="card-metrica-icono">&#x23F1;</div>
     </div>
     <div class="valor">{{ metricas.promedios.espera_seg }} <small>s</small></div>
     <div class="subtitulo">Hasta llamado ({{ metricas.kpis_avanzados.promedio_espera_formateado if metricas.kpis_avanzados else '0s' }})</div>
     <div class="card-metrica-pie">
       <span>Objetivo SLA: &le; {{ metricas.sla.objetivo_max_espera_seg }}s</span>
       {% if metricas.promedios.espera_seg <= metricas.sla.objetivo_max_espera_seg %}
-      <span class="kpi-tag kpi-tag-ok">&#x2713; En norma</span>
+      <span class="kpi-tag kpi-tag-ok">En norma</span>
       {% else %}
-      <span class="kpi-tag kpi-tag-alerta">&#x26A0; Excede</span>
+      <span class="kpi-tag kpi-tag-alerta">Excede</span>
       {% endif %}
     </div>
   </div>
@@ -153,7 +148,6 @@
   <div class="card-metrica kpi-prom-atencion">
     <div class="card-metrica-cab">
       <div class="titulo">Promedio de atención</div>
-      <div class="card-metrica-icono">&#x1F550;</div>
     </div>
     <div class="valor">{{ metricas.promedios.atencion_seg }} <small>s</small></div>
     <div class="subtitulo">Duración servicio ({{ metricas.kpis_avanzados.promedio_atencion_formateado if metricas.kpis_avanzados else '0s' }})</div>
@@ -167,7 +161,6 @@
   <div class="card-metrica kpi-ventanillas">
     <div class="card-metrica-cab">
       <div class="titulo">Ventanillas activas</div>
-      <div class="card-metrica-icono">&#x1FA9F;</div>
     </div>
     <div class="valor">{{ metricas.ventanillas.activas }} <small>/ {{ metricas.ventanillas.total_configuradas }}</small></div>
     <div class="subtitulo">Módulos en atención activa</div>
@@ -181,7 +174,6 @@
   <div class="card-metrica {% if metricas.sla.estado == 'CUMPLIDO' %}kpi-sla-cumplido{% else %}kpi-sla-incumplido{% endif %}">
     <div class="card-metrica-cab">
       <div class="titulo">Cumplimiento SLA</div>
-      <div class="card-metrica-icono">&#x1F3AF;</div>
     </div>
     <div class="gauge-contenedor">
       <!-- SVG Gauge Circular -->
@@ -206,7 +198,6 @@
   <div class="card-metrica kpi-abandono">
     <div class="card-metrica-cab">
       <div class="titulo">Tasa de abandono</div>
-      <div class="card-metrica-icono">&#x26A0;&#xFE0F;</div>
     </div>
     <div class="valor">{{ metricas.kpis_avanzados.tasa_abandono if metricas.kpis_avanzados else 0 }} <small>%</small></div>
     <div class="subtitulo">{{ metricas.totales.abandonados }} turnos cancelados en sala</div>
@@ -226,7 +217,6 @@
   <div class="card-metrica kpi-max-espera">
     <div class="card-metrica-cab">
       <div class="titulo">Espera máxima</div>
-      <div class="card-metrica-icono">&#x1F4C8;</div>
     </div>
     <div class="valor">{{ metricas.kpis_avanzados.max_espera_seg if metricas.kpis_avanzados else 0 }} <small>s</small></div>
     <div class="subtitulo">Pico: {{ metricas.kpis_avanzados.max_espera_formateada if metricas.kpis_avanzados else '0s' }}</div>
@@ -247,7 +237,7 @@
         <p class="sub" style="margin:4px 0 0">Distribución de turnos registrados por hora a lo largo de la jornada.</p>
       </div>
       {% if metricas.diagnostico and metricas.diagnostico.hora_pico and metricas.diagnostico.hora_pico.total > 0 %}
-      <span class="kpi-tag kpi-tag-aviso" title="Franja horaria con mayor demanda">&#x1F525; Pico: {{ metricas.diagnostico.hora_pico.hora }}</span>
+      <span class="kpi-tag kpi-tag-aviso" title="Franja horaria con mayor demanda">Pico: {{ metricas.diagnostico.hora_pico.hora }}</span>
       {% endif %}
     </div>
 
@@ -309,29 +299,28 @@
     <!-- Tarjetas de bandas comparativas -->
     <div class="bandas-sla-grid">
       <div class="card-banda b-rapido">
-        <div class="card-banda-tit">&#x26A1; Rápido (&le; 2m)</div>
+        <div class="card-banda-tit">Rápido (&le; 2m)</div>
         <div class="card-banda-val">{{ de.hasta_2min }}</div>
         <div class="card-banda-pct">{% if total_esp > 0 %}{{ (de.hasta_2min / total_esp * 100)|round(1) }}%{% else %}0%{% endif %} del total</div>
       </div>
       <div class="card-banda b-moderado">
-        <div class="card-banda-tit">&#x1F44D; Aceptable (2-5m)</div>
+        <div class="card-banda-tit">Aceptable (2-5m)</div>
         <div class="card-banda-val">{{ de.de_2_a_5min }}</div>
         <div class="card-banda-pct">{% if total_esp > 0 %}{{ (de.de_2_a_5min / total_esp * 100)|round(1) }}%{% else %}0%{% endif %} del total</div>
       </div>
       <div class="card-banda b-extendido">
-        <div class="card-banda-tit">&#x26A0; Extendido (5-10m)</div>
+        <div class="card-banda-tit">Extendido (5-10m)</div>
         <div class="card-banda-val">{{ de.de_5_a_10min }}</div>
         <div class="card-banda-pct">{% if total_esp > 0 %}{{ (de.de_5_a_10min / total_esp * 100)|round(1) }}%{% else %}0%{% endif %} del total</div>
       </div>
       <div class="card-banda b-critico">
-        <div class="card-banda-tit">&#x1F6A8; Crítico (&gt; 10m)</div>
+        <div class="card-banda-tit">Crítico (&gt; 10m)</div>
         <div class="card-banda-val">{{ de.mas_de_10min }}</div>
         <div class="card-banda-pct">{% if total_esp > 0 %}{{ (de.mas_de_10min / total_esp * 100)|round(1) }}%{% else %}0%{% endif %} del total</div>
       </div>
     </div>
 
     <div class="callout-sla">
-      <span style="font-size: 16px;">&#x1F4CA;</span>
       <span><strong>{{ metricas.graficos.cumplimiento_5min_pct }}%</strong> de los clientes son llamados en menos de 5 minutos, cumpliendo el estándar de calidad de servicio.</span>
     </div>
   </div>
@@ -345,7 +334,7 @@
       <p class="sub" style="margin:4px 0 0">Volumen de turnos completados y tiempo promedio de atención por módulo de servicio.</p>
     </div>
     {% if metricas.diagnostico and metricas.diagnostico.ventanilla_lider and metricas.diagnostico.ventanilla_lider.total > 0 %}
-    <span class="lider-tag">&#x2B50; Módulo líder: {{ metricas.diagnostico.ventanilla_lider.ventanilla }}</span>
+    <span class="lider-tag">Módulo líder: {{ metricas.diagnostico.ventanilla_lider.ventanilla }}</span>
     {% endif %}
   </div>
 
@@ -356,12 +345,12 @@
         <div class="ventanilla-tit-h">
           <span class="codigo">{{ rv.ventanilla }}</span>
           {% if rv.activa_ahora %}
-          <span class="badge badge-llamado">&#x25CF; En atención</span>
+          <span class="badge badge-llamado">En atención</span>
           {% else %}
-          <span class="badge badge-normal">&#x25CB; Libre</span>
+          <span class="badge badge-normal">Libre</span>
           {% endif %}
           {% if rv.es_lider %}
-          <span class="lider-tag">&#x1F3C6; Mayor rendimiento</span>
+          <span class="lider-tag">Mayor rendimiento</span>
           {% endif %}
         </div>
         <div class="metrica-barra-h">
@@ -426,9 +415,9 @@
             <td class="num"><strong>{{ v.turnos_en_proceso }}</strong></td>
             <td>
               {% if v.ocupada %}
-              <span style="font-size: 11px; color: #047857; font-weight: 600;">&#x25CF; En servicio</span>
+              <span style="font-size: 11px; color: #047857; font-weight: 600;">En servicio</span>
               {% else %}
-              <span style="font-size: 11px; color: var(--c-texto-tenue);">&#x25CB; En espera de turno</span>
+              <span style="font-size: 11px; color: var(--c-texto-tenue);">En espera de turno</span>
               {% endif %}
             </td>
           </tr>
