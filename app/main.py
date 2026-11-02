@@ -36,7 +36,8 @@ from app.emitir import EmisionError, emitir_turno
 from app.consultar import ConsultaError, consultar_turno
 from app.llamado import LlamadoError, llamar_siguiente_turno
 from app.constantes import ESTADOS, PRIORIDADES, SERVICIO_ID, SERVICIO_NOMBRE, VENTANILLAS
-from app.redis_client import verificar_conexion as verificar_redis
+from app.redis_client import get_redis, verificar_conexion as verificar_redis
+from app import salud as salud_app
 from app.turnos_schema import TurnoValidationError, validar_documento_turno
 from app.historial import exportar_historial_turnos, obtener_historial_turnos
 from app.dashboard import calcular_metricas_dashboard, exportar_metricas_dashboard
@@ -289,8 +290,16 @@ def guia_demo(request: Request):
 
 @app.get("/redis/estado")
 def redis_estado():
-    """Estado de la conexión a Redis (TT-006)."""
-    return verificar_redis()
+    """Estado de la conexión a Redis (TT-006). Solo «ok»: host, puerto, versión y errores quedan en el servidor."""
+    return {"ok": bool(verificar_redis().get("ok"))}
+
+
+@app.get("/salud")
+def salud(request: Request):
+    """Estado de la aplicación, Redis y MongoDB, sin detalles de infraestructura (S4-M06)."""
+    cuerpo, status = salud_app.comprobar(
+        lambda: get_db(), lambda: get_redis(), getattr(request.app.state, "barrido", None))
+    return JSONResponse(cuerpo, status_code=status)
 
 
 @app.get("/api/cola")

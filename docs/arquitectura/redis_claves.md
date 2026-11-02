@@ -100,6 +100,20 @@ Las pruebas de TT-017, TT-018 y TT-019 usan claves aparte para no tocar la opera
 
 La prueba de recuperación (`R-*`) sí usa la cola real, pero solo con códigos `R-*`.
 
+Las pruebas de la cola, de rendimiento y de concurrencia usan la familia `grupo2:qline:test:*`, que cada script elimina al terminar:
+
+| Clave | Script | Uso |
+|---|---|---|
+| `grupo2:qline:test:contador`, `grupo2:qline:test:cola`, `grupo2:qline:test:ventanilla:{id}:actual` | `scripts/probar_cola.py` | Contador, cola y ventanillas de la prueba de la cola |
+| `grupo2:qline:test:bench:*` (`contador`, `cola_enc`, `cola_sig`…) | `scripts/medir_rendimiento.py` | Mediciones de Redis contra MongoDB |
+| `grupo2:qline:test:conc:cola`, `...:conc:actual:{consumidor}` | `scripts/prueba_concurrencia.py` | Consumidores simultáneos sobre una cola aislada |
+
+El escenario C de `prueba_concurrencia.py` (opcional, con `--http`) sí usa la cola real y exige que esté vacía y sin ventanillas ocupadas; solo toca los turnos que él mismo emite.
+
+## Identificador de ventanilla
+
+`{id}` en `ventanilla:{id}:actual` es hoy `V-01`, `V-02` o `V-03` (`VENTANILLAS` en `app/constantes.py`). La forma de la clave no depende del número de ventanillas; lo que cambiará con las ventanillas dinámicas es quién valida que el identificador exista (catálogo en MongoDB, pendiente de G0).
+
 ## Reglas de consistencia (sección 17 del plan)
 
 - Un turno `atendido` o `abandonado` no puede estar en la cola ni como actual de una ventanilla.
