@@ -1022,6 +1022,9 @@ def vista_dashboard(request: Request, sla_espera: int = 300):
             "promedios": {"espera_seg": 0.0, "atencion_seg": 0.0},
             "ventanillas": {"total_configuradas": len(VENTANILLAS), "activas": 0, "detalle": [{"ventanilla": v, "ocupada": False, "turnos_en_proceso": 0} for v in VENTANILLAS]},
             "sla": {"objetivo_max_espera_seg": sla_espera, "total_evaluados": 0, "cumplen": 0, "incumplen": 0, "porcentaje_cumplimiento": 100.0, "tasa_minima_requerida": 80.0, "estado": "CUMPLIDO"},
+            "graficos": {"afluencia_horaria": [], "rendimiento_ventanillas": [], "distribucion_espera": {"hasta_2min": 0, "de_2_a_5min": 0, "de_5_a_10min": 0, "mas_de_10min": 0}, "porcentajes_espera": {}, "cumplimiento_5min_pct": 100.0},
+            "kpis_avanzados": {"tasa_abandono": 0.0, "tasa_atencion": 0.0, "turnos_en_proceso": 0, "ocupacion_ventanillas_pct": 0.0, "max_espera_seg": 0.0, "min_espera_seg": 0.0, "max_espera_formateada": "0s", "min_espera_formateada": "0s", "promedio_espera_formateado": "0s", "promedio_atencion_formateado": "0s"},
+            "diagnostico": {"semaforo": "verde", "estado_operativo": "FLUIDO", "alertas": [], "recomendaciones": [], "hora_pico": None, "ventanilla_lider": None, "cumplimiento_5min_pct": 100.0},
         }
         return templates.TemplateResponse(
             request,

@@ -380,6 +380,20 @@ class TestDashboardGraficos(unittest.TestCase):
         self.assertEqual(rend["V-01"]["total_atendidos"], 1)
         self.assertEqual(rend["V-02"]["total_atendidos"], 1)
 
+        # 4. KPIs avanzados y diagnóstico operacional (S4 mejora analítica)
+        self.assertIn("kpis_avanzados", res)
+        kpis = res["kpis_avanzados"]
+        self.assertIn("tasa_abandono", kpis)
+        self.assertIn("tasa_atencion", kpis)
+        self.assertIn("max_espera_formateada", kpis)
+        self.assertIn("promedio_espera_formateado", kpis)
+
+        self.assertIn("diagnostico", res)
+        diag = res["diagnostico"]
+        self.assertIn(diag["semaforo"], ("verde", "amarillo", "rojo"))
+        self.assertIn("alertas", diag)
+        self.assertIn("recomendaciones", diag)
+
     @patch("app.main.get_db")
     def test_vista_dashboard_html_con_graficos(self, mock_get_db):
         """Verifica que /dashboard renderiza los bloques gráficos de afluencia, espera y ventanillas."""
@@ -393,6 +407,10 @@ class TestDashboardGraficos(unittest.TestCase):
         self.assertIn("grafico-barras-v", html)
         self.assertIn("barra-segmentada", html)
         self.assertIn("grafico-barras-h", html)
+        self.assertIn("dashboard-toolbar", html)
+        self.assertIn("panel-diagnostico", html)
+        self.assertIn("gauge-svg", html)
+        self.assertIn("bandas-sla-grid", html)
 
 
 class TestReporteDiarioScript(unittest.TestCase):
