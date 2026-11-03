@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}Asignación de ventanillas{% endblock %}
+{% block lead %}Asigne a cada operador la ventanilla en la que trabaja. El operador ya no elige: llama y atiende desde la suya. Una ventanilla tiene un solo operador y no se cambia mientras tenga un turno en curso.{% endblock %}
+
+{% block contenido %}
+{% if mensaje %}<div class="ok" role="status">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <div class="card-cabecera">
+    <div>
+      <h2>Operadores: {{ operadores|length }}</h2>
+      <p class="sub" style="margin:4px 0 0">Solo aparecen los operadores con la cuenta activa.</p>
+    </div>
+    <a href="{{ base }}/supervisor/asignaciones" class="btn btn-secundario">Actualizar</a>
+  </div>
+
+  {% if operadores %}
+  <div class="tabla-wrap">
+    <table>
+      <thead><tr><th>Operador</th><th>Ventanilla</th><th>Turno en curso</th><th>Acciones</th></tr></thead>
+      <tbody>
+        {% for o in operadores %}
+        <tr>
+          <td class="codigo">{{ o.usuario }}</td>
+          <td>{% if o.ventanilla %}<span class="badge badge-atendido">{{ o.ventanilla }}</span>{% else %}<span class="badge badge-pendiente">Sin ventanilla</span>{% endif %}</td>
+          <td>{% if o.turno %}<span class="badge badge-llamado">{{ o.turno }}</span>{% else %}<span class="texto-tenue">&mdash;</span>{% endif %}</td>
+          <td>
+            <div class="fila" style="gap:6px">
+              <form method="post" action="{{ base }}/supervisor/asignaciones/asignar" class="fila" style="gap:6px">
+                <input type="hidden" name="operador" value="{{ o.usuario }}">
+                <select name="ventanilla" aria-label="Ventanilla de {{ o.usuario }}"{% if o.turno %} disabled{% endif %}>
+                  {%- if not o.ventanilla %}<option value="" selected disabled>Elija…</option>{% endif -%}
+                  {%- for v in o.libres %}<option value="{{ v }}"{% if v == o.ventanilla %} selected{% endif %}>{{ v }}</option>{% endfor -%}
+                </select>
+                <button type="submit" class="btn-ok btn-sm"{% if o.turno %} disabled{% endif %}>{{ 'Cambiar' if o.ventanilla else 'Asignar' }}</button>
+              </form>
+              {% if o.ventanilla %}
+              <form method="post" action="{{ base }}/supervisor/asignaciones/quitar" style="display:inline">
+                <input type="hidden" name="operador" value="{{ o.usuario }}">
+                <button type="submit" class="btn-secundario btn-sm"{% if o.turno %} disabled{% endif %}>Quitar</button>
+              </form>
+              {% endif %}
+            </div>
+            {% if o.turno %}<p class="nota op-nota">Finalice el turno {{ o.turno }} en el panel para cambiar esta asignación.</p>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="texto-suave">No hay operadores activos. {% if es_admin %}Habilítelos en <a href="{{ base }}/admin/usuarios">Usuarios y acceso</a>.{% else %}El administrador los habilita en «Usuarios y acceso».{% endif %}</p>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-top: 20px;">
+  <div class="card-cabecera">
+    <div>
+      <h2>Ventanillas activas: {{ ventanillas|length }}</h2>
+      <p class="sub" style="margin:4px 0 0">Las ventanillas se dan de alta y de baja en Administración.</p>
+    </div>
+  </div>
+  <div class="tabla-wrap">
+    <table>
+      <thead><tr><th>Ventanilla</th><th>Operador asignado</th><th>Turno en curso</th></tr></thead>
+      <tbody>
+        {% for v in ventanillas %}
+        <tr>
+          <td class="codigo">{{ v.codigo }}</td>
+          <td>{% if v.operador %}<strong>{{ v.operador }}</strong>{% else %}<span class="badge badge-pendiente">Libre</span>{% endif %}</td>
+          <td>{% if v.turno %}<span class="badge badge-{{ v.turno[1] }}">{{ v.turno[0] }} · {{ v.turno[1]|replace('_', ' ') }}</span>{% else %}<span class="texto-tenue">&mdash;</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

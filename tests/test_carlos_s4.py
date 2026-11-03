@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from unittest.mock import MagicMock, patch
 
 from starlette.testclient import TestClient
@@ -213,7 +214,12 @@ class TestHistorialMongomockIntegracion(unittest.TestCase):
 
 class TestHistorialEndpointsFastAPI(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(app)
+        import mongomock
+        self.db_acceso = mongomock.MongoClient()["acceso"]       # solo guarda la sesión de prueba
+        parche = patch("app.main.get_db", return_value=self.db_acceso)
+        parche.start()
+        self.addCleanup(parche.stop)
+        self.client = ClienteConSesion(app, rol=None).iniciar_sesion_en(self.db_acceso)
 
     @patch("app.main.obtener_historial_turnos")
     def test_api_historial_parametros_fechas(self, mock_obtener):
@@ -302,12 +308,12 @@ class TestHistorialEndpointsFastAPI(unittest.TestCase):
 
 class TestDashboardGraficos(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(app)
         try:
             import mongomock
             self.db = mongomock.MongoClient().db
         except ImportError:
             self.skipTest("mongomock no disponible")
+        self.client = ClienteConSesion(app, rol=None).iniciar_sesion_en(self.db)
 
         # Cargar datos de prueba con turnos en distintos estados, horas y ventanillas
         from app.dashboard import COLECCION_TURNOS, calcular_metricas_dashboard
@@ -449,12 +455,12 @@ class TestReporteDiarioScript(unittest.TestCase):
 
 class TestVentanillasDinamicas(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(app)
         try:
             import mongomock
             self.db = mongomock.MongoClient().db
         except ImportError:
             self.skipTest("mongomock no disponible")
+        self.client = ClienteConSesion(app, rol=None).iniciar_sesion_en(self.db)
 
     def test_validar_codigo_ventanilla(self):
         """Valida que los códigos cumplan el formato 'V-XX' y rechace formatos inválidos."""

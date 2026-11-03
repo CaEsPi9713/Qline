@@ -1251,3 +1251,65 @@ body.publico { background: var(--c-fondo); }
 .progreso > span { background: var(--viv-verde); }
 .chip.ok-chip::before { background: var(--viv-verde); }
 .chip.mal-chip::before { background: var(--viv-coral); }
+
+/* ---------- Sesión del personal (usuario y cierre de sesión) ----------------- */
+.sesion { display: flex; align-items: center; gap: 10px; padding-left: 18px; border-left: 1px solid rgba(255,255,255,.12); }
+.sesion form { margin: 0; }
+.sesion-usuario { font-size: 13px; font-weight: 600; color: #e2e8f0; white-space: nowrap; }
+.sesion-salir { background: transparent; color: #e2e8f0; border: 1px solid rgba(255,255,255,.4); border-radius: 7px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.sesion-salir:hover { background: var(--c-nav-2); color: #fff; border-color: #fff; }
+/* Con sesión: la marca y el usuario arriba, y el menú completo en su propia fila. */
+.app-header-inner .brand { order: 1; }
+.app-header-inner .sesion { order: 2; margin-left: auto; padding-left: 0; border-left: none; }
+.app-header-inner .nav { order: 3; width: 100%; margin-left: 0; border-top: 1px solid rgba(255,255,255,.1); }
+.app-header-inner .nav .nav-grupo:first-child { padding-left: 0; }
+
+/* ---------- Vista de trabajo del operador (Fase 5) -------------------------- */
+.oper-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 16px; padding: 10px 16px; background: #fff; border: 1px solid var(--c-borde); border-radius: var(--radio); }
+.oper-ventanilla { font-size: 18px; }
+.oper-ventanilla strong { color: var(--viv-teal); font-family: var(--mono); font-size: 22px; }
+.oper-usuario { color: var(--c-texto-suave); font-weight: 600; }
+.oper-cambio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.oper-cambio label { font-size: 13px; color: var(--c-texto-suave); }
+.oper-conexion { margin-left: auto; font-size: 13px; font-weight: 700; padding: 3px 12px; border-radius: 999px; background: #EEF3F7; color: var(--c-texto-suave); }
+.oper-conexion::before { content: "\25CF"; margin-right: 6px; }
+.oper-conexion[data-estado="vivo"] { background: var(--viv-verde-suave); color: var(--viv-verde); }
+.oper-conexion[data-estado="reconectando"], .oper-conexion[data-estado="sin-js"] { background: var(--viv-ambar-suave); color: var(--viv-ambar); }
+.oper-sonido { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--c-texto-suave); }
+.oper-sonido[hidden] { display: none; }
+.oper-alertas:empty { display: none; }
+.oper-alertas { margin-bottom: 14px; padding: 12px 16px; border-left: 6px solid var(--viv-coral); border-radius: 10px; background: var(--viv-coral-suave); color: var(--viv-coral); font-weight: 700; }
+.oper-pref { margin-bottom: 14px; padding: 12px 16px; border-left: 6px solid var(--viv-ambar); border-radius: 10px; background: var(--viv-ambar-suave); color: var(--viv-ambar); font-weight: 700; }
+.oper-pref[hidden] { display: none; }
+.oper-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .oper-grid { grid-template-columns: 1fr; } }
+.oper-actual { text-align: center; }
+.oper-vacio { margin: 8px 0 18px; font-size: 20px; font-weight: 600; color: var(--c-texto-suave); }
+.oper-codigo { margin: 4px 0 10px; font-family: var(--mono); font-size: 76px; font-weight: 800; line-height: 1.05; letter-spacing: 2px; }
+.oper-etiquetas { display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; }
+.oper-cuenta { margin: 8px 0 18px; font-size: 17px; }
+.oper-cuenta strong { font-family: var(--mono); font-size: 22px; }
+.oper-turno .op-cierre { text-align: left; margin-top: 4px; }
+.oper-actual form { margin: 0; }
+.oper-boton { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 72px; border: 0; border-radius: 14px; color: #fff; font-size: 24px; font-weight: 800; cursor: pointer; }
+.oper-boton--llamar { background: var(--viv-teal); }
+.oper-boton--iniciar { background: var(--viv-azul); }
+.oper-boton--finalizar { background: var(--viv-verde); margin-top: 14px; }
+.oper-boton:hover:not([disabled]) { filter: brightness(1.12); }
+.oper-boton:focus-visible { outline: 4px solid var(--viv-ambar); outline-offset: 3px; }
+.oper-boton[disabled] { opacity: .5; cursor: not-allowed; }
+.oper-boton kbd { padding: 1px 9px; border: 1px solid rgba(255,255,255,.75); border-radius: 6px; background: rgba(255,255,255,.22); font-family: var(--mono); font-size: 14px; font-weight: 700; }
+.oper-numeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.oper-numeros div { padding: 10px 14px; border-radius: 10px; background: var(--viv-teal-suave); }
+.oper-numeros dt { font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--viv-teal); }
+.oper-numeros dd { margin: 0; font-family: var(--mono); font-size: 26px; font-weight: 800; color: var(--viv-teal); }
+.oper-lista { display: grid; gap: 8px; max-height: 420px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.oper-item { display: grid; grid-template-columns: 34px 1fr auto 64px; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--c-borde); border-left: 5px solid var(--c-borde-fuerte); border-radius: 10px; background: #fff; }
+.oper-item--preferencial { border-left-color: var(--viv-ambar); }
+.oper-pos { font-weight: 800; color: var(--c-texto-suave); }
+.oper-cod { font-family: var(--mono); font-size: 18px; font-weight: 800; }
+.oper-espera { font-family: var(--mono); text-align: right; color: var(--c-texto-suave); }
+.oper-atajos { margin-top: 16px; font-size: 14px; color: var(--c-texto-suave); }
+.oper-atajos kbd { padding: 1px 9px; border: 1px solid var(--c-borde-fuerte); border-radius: 6px; background: #fff; color: var(--c-texto); font-family: var(--mono); font-weight: 700; }
+@media (max-width: 520px) { .oper-codigo { font-size: 56px; } .oper-boton { font-size: 20px; } }
+#aviso-vista-trabajo .fila { margin-top: 8px; }

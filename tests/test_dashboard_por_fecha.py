@@ -1,6 +1,7 @@
 """P02 · Desglose por fecha del dashboard: días en hora local, indicadores por día, rango de fechas y avisos."""
 import json
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
@@ -120,7 +121,7 @@ class PruebasDelDesglose(BaseRedisMongo):
 class PruebasEnElDashboard(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
         self.db["turnos"].insert_many([turno("A-001", utc(10, 15)), turno("A-002", utc(11, 15), "abandonado"),
                                        turno("A-003", utc(12, 15))])
 

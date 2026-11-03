@@ -5,6 +5,12 @@
 {% if mensaje %}<div class="ok" role="status">{{ mensaje }}</div>{% endif %}
 {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 
+<div class="mensaje" role="note" id="aviso-vista-trabajo">
+  <strong>Esta es la vista de supervisión.</strong> El operador trabaja en una pantalla propia, con el turno en curso, la cola en vivo,
+  avisos y atajos de teclado. Ábrala para una ventanilla:
+  <span class="fila">{% for v in ventanillas %}<a class="btn btn-sm" href="{{ base }}/cola?ventanilla={{ v }}">{{ v }}</a>{% endfor %}</span>
+</div>
+
 <div class="op op-cola">
 <div class="grid grid-2">
   <div class="card">

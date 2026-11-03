@@ -48,6 +48,13 @@ class PruebasDeContraste(unittest.TestCase):
         for nombre in ("teal", "azul", "verde", "ambar"):
             self.assertGreaterEqual(contraste("#FFFFFF", _variable(f"--viv-{nombre}")), 4.5, nombre)
 
+    def test_usuario_y_cierre_de_sesion_del_menu_sobre_azul_marino(self):
+        """Los colores de .sesion-usuario y .sesion-salir se leen de la hoja de estilos, no se repiten aquí."""
+        marino = _variable("--c-nav")
+        for regla in (".sesion-usuario", ".sesion-salir"):
+            color = re.search(rf"{re.escape(regla)}\s*\{{[^}}]*?(?<![-\w])color:\s*(#[0-9A-Fa-f]{{6}})", CSS).group(1)
+            self.assertGreaterEqual(contraste(color, marino), 4.5, regla)
+
     def test_portada_sobre_azul_marino(self):
         marino = "#0B111C"
         for texto in ("#5BB6C5", "#B8CBD8", "#FFFFFF"):

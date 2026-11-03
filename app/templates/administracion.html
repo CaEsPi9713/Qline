@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block titulo %}Administración{% endblock %}
-{% block lead %}Administración técnica de la base <strong>{{ base_datos }}</strong> (usuario <strong>{{ usuario }}</strong>). El CRUD de <code>turnos</code> valida contra el JSON Schema; no es el flujo operativo normal.{% endblock %}
+{% block lead %}Administración técnica de la base <strong>{{ base_datos }}</strong> (usuario <strong>{{ usuario_mongo }}</strong>). El CRUD de <code>turnos</code> valida contra el JSON Schema; no es el flujo operativo normal.{% endblock %}
 {% block contenido %}
 <div class="admin-layout">
 <aside class="sidebar">
@@ -24,6 +24,16 @@
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
   {% if not coleccion %}
+  <div class="card">
+    <div class="card-cabecera">
+      <div>
+        <h2>Usuarios y acceso del personal</h2>
+        <p class="sub" style="margin:4px 0 0">Habilite o deshabilite el acceso de operadores y supervisores, asigne roles y restablezca contraseñas.</p>
+      </div>
+      <a href="{{ base }}/admin/usuarios" class="btn">Administrar usuarios{% if usuarios_pendientes %} · {{ usuarios_pendientes }} pendiente{{ '' if usuarios_pendientes == 1 else 's' }}{% endif %}</a>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-cabecera">
       <div>

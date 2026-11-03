@@ -12,6 +12,12 @@
   {"n": 7, "rol": "Administración", "nombre": "Administración", "ruta": "/administracion", "prefijos": ["/administracion", "/admin/", "/ventanillas/", "/insertar", "/actualizar", "/eliminar", "/crear_coleccion"], "exacta": "/administracion"}
 ] -%}
 {%- set ruta_actual = request.url.path -%}
+{#- Sesión: la dependencia de rol deja el usuario en request.state. Cada rol ve su grupo del menú y los anteriores. -#}
+{%- set usuario = request.state.usuario if request.state.usuario is defined else none -%}
+{%- set rol_usuario = usuario.rol if usuario else none -%}
+{%- set grupos_visibles = {"operador": ["Cliente", "Operador"], "supervisor": ["Cliente", "Operador", "Supervisor"], "administrador": ["Cliente", "Operador", "Supervisor", "Administración"]}.get(rol_usuario, ["Cliente", "Operador", "Supervisor", "Administración"]) -%}
+{%- set con_guia = rol_usuario in ["supervisor", "administrador"] or not rol_usuario -%}
+{%- set inicio_rol = {"operador": "/cola", "supervisor": "/dashboard", "administrador": "/administracion"}.get(rol_usuario, "/demo") -%}
 {%- set ns = namespace(actual=none) -%}
 {%- for p in pasos -%}
   {%- if ns.actual is none -%}
@@ -23,7 +29,7 @@
 {%- set actual = ns.actual -%}
 {#- Color de cada módulo: Cliente azul, Operador turquesa, Supervisor verde, Administración ámbar. -#}
 {%- set clases_rol = {"Cliente": "cliente", "Operador": "operador", "Supervisor": "supervisor", "Administración": "administracion"} -%}
-{%- set rol_clase = clases_rol.get(actual.rol, 'general') if actual else ('demo' if ruta_actual == '/demo' else 'general') -%}
+{%- set rol_clase = clases_rol.get(actual.rol, 'general') if actual else ('demo' if ruta_actual == '/demo' else ('supervisor' if ruta_actual.startswith('/supervisor/') else 'general')) -%}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -35,15 +41,17 @@
 <body>
 <header class="app-header">
   <div class="app-header-inner">
-    <a class="brand" href="{{ base }}/demo">
+    <a class="brand" href="{{ base }}{{ inicio_rol }}">
       <span class="brand-logo">Q</span>
       <span>QLine<small>Gestión de filas y turnos</small></span>
     </a>
     <nav class="nav" aria-label="Navegación principal">
+      {%- if con_guia %}
       <div class="nav-grupo">
         <a href="{{ base }}/demo" class="{{ 'activo' if ruta_actual == '/demo' else '' }}">Guía de demo</a>
       </div>
-      {%- for rol in ["Cliente", "Operador", "Supervisor", "Administración"] %}
+      {%- endif %}
+      {%- for rol in ["Cliente", "Operador", "Supervisor", "Administración"] if rol in grupos_visibles %}
       <div class="nav-grupo grupo-{{ clases_rol[rol] }}">
         <span class="nav-etiqueta">{{ rol }}</span>
         {%- for p in pasos if p.rol == rol %}
@@ -51,23 +59,33 @@
           <span class="num">{{ p.n }}</span>{{ p.nombre }}
         </a>
         {%- endfor %}
+        {%- if rol == "Supervisor" %}
+        <a href="{{ base }}/supervisor/asignaciones" class="{{ 'activo' if ruta_actual.startswith('/supervisor/') else '' }}"{% if ruta_actual.startswith('/supervisor/') %} aria-current="page"{% endif %}>Asignaciones</a>
+        {%- endif %}
       </div>
       {%- endfor %}
     </nav>
+    {%- if usuario %}
+    <div class="sesion">
+      <span class="sesion-usuario">{{ usuario.usuario }} · {{ usuario.rol }}</span>
+      <form method="post" action="{{ base }}/salir"><button type="submit" class="sesion-salir">Cerrar sesión</button></form>
+    </div>
+    {%- endif %}
   </div>
 </header>
 
 <main class="pagina {{ ancho or '' }} rol-{{ rol_clase }}">
   <div class="page-head">
-    {% if actual %}<div class="paso-pill">Paso {{ actual.n }} de {{ pasos|length }} · {{ actual.rol }}</div>
-    {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 4 · Guía de demostración</div>{% endif %}
+    {% if actual %}<div class="paso-pill">{% if con_guia %}Paso {{ actual.n }} de {{ pasos|length }} · {% endif %}{{ actual.rol }}</div>
+    {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 4 · Guía de demostración</div>
+    {% elif ruta_actual.startswith('/supervisor/') %}<div class="paso-pill">Supervisor</div>{% endif %}
     <h1>{% block h1 %}{{ self.titulo() }}{% endblock %}</h1>
     {% block lead_bloque %}<p class="lead">{% block lead %}{% endblock %}</p>{% endblock %}
   </div>
 
   {% block contenido %}{% endblock %}
 
-  {% if actual %}
+  {% if actual and con_guia %}
   {%- set anterior = pasos[actual.n - 2] if actual.n > 1 else none -%}
   {%- set siguiente = pasos[actual.n] if actual.n < pasos|length else none -%}
   <div class="paginacion-pasos">

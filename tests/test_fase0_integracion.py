@@ -1,6 +1,7 @@
 """Fase 0 · lo que la integración de S4 había roto: administración de MongoDB, páginas de error, /acerca y enlaces."""
 import re
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from pathlib import Path
 from unittest import mock
 
@@ -17,7 +18,7 @@ PLANTILLAS = Path(__file__).resolve().parents[1] / "app" / "templates"
 class PruebasAdministracion(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app, follow_redirects=False)
+        self.c = ClienteConSesion(main.app, follow_redirects=False)
 
     def test_la_raiz_es_la_portada_y_no_el_crud(self):
         r = self.c.get("/")
@@ -64,7 +65,7 @@ class PruebasAdministracion(BaseRedisMongo):
 class PruebasErroresYAcerca(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app, raise_server_exceptions=False)
+        self.c = ClienteConSesion(main.app, raise_server_exceptions=False)
 
     def test_ruta_inexistente_muestra_la_pagina_404(self):
         r = self.c.get("/no-existe")

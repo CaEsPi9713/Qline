@@ -1,6 +1,7 @@
 """P09 conectado a la operación: una ventanilla del catálogo puede llamar, atender, verse en el panel y filtrarse en el historial."""
 import threading
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from unittest import mock
 
 from tests.test_ventanilla_unica import HAY_DEPENDENCIAS, BaseRedisMongo, doc
@@ -19,7 +20,7 @@ if HAY_DEPENDENCIAS:
 class BaseCatalogo(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app, follow_redirects=False)
+        self.c = ClienteConSesion(main.app, follow_redirects=False)
         ventanillas._ULTIMAS_CONOCIDAS = tuple(VENTANILLAS)
 
     def alta(self, codigo):

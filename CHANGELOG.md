@@ -7,6 +7,35 @@ Estado de versión actual: **v0.9.0-rc** (Candidato a release de Seguimiento 4, 
 
 ---
 
+## [Sin publicar] - Entrega a sucursal (en curso)
+
+### Añadido
+- **Inicio de sesión del personal por rol (Fases 1 y 2):** `app/auth.py` guarda solo un hash `scrypt` de la contraseña, firma la sesión en una cookie `HttpOnly` y `SameSite=Lax`, bloquea 5 minutos tras 5 intentos fallidos y relee el usuario en cada petición, de modo que deshabilitarlo o cambiarle el rol surte efecto al instante. Páginas `/login`, `/registro` (queda pendiente hasta que el administrador la habilite) y `/salir`.
+- **Permisos por rol:** operador (`/cola`, `/panel`), supervisor (además historial, dashboard y guía de demo) y administrador (además administración y sucursales). El cliente, el quiosco, la consulta por QR, la pantalla de sala y `/salud` siguen sin pedir sesión. El menú muestra solo lo que corresponde al rol, con el usuario y «Cerrar sesión». Los POST de personal comprueban que vengan de la misma página (`Sec-Fetch-Site`, con `Origin`/`Referer` de respaldo).
+- **Gestión de usuarios y acceso (Fase 3):** pantalla `/admin/usuarios` para que el administrador habilite o rechace solicitudes (asignando el rol), deshabilite, cambie el rol y restablezca contraseñas. No puede deshabilitarse ni cambiarse el rol a sí mismo, ni dejar el sistema sin un administrador activo. Cada cambio cierra las sesiones abiertas de esa persona y anota quién lo hizo y cuándo. La portada de `/administracion` avisa cuántas solicitudes hay pendientes.
+- **Asignación de ventanillas (Fase 4):** pantalla `/supervisor/asignaciones` para que el supervisor (o el administrador) asigne a cada operador su ventanilla. Una por operador y un operador por ventanilla, con índice único parcial en MongoDB; no se reasigna ni se quita con un turno `llamado` o `en_atencion`, y deshabilitar o cambiar de rol a un operador libera la suya.
+- **El operador ya no elige ventanilla:** el servidor le impone la asignada al llamar, iniciar y finalizar (pedir otra responde 403); `/cola` le muestra «Usted atiende en la ventanilla V-0X» sin selector, `/panel` solo su ventanilla y, sin ventanilla asignada, «Pida a su supervisor que le asigne una». El supervisor y el administrador siguen eligiendo cualquiera, y llamar sin indicarla responde 422 como antes.
+- **Vista interactiva del operador (Fase 5):** `/cola` pasa a ser su pantalla de trabajo, con el turno en curso y sus acciones (llamar, iniciar, finalizar con motivo y nota), la cola de espera con cuánto lleva esperando cada turno, y sus números (en espera, preferenciales, atendidos por él hoy y atención media). Se actualiza sola por WebSocket (con consulta cada 5 s si el socket cae y cada 30 s de respaldo), con cuenta regresiva de presentación, cronómetros, aviso de turnos preferenciales (sonido opcional), indicador «En vivo» y atajos `N`, `I` y `F` (esta última lleva el foco a «Finalizar» para confirmar con Intro). Funciona sin JavaScript como formularios. Nueva API `GET /api/operador/estado`; el supervisor y el administrador abren la misma vista de cualquier ventanilla con `/cola?ventanilla=V-0X`, y `/panel` de todas las ventanillas queda para supervisión (el operador que lo abre pasa a `/cola`).
+- **Trazabilidad:** al llamar un turno se guarda en `operador` el usuario que lo llamó; el historial ya lo mostraba.
+- **Nombre de usuario solo con letras:** acepta mayúsculas y minúsculas (de 3 a 30 letras de la A a la Z) y rechaza números, espacios, tildes y caracteres especiales, con un mensaje que explica la regla. «Ana» y «ana» siguen siendo la misma cuenta. Antes admitía minúsculas, números, punto, guion y guion bajo.
+- `scripts/crear_admin.py` crea al primer administrador o le restablece la contraseña.
+- `tests/test_acceso_roles.py` recorre todas las rutas contra la política y falla si aparece una sin clasificar; `tests/test_auth.py` y `tests/test_login.py` cubren el hash, la sesión, el bloqueo, el registro y el script; `tests/apoyo_sesion.py` da a las pruebas existentes un cliente con sesión.
+- Variable de entorno `SECRETO_SESION` (ver README y `.env.example`).
+
+### Seguridad
+- Se desactivan `/docs`, `/redoc` y `/openapi.json`, que exponían el esquema de la API.
+- Las rutas de diagnóstico (`/redis/estado`, `/ws-prueba`, `/api/eventos/*`) pasan a ser solo del administrador.
+- La administración genérica de MongoDB oculta el hash de la colección `usuarios` y ya no permite insertar, editar ni eliminar sus documentos a mano (se gestionan en `/admin/usuarios`).
+- El formulario de ingreso rechazaba a un navegador legítimo porque las páginas públicas piden `no-referrer` y el navegador envía entonces `Origin: null`; ahora la comprobación de origen usa `Sec-Fetch-Site`, con `Origin` y `Referer` de respaldo.
+- Se detectó con la prueba de inventario una ruta `PUT /api/admin/sucursales/{codigo}` que habría quedado sin protección y se corrigió.
+- En `/administracion` el nombre `usuario` del contexto (el usuario de MongoDB) chocaba con el de la sesión; el primero pasa a llamarse `usuario_mongo`.
+- El encabezado con sesión pone la marca y el usuario arriba y el menú completo debajo, y no crece de más según el rol.
+
+### Notas
+- El `.htaccess` no se modifica (D-35): el Basic Auth de Apache sigue como puerta exterior, así que el personal verá además la clave de Apache y las páginas del cliente la seguirán pidiendo salvo el QR y `/static/`.
+
+---
+
 ## [0.9.0-rc] - 2026-11-01 (Seguimiento 4 · Release Candidate; actualizado el 2026-11-02)
 
 ### Añadido

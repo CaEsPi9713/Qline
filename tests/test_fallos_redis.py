@@ -4,6 +4,7 @@ Requiere fakeredis, mongomock y httpx; si faltan, las pruebas se omiten.
 """
 
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 import uuid
 from datetime import datetime, timezone
 
@@ -30,7 +31,7 @@ class RedisCaido:
 class BaseFallos(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.cliente = pf.ClientePrueba(TestClient(main.app))
+        self.cliente = pf.ClientePrueba(ClienteConSesion(main.app))
         # El Redis simulado no implementa INFO (versión): se sustituye solo el estado "normal".
         self._verificar_orig = main.verificar_redis
         main.verificar_redis = lambda: {"ok": True, "host": "127.0.0.1", "port": 6379, "version": "simulado"}

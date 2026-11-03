@@ -4,6 +4,7 @@ Requiere httpx (TestClient) y fakeredis; si faltan, las pruebas se omiten.
 """
 
 import unittest
+from tests.apoyo_sesion import ClienteConSesion, base_con_usuarios
 
 try:
     import fakeredis
@@ -30,8 +31,9 @@ class PruebasRutaFinalizar(unittest.TestCase):
         self.redis = fakeredis.FakeRedis(decode_responses=True)
         self._cliente_orig, self._db_orig = redis_client._client, main.get_db
         redis_client._client = self.redis
-        main.get_db = lambda: {"turnos": self.col}
-        self.c = TestClient(main.app)
+        _base = base_con_usuarios(turnos=self.col)
+        main.get_db = lambda: _base
+        self.c = ClienteConSesion(main.app)
 
     def tearDown(self):
         redis_client._client = self._cliente_orig

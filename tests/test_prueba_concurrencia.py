@@ -6,6 +6,7 @@ Requiere fakeredis, mongomock y httpx; si faltan, las pruebas se omiten.
 import tempfile
 import time
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from pathlib import Path
 
 from tests.test_ventanilla_unica import HAY_DEPENDENCIAS, BaseRedisMongo
@@ -112,7 +113,7 @@ class PruebasQuePruebaDetectaFallos(BaseConcurrencia):
 class PruebasFlujoHTTP(BaseConcurrencia):
     def setUp(self):
         super().setUp()
-        self.cliente = pc.ClientePrueba(TestClient(main.app))
+        self.cliente = pc.ClientePrueba(ClienteConSesion(main.app))
 
     def test_flujo_real_de_extremo_a_extremo(self):
         x = pc.flujo_http(self.cliente, self.db, self.redis, rondas=3)
@@ -172,7 +173,7 @@ class PruebasInformeYPrograma(BaseConcurrencia):
 
     def test_el_informe_incluye_el_escenario_http_cuando_se_ejecuta(self):
         rondas, vaciado = self._resultados()
-        http = pc.flujo_http(pc.ClientePrueba(TestClient(main.app)), self.db, self.redis, rondas=2)
+        http = pc.flujo_http(pc.ClientePrueba(ClienteConSesion(main.app)), self.db, self.redis, rondas=2)
         texto = pc.generar_informe({"fecha": "x", "redis": "x", "python": "x", "sistema": "x"}, rondas, vaciado, http)
         self.assertIn("Escenario C", texto)
         self.assertIn("POST /api/llamar", texto)

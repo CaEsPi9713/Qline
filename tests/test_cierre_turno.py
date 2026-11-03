@@ -1,5 +1,6 @@
 """S4-M03 · motivo y nota opcionales al finalizar la atención (campo raíz `cierre`, compatible con turnos anteriores)."""
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from datetime import datetime, timedelta, timezone
 
 from app.atencion import finalizar_atencion, validar_cierre
@@ -110,7 +111,7 @@ class PruebasEsquemaDelCierre(unittest.TestCase):
 class PruebasRutasDeCierre(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app, follow_redirects=False)
+        self.c = ClienteConSesion(main.app, follow_redirects=False)
         ahora = datetime.now(timezone.utc)
         for n in (1, 2):
             self.db["turnos"].insert_one(construir_turno(

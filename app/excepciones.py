@@ -44,3 +44,10 @@ class TurnoInconsistente(ErrorAtencion):
 class ServicioNoDisponible(ErrorAtencion):
     status_code = 503
     mensaje = "Servicio temporalmente no disponible"
+
+
+class VentanillaNoAsignada(ErrorAtencion):
+    """El operador no tiene ventanilla asignada o intenta operar una que no es la suya."""
+
+    status_code = 403
+    mensaje = "No tiene una ventanilla asignada. Pida a su supervisor que le asigne una."

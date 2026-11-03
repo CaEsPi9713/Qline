@@ -1,5 +1,6 @@
 """RFC-004 (sucursales) se presenta como un extra del trabajo y sin aparentar que el sistema es multisucursal."""
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from pathlib import Path
 
 from tests.test_ventanilla_unica import HAY_DEPENDENCIAS, BaseRedisMongo
@@ -20,7 +21,7 @@ def _leer(ruta: str) -> str:
 class PruebasDeLasPantallas(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
 
     def test_la_pantalla_de_sucursales_dice_que_es_un_extra_y_su_alcance(self):
         html = self.c.get("/admin/sucursales").text

@@ -56,10 +56,11 @@ def _ocupada(ventanilla: str, codigo: str, estado: str = None) -> LlamadoError:
         "Inícielo o finalícelo en el panel de atención antes de llamar otro.", 409)
 
 
-def llamar_siguiente_turno(db, ventanilla: str) -> dict:
+def llamar_siguiente_turno(db, ventanilla: str, operador: str = None) -> dict:
     """
     Devuelve {"codigo": None, ...} si no hay turnos; si no, los datos del turno
     llamado. Lanza LlamadoError / ColaError / RedisError en los fallos.
+    `operador` es el usuario que llama: queda en el turno para la trazabilidad (historial y dashboard).
     """
     if ventanilla not in ventanillas_activas(db):
         raise cola.ColaError(f"Ventanilla inválida o inactiva: {ventanilla!r}")
@@ -88,6 +89,7 @@ def llamar_siguiente_turno(db, ventanilla: str) -> dict:
                 "estado": ESTADO_LLAMADO,
                 "ventanilla": ventanilla,
                 "timestamps.llamado": ahora,
+                **({"operador": operador} if operador else {}),
             }},
             return_document=ReturnDocument.AFTER,
         )

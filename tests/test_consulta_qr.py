@@ -5,6 +5,7 @@ Requiere fakeredis, mongomock y httpx; si faltan, las pruebas se omiten.
 
 import time
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 import uuid
 
 from tests.test_ventanilla_unica import AHORA, HAY_DEPENDENCIAS, BaseRedisMongo, doc
@@ -28,7 +29,7 @@ class BaseQR(BaseRedisMongo):
     def setUp(self):
         super().setUp()
         hub.detener()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
 
     def tearDown(self):
         hub.detener()

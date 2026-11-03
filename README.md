@@ -103,6 +103,7 @@ Se leen del archivo `.env` (copia de [`.env.example`](.env.example)). **Nunca** 
 | `BARRIDO_ABANDONO` | `1` (o ausente) activa el abandono automático; `0` lo apaga | `1` |
 | `BARRIDO_INTERVALO_SEG` | Segundos entre pasadas del barrido | `10` |
 | `ZONA_HORARIA` | Zona IANA con la que las pantallas muestran fechas y horas (los datos se guardan en UTC) | `America/Costa_Rica` |
+| `SECRETO_SESION` | Secreto con el que se firman las cookies de sesión del personal (inicio de sesión por rol). Genere uno largo y propio; sin él las sesiones se pierden al reiniciar. Cambiarlo cierra todas las sesiones | *(vacío)* |
 
 ## 6. Inicializar MongoDB y cargar datos
 
@@ -160,8 +161,13 @@ Todo lo que no es del cliente exige usuario y contraseña de Apache (`.htaccess`
 | Cliente | `/quiosco`, `/emitir` | Emisión de turno (normal o preferencial) con ticket, QR e impresión |
 | Cliente | `/consultar` | Consulta de un turno por código |
 | Sala | `/pantalla` | Turnos llamados y en atención, con aviso sonoro opcional |
-| Operador | `/cola`, `/panel` | Cola con prioridad; llamado, inicio y fin de la atención (con motivo y nota opcionales) |
+| Operador | `/cola` | Vista de trabajo de **su** ventanilla (la asigna el supervisor): turno en curso con llamar, iniciar y finalizar (motivo y nota opcionales), cola en vivo con la espera de cada turno, aviso de turnos preferenciales y atajos de teclado `N`, `I` y `F` (D-35) |
+| Operador | `/api/operador/estado` | Estado en JSON de esa vista (turno en curso, cola y números del día). El supervisor y el administrador piden otra ventanilla con `?ventanilla=` |
+| Supervisor | `/panel`, `/cola` | Panel de todas las ventanillas y cola con selector; `/cola?ventanilla=V-0X` abre la vista de trabajo de una ventanilla. El operador que abre `/panel` pasa a `/cola` |
+| Supervisor | `/supervisor/asignaciones` | Asigna a cada operador su ventanilla (una por operador; no se cambia con un turno en curso). El operador llama y atiende solo desde la suya (D-35) |
 | Supervisor | `/historial`, `/dashboard` | Historial con filtros, fechas, paginación y descarga JSON; KPI, SLA y desglose por fecha |
+| Personal | `/login`, `/registro`, `/salir` | Ingreso con usuario y contraseña; solicitud de acceso (queda pendiente hasta que el administrador la habilite) y cierre de sesión. El cliente y la pantalla de sala **no** piden sesión (D-35) |
+| Administración | `/admin/usuarios` | Habilitar o rechazar solicitudes de acceso, asignar rol, deshabilitar, cambiar rol y restablecer contraseñas (D-35) |
 | Administración | `/administracion`, `/admin/sucursales` | Administrador técnico de MongoDB; alta y baja de ventanillas (P09); **extra:** mantenimiento de sucursales (RFC-004) |
 | Equipo | `/demo`, `/salud`, `/acerca` | Guía de demostración; estado de la aplicación, Redis y MongoDB; equipo del proyecto |
 

@@ -1,0 +1,30 @@
+{#- Ingreso del personal (operador, supervisor y administrador). El cliente no necesita iniciar sesión. -#}
+{% extends "base_publico.html" %}
+{% block titulo %}Ingreso del personal{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
+
+{% block contenido %}
+<div class="contenedor--estrecho pila">
+  <h1>Ingreso del personal</h1>
+  <p class="mensaje">Para operadores, supervisores y administradores. Si es cliente no necesita ingresar: <a href="{{ base }}/quiosco">saque su turno aquí</a>.</p>
+
+  {% if salio %}<p class="mensaje mensaje--ok" role="status">Cerró la sesión correctamente.</p>{% endif %}
+  {% if error %}<p class="mensaje mensaje--error" role="alert">{{ error }}</p>{% endif %}
+
+  <form class="tarjeta" method="post" action="{{ base }}/login">
+    <input type="hidden" name="siguiente" value="{{ siguiente|default('') }}">
+    <div class="campo">
+      <label for="usuario">Usuario</label>
+      <input id="usuario" name="usuario" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="30" value="{{ usuario|default('') }}">
+    </div>
+    <div class="campo">
+      <label for="clave">Contraseña</label>
+      <input id="clave" name="clave" type="password" autocomplete="current-password" required maxlength="128">
+    </div>
+    <button class="boton" type="submit">Ingresar</button>
+  </form>
+
+  <p class="texto-suave">¿Aún no tiene acceso? <a href="{{ base }}/registro">Solicítelo aquí</a>; el administrador debe aprobarlo.</p>
+</div>
+{% endblock %}

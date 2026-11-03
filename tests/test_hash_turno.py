@@ -5,6 +5,7 @@ Requiere fakeredis y mongomock; si faltan, las pruebas se omiten.
 
 import time
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 
 from tests.test_ventanilla_unica import AHORA, HAY_DEPENDENCIAS, BaseRedisMongo, doc
 
@@ -96,7 +97,7 @@ class PruebasHashTurno(BaseRedisMongo):
 class PruebasHashEnElFlujo(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
 
     def test_llamar_crea_el_hash_con_ttl(self):
         self.pendiente("A-001", prioridad="preferencial", llegada_ms=1)

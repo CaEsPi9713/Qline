@@ -1,6 +1,7 @@
 """Acentos de color por módulo en las pantallas internas: un color por rol, siempre sólidos y sin romper los botones."""
 import re
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from pathlib import Path
 
 from tests.test_ventanilla_unica import HAY_DEPENDENCIAS, BaseRedisMongo
@@ -18,7 +19,7 @@ BLOQUE = CSS.split("Acentos de color en las pantallas internas")[1]
 class PruebasDeLasPantallas(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
 
     def test_cada_pantalla_interna_lleva_la_clase_de_su_rol(self):
         esperado = {"/cola": "rol-operador", "/panel": "rol-operador", "/historial": "rol-supervisor",

@@ -5,6 +5,7 @@ Requiere fakeredis (Redis simulado) y mongomock; si faltan, las pruebas se omite
 
 import threading
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from datetime import datetime, timedelta, timezone
 
 try:
@@ -249,7 +250,7 @@ class PruebasLlamarConMongo(BaseRedisMongo):
 class PruebasRutasYVistas(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
 
     def test_api_llamar_responde_409_cuando_la_ventanilla_esta_ocupada(self):
         self.pendiente("A-001", llegada_ms=1)

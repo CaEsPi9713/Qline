@@ -1,6 +1,7 @@
 """UI-04 · cola, panel y sala: superficies sólidas, estados con texto y símbolo, identificadores del JavaScript intactos."""
 import re
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -58,7 +59,7 @@ class PruebasPlantillas(unittest.TestCase):
 class PruebasPantallas(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
 
     def test_cola_y_panel_van_dentro_de_su_modulo(self):
         self.assertIn('class="op op-cola"', self.c.get("/cola").text)

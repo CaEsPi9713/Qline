@@ -1,5 +1,6 @@
 """HU-009 · diseño de la pantalla de sala: tarjeta principal, otros turnos, estado vacío y privacidad."""
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest import mock
@@ -18,7 +19,7 @@ AHORA = datetime.now(timezone.utc)
 class BasePantalla(BaseRedisMongo):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
         self.col = self.db["turnos"]
 
     def turno(self, codigo, estado, ventanilla=None, seg=30, **kw):

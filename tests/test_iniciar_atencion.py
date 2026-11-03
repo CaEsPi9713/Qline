@@ -5,6 +5,7 @@
 
 import threading
 import unittest
+from tests.apoyo_sesion import ClienteConSesion, base_con_usuarios
 
 from app.atencion import iniciar_atencion
 from app.excepciones import (
@@ -118,11 +119,12 @@ class PruebasRutaIniciar(unittest.TestCase):
             turno("A-020", "llamado", "V-02"),
         ])
         self._orig = main.get_db
-        main.get_db = lambda: {"turnos": self.col}
+        _base = base_con_usuarios(turnos=self.col)
+        main.get_db = lambda: _base
         # Iniciar la atención toca Redis (confirmar presencia): se aísla con un Redis simulado.
         self._cliente_orig = redis_client._client
         redis_client._client = fakeredis.FakeRedis(decode_responses=True)
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
 
     def tearDown(self):
         main.get_db = self._orig

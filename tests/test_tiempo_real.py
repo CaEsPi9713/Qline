@@ -7,6 +7,7 @@ import asyncio
 import json
 import time
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 
 try:
     import fakeredis
@@ -152,7 +153,11 @@ class PruebasHub(BaseEventos):
 class PruebasWebSocket(BaseEventos):
     def setUp(self):
         super().setUp()
-        self.c = TestClient(main.app)
+        import mongomock
+        self.db = mongomock.MongoClient()["grupo2_db"]                  # solo guarda la sesión de prueba
+        self._get_db_orig, main.get_db = main.get_db, lambda: self.db
+        self.addCleanup(setattr, main, "get_db", self._get_db_orig)
+        self.c = ClienteConSesion(main.app)
 
     def test_ws_ping_envia_bienvenida_latido_y_eco(self):
         with self.c.websocket_connect("/ws/ping") as ws:

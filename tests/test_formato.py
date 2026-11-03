@@ -2,6 +2,7 @@
 import os
 import re
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from datetime import datetime, timezone
 from unittest import mock
 
@@ -71,7 +72,7 @@ class PruebasPantallas(BaseRedisMongo):
         p = mock.patch.dict(os.environ, {**CR, "PUBLIC_BASE_URL": "https://grupo2.crnube.net", "BASE_PATH": ""})
         p.start()
         self.addCleanup(p.stop)
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
         self.col = self.db["turnos"]
         self.creado = datetime(2026, 10, 27, 1, 12, 49, 757000)          # sin zona, como lo entrega PyMongo
         self.col.insert_one(construir_turno("A-001", "atendido", "normal", self.creado, "V-01",

@@ -12,6 +12,7 @@ Verifica:
 """
 from datetime import datetime, timezone
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -260,7 +261,7 @@ class TestSucursalesEndpointsFastAPI(unittest.TestCase):
         self.client_mongo = mongomock.MongoClient()
         self.db = self.client_mongo["qline_api_test"]
         inicializar_sucursal_base(self.db)
-        self.client = TestClient(app)
+        self.client = ClienteConSesion(app, rol=None).iniciar_sesion_en(self.db)
 
     @patch("app.main.get_db")
     def test_api_listar_sucursales(self, mock_get_db):

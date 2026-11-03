@@ -1,5 +1,6 @@
 """S4-M06 · /salud responde solo con estados, con 200 o 503, y nunca filtra el texto de un fallo."""
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from unittest import mock
 
 from tests.test_ventanilla_unica import HAY_DEPENDENCIAS, BaseRedisMongo
@@ -20,7 +21,7 @@ class _Barrido:
 
 class PruebasSalud(BaseRedisMongo):
     def pedir(self):
-        return TestClient(main.app).get("/salud")
+        return ClienteConSesion(main.app).get("/salud")
 
     def test_todo_sano_responde_200(self):
         r = self.pedir()
@@ -78,12 +79,12 @@ class PruebasRedisEstado(BaseRedisMongo):
 
     def test_con_redis_sano_solo_devuelve_ok(self):
         main.verificar_redis = lambda: {"ok": True, "host": "10.0.0.7", "port": 6379, "version": "7.0.15"}
-        r = TestClient(main.app).get("/redis/estado")
+        r = ClienteConSesion(main.app).get("/redis/estado")
         self.assertEqual((r.status_code, r.json()), (200, {"ok": True}))
 
     def test_con_redis_caido_no_filtra_el_error(self):
         main.verificar_redis = lambda: {"ok": False, "host": "10.0.0.7", "port": 6379, "error": SECRETO}
-        r = TestClient(main.app).get("/redis/estado")
+        r = ClienteConSesion(main.app).get("/redis/estado")
         self.assertEqual((r.status_code, r.json()), (200, {"ok": False}))
         for prohibido in ("clave-secreta", "10.0.0.7", "6379", "mongodb://"):
             self.assertNotIn(prohibido, r.text)

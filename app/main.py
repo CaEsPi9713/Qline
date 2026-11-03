@@ -13,7 +13,7 @@ from urllib.parse import quote_plus
 from bson import ObjectId, json_util
 from bson.errors import InvalidId
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, Form, Request
+from fastapi import Body, Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -22,9 +22,12 @@ from pymongo.errors import PyMongoError
 from redis.exceptions import RedisError
 
 from app import atencion
+from app import asignaciones
+from app import auth
+from app import vista_operador
 from app import cola as cola_redis
 from app import eventos
-from app.excepciones import ErrorAtencion
+from app.excepciones import ErrorAtencion, VentanillaNoAsignada
 from app.panel_atencion import estado_ventanillas
 from app.redis_atencion import liberar_turno
 from app.consulta_qr import QRError, consultar_por_token
@@ -61,6 +64,8 @@ MONGO_PORT = int(os.getenv("MONGO_PORT", "27017"))
 # construir los enlaces y redirecciones que ve el navegador.
 _bp = os.getenv("BASE_PATH", "").strip().strip("/")
 BASE = f"/{_bp}" if _bp else ""
+
+MENSAJE_USUARIOS_APARTE = "Los usuarios se gestionan en la pantalla de usuarios y acceso: aquí no se editan, para no tocar contraseñas ni roles a mano."
 
 MENSAJES = {
     "insertado": "Documento insertado correctamente.",
@@ -108,7 +113,8 @@ async def _lifespan(app_):
         hub._repartir = _orig_repartir
 
 
-app = FastAPI(title="MongoDB Web Admin", lifespan=_lifespan)
+# Sin documentación interactiva ni esquema OpenAPI públicos: no hay motivo para exponerlos en la sucursal.
+app = FastAPI(title="MongoDB Web Admin", lifespan=_lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory=BASE_DIR.parent / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
@@ -127,10 +133,27 @@ templates.env.globals["base"] = BASE   # las páginas de error no reciben contex
 registrar_errores(app, templates)
 formato.registrar(templates.env)             # filtros de fecha y hora para las pantallas
 
-registrar_rutas_eventos(app, get_db=lambda: get_db())
+# --- Control de acceso por rol -------------------------------------------------------------------
+# Páginas del cliente, la pantalla de sala, la consulta por QR y /salud no piden sesión. Lo demás sí.
+# El supervisor y el administrador también pueden abrir las páginas del operador: la guía /demo las recorre
+# y ellos supervisan la operación. Para volver a dejarlas solo al operador basta cambiar OPERACION.
+ROLES_OPERACION = (auth.ROL_OPERADOR, auth.ROL_SUPERVISOR, auth.ROL_ADMINISTRADOR)
+ROLES_SUPERVISION = (auth.ROL_SUPERVISOR, auth.ROL_ADMINISTRADOR)
+ROLES_ADMIN = (auth.ROL_ADMINISTRADOR,)
 
 
-@app.get("/ws-prueba", response_class=HTMLResponse)
+def _exigir(*roles):
+    return [Depends(auth.requiere_rol(*roles, obtener_db=lambda: get_db()))]
+
+
+OPERACION = _exigir(*ROLES_OPERACION)
+SUPERVISION = _exigir(*ROLES_SUPERVISION)
+SOLO_ADMIN = _exigir(*ROLES_ADMIN)
+
+registrar_rutas_eventos(app, get_db=lambda: get_db(), dependencias_diagnostico=SOLO_ADMIN)
+
+
+@app.get("/ws-prueba", dependencies=SOLO_ADMIN, response_class=HTMLResponse)
 def prueba_tiempo_real(request: Request):
     """Verifica en el navegador si el WebSocket y los eventos de Redis funcionan por el proxy."""
     return templates.TemplateResponse(request, "ws_prueba.html", {"base": BASE})
@@ -231,12 +254,12 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
     }, indent=2)
 
     contexto = {
-        "usuario": MONGO_USER, "base": BASE, "base_datos": MONGO_DB, "coleccion": coleccion,
+        "usuario_mongo": MONGO_USER, "base": BASE, "base_datos": MONGO_DB, "coleccion": coleccion,
         "colecciones": [], "documentos": [], "doc_editar": None, "id_editar": "",
         "mensaje": MENSAJES.get(ok, "").replace("{codigo}", ventanilla if re.fullmatch(PATRON_VENTANILLA, ventanilla) else "nueva"),
         "error": error, "json_texto": json_texto,
         "filtro_estado": filtro_estado, "plantilla_turnos": plantilla_turnos,
-        "proximo_codigo_ventanilla": siguiente_codigo_ventanilla(),
+        "proximo_codigo_ventanilla": siguiente_codigo_ventanilla(), "usuarios_pendientes": 0,
     }
     try:
         db = get_db()
@@ -244,9 +267,12 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
         from app.ventanillas import listar_ventanillas
         contexto["ventanillas_gestion"] = listar_ventanillas(db, solo_activas=False)
         contexto["proximo_codigo_ventanilla"] = siguiente_codigo_ventanilla(db)
+        contexto["usuarios_pendientes"] = auth.contar_pendientes(db)
         from app.sucursales import listar_sucursales
         contexto["sucursales_gestion"] = listar_sucursales(db, solo_activas=False)
-        if coleccion and editar:
+        if coleccion and editar and coleccion == auth.COLECCION_USUARIOS:
+            contexto["error"] = MENSAJE_USUARIOS_APARTE
+        elif coleccion and editar:
             try:
                 doc = db[coleccion].find_one({"_id": a_object_id(editar)})
                 if doc is None:
@@ -270,6 +296,8 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
                         "estado": d.get("estado"),
                         "ventanilla": d.get("ventanilla"),
                     }
+                if coleccion == auth.COLECCION_USUARIOS and isinstance(d, dict):
+                    d = {**d, "hash": "[oculto]"}            # nunca se muestra, ni siquiera al administrador
                 documentos.append({
                     "id": str(d.get("_id", "")),
                     "json": a_json_bonito(d),
@@ -282,7 +310,7 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
 
 
 
-@app.get("/demo", response_class=HTMLResponse)
+@app.get("/demo", dependencies=SUPERVISION, response_class=HTMLResponse)
 def guia_demo(request: Request):
     """Guía ordenada para recorrer el flujo completo de la demo (Seguimientos 2 y 3)."""
     redis_estado = verificar_redis()
@@ -309,7 +337,7 @@ def guia_demo(request: Request):
     )
 
 
-@app.get("/redis/estado")
+@app.get("/redis/estado", dependencies=SOLO_ADMIN)
 def redis_estado():
     """Estado de la conexión a Redis (TT-006). Solo «ok»: host, puerto, versión y errores quedan en el servidor."""
     return {"ok": bool(verificar_redis().get("ok"))}
@@ -323,7 +351,7 @@ def salud(request: Request):
     return JSONResponse(cuerpo, status_code=status)
 
 
-@app.get("/api/cola")
+@app.get("/api/cola", dependencies=OPERACION)
 def api_cola():
     """Turnos disponibles en orden de atención (HU-004). Solo lectura."""
     try:
@@ -332,10 +360,82 @@ def api_cola():
         return JSONResponse({"ok": False, "error": f"Redis no disponible: {e}"}, status_code=503)
 
 
-def _llamar(ventanilla: str):
-    """(resultado, error, status) para las rutas de llamada."""
+def _ventanilla_permitida(request: Request, pedida: str) -> str:
+    """
+    Ventanilla sobre la que puede actuar quien hace la petición. El operador siempre usa la que le asignó su
+    supervisor (si pide otra, se rechaza); el supervisor y el administrador pueden actuar sobre cualquiera.
+    """
+    pedida = (pedida or "").strip()
+    usuario = request.state.usuario
+    if usuario["rol"] != auth.ROL_OPERADOR:
+        return pedida
+    asignada = usuario.get("ventanilla_asignada")
+    if not asignada:
+        raise VentanillaNoAsignada(asignaciones.MENSAJE_SIN_VENTANILLA)
+    if pedida and pedida != asignada:
+        raise VentanillaNoAsignada(f"Su ventanilla es {asignada}; no puede operar {pedida}.")
+    return asignada
+
+
+def _ventanilla_de_trabajo(request: Request, pedida: str) -> str:
+    """
+    Ventanilla de la vista de trabajo. El operador siempre trabaja en la asignada (sin ella, VentanillaNoAsignada).
+    El supervisor y el administrador eligen una activa con `?ventanilla=`; sin elegir devuelve "" (vista de supervisión).
+    """
+    usuario = request.state.usuario
+    if usuario["rol"] == auth.ROL_OPERADOR:
+        asignada = usuario.get("ventanilla_asignada")
+        if not asignada:
+            raise VentanillaNoAsignada(asignaciones.MENSAJE_SIN_VENTANILLA)
+        return asignada
+    pedida = (pedida or "").strip()
+    return pedida if pedida in ventanillas_activas(get_db()) else ""
+
+
+@app.get("/api/operador/estado", dependencies=OPERACION)
+def api_estado_operador(request: Request, ventanilla: str = ""):
+    """Todo lo que necesita la vista del operador en una sola respuesta (turno en curso, cola y sus números)."""
+    destino = _ventanilla_de_trabajo(request, ventanilla)
+    if not destino:
+        return JSONResponse({"ok": False, "error": "Indique una ventanilla válida."}, status_code=400, headers=_SIN_CACHE)
     try:
-        return llamar_siguiente_turno(get_db(), ventanilla), "", 200
+        estado = vista_operador.estado_operador(get_db(), destino, request.state.usuario["usuario"])
+    except Exception:                                    # noqa: BLE001 · sin detalles internos hacia el navegador
+        return JSONResponse({"ok": False, "error": "No se pudo consultar el estado en este momento."},
+                            status_code=503, headers=_SIN_CACHE)
+    return JSONResponse({"ok": True, **estado}, headers=_SIN_CACHE)
+
+
+def _vista_trabajo(request: Request, ventanilla, es_operador: bool, msg: str, error: str):
+    """Pantalla de trabajo: el turno en curso con sus acciones y la cola en vivo, de una ventanilla."""
+    usuario = request.state.usuario["usuario"]
+    estado = None
+    if ventanilla:
+        try:
+            estado = vista_operador.estado_operador(get_db(), ventanilla, usuario)
+        except Exception:                                # noqa: BLE001
+            estado = vista_operador.estado_vacio(ventanilla, usuario, "MongoDB no responde: los datos no están disponibles.")
+    try:
+        activas = list(ventanillas_activas(get_db()))
+    except Exception:                                    # noqa: BLE001
+        activas = list(VENTANILLAS)
+    return templates.TemplateResponse(
+        request, "operador.html",
+        {"base": BASE, "servicio": SERVICIO_NOMBRE, "ventanilla": ventanilla, "estado": estado, "es_operador": es_operador,
+         "ventanillas": activas, "mensaje": msg, "error": error, "usuario_actual": usuario,
+         "sin_ventanilla_msg": asignaciones.MENSAJE_SIN_VENTANILLA},
+        headers=_SIN_CACHE)
+
+
+def _llamar(request: Request, ventanilla: str):
+    """(resultado, error, status) para las rutas de llamada. Queda anotado qué usuario llamó el turno."""
+    try:
+        ventanilla = _ventanilla_permitida(request, ventanilla)
+        if not ventanilla:                       # solo el supervisor y el administrador llegan aquí sin ventanilla
+            return None, "Indique la ventanilla desde la que llama.", 422
+        return llamar_siguiente_turno(get_db(), ventanilla, operador=request.state.usuario["usuario"]), "", 200
+    except VentanillaNoAsignada as e:
+        return None, e.mensaje, e.status_code
     except cola_redis.ColaError as e:
         return None, str(e), 400
     except LlamadoError as e:
@@ -344,10 +444,10 @@ def _llamar(ventanilla: str):
         return None, f"Redis no disponible: {e}", 503
 
 
-@app.post("/api/llamar")
-def api_llamar(ventanilla: str = Form(...)):
-    """Llamar al siguiente turno desde una ventanilla (HU-005)."""
-    res, error, status = _llamar(ventanilla.strip())
+@app.post("/api/llamar", dependencies=OPERACION)
+def api_llamar(request: Request, ventanilla: str = Form("")):
+    """Llamar al siguiente turno desde una ventanilla (HU-005). El operador llama desde la que tiene asignada."""
+    res, error, status = _llamar(request, ventanilla)
     if error:
         return JSONResponse({"ok": False, "error": error}, status_code=status)
     return {"ok": True, **res}
@@ -595,9 +695,9 @@ def vista_turno(request: Request, codigo: str):
     return _mostrar_consulta(request, codigo)
 
 
-@app.post("/cola/llamar")
-def cola_llamar(ventanilla: str = Form(...)):
-    res, error, _ = _llamar(ventanilla.strip())
+@app.post("/cola/llamar", dependencies=OPERACION)
+def cola_llamar(request: Request, ventanilla: str = Form("")):
+    res, error, _ = _llamar(request, ventanilla)
     if error:
         return RedirectResponse(f"{BASE}/cola?error={quote_plus(error)}", status_code=303)
     if res["codigo"] is None:
@@ -607,8 +707,15 @@ def cola_llamar(ventanilla: str = Form(...)):
     return RedirectResponse(f"{BASE}/cola?msg={quote_plus(msg)}", status_code=303)
 
 
-@app.get("/cola", response_class=HTMLResponse)
-def ver_cola(request: Request, msg: str = "", error: str = ""):
+@app.get("/cola", dependencies=OPERACION, response_class=HTMLResponse)
+def ver_cola(request: Request, msg: str = "", error: str = "", ventanilla: str = ""):
+    es_operador = request.state.usuario["rol"] == auth.ROL_OPERADOR
+    try:
+        destino = _ventanilla_de_trabajo(request, ventanilla)
+    except VentanillaNoAsignada:
+        destino = None                                   # el operador sin ventanilla ve el aviso en la vista de trabajo
+    if es_operador or destino:
+        return _vista_trabajo(request, destino, es_operador, msg, error)
     turnos = []
     redis_responde = True
     try:
@@ -654,19 +761,21 @@ def _confirmar_presencia(codigo: str) -> None:
         pass
 
 
-@app.post("/api/atencion/iniciar", response_model=TurnoEnAtencion)
-def api_iniciar_atencion(codigo: str = Form(...), ventanilla: str = Form(...)):
+@app.post("/api/atencion/iniciar", dependencies=OPERACION, response_model=TurnoEnAtencion)
+def api_iniciar_atencion(request: Request, codigo: str = Form(...), ventanilla: str = Form(...)):
     """Iniciar la atención de un turno llamado: llamado -> en_atencion (HU-006)."""
+    ventanilla = _ventanilla_permitida(request, ventanilla)
     resultado = atencion.iniciar_atencion(get_db()["turnos"], codigo, ventanilla)
     _confirmar_presencia(resultado["codigo"])
     _publicar_evento(eventos.ATENCION_INICIADA, resultado["codigo"], "en_atencion", resultado.get("ventanilla"))
     return resultado
 
 
-@app.post("/api/atencion/finalizar", response_model=TurnoFinalizado)
-def api_finalizar_atencion(codigo: str = Form(...), ventanilla: str = Form(...),
+@app.post("/api/atencion/finalizar", dependencies=OPERACION, response_model=TurnoFinalizado)
+def api_finalizar_atencion(request: Request, codigo: str = Form(...), ventanilla: str = Form(...),
                            motivo: str = Form(""), nota: str = Form("")):
     """Finalizar la atención: en_atencion -> atendido y liberar Redis (HU-007)."""
+    ventanilla = _ventanilla_permitida(request, ventanilla)
     resultado = atencion.finalizar_atencion(
         get_db()["turnos"], codigo, ventanilla,
         al_finalizar=lambda c: liberar_turno(c, ventanilla.strip()),
@@ -681,9 +790,12 @@ def _redirigir_panel(**params) -> RedirectResponse:
     return RedirectResponse(f"{BASE}/panel?{extra}", status_code=303)
 
 
-@app.get("/panel", response_class=HTMLResponse)
+@app.get("/panel", dependencies=OPERACION, response_class=HTMLResponse)
 def panel_atencion(request: Request, msg: str = "", error: str = ""):
-    """Panel del operador: turno actual por ventanilla con Iniciar / Finalizar."""
+    """Panel de atención de todas las ventanillas (supervisión). El operador trabaja en /cola con la suya."""
+    if request.state.usuario["rol"] == auth.ROL_OPERADOR:
+        consulta = request.url.query
+        return RedirectResponse(f"{BASE}/cola" + (f"?{consulta}" if consulta else ""), status_code=303)
     ventanillas, avisos = [], []
     try:
         ventanillas, avisos = estado_ventanillas(get_db())
@@ -696,9 +808,10 @@ def panel_atencion(request: Request, msg: str = "", error: str = ""):
     )
 
 
-@app.post("/panel/iniciar")
-def panel_iniciar(codigo: str = Form(...), ventanilla: str = Form(...)):
+@app.post("/panel/iniciar", dependencies=OPERACION)
+def panel_iniciar(request: Request, codigo: str = Form(...), ventanilla: str = Form(...)):
     try:
+        ventanilla = _ventanilla_permitida(request, ventanilla)
         r = atencion.iniciar_atencion(get_db()["turnos"], codigo, ventanilla)
     except ErrorAtencion as e:
         return _redirigir_panel(error=e.mensaje)
@@ -707,10 +820,11 @@ def panel_iniciar(codigo: str = Form(...), ventanilla: str = Form(...)):
     return _redirigir_panel(msg=f"{r['ventanilla']}: atención iniciada para {r['codigo']}.")
 
 
-@app.post("/panel/finalizar")
-def panel_finalizar(codigo: str = Form(...), ventanilla: str = Form(...),
+@app.post("/panel/finalizar", dependencies=OPERACION)
+def panel_finalizar(request: Request, codigo: str = Form(...), ventanilla: str = Form(...),
                     motivo: str = Form(""), nota: str = Form("")):
     try:
+        ventanilla = _ventanilla_permitida(request, ventanilla)
         r = atencion.finalizar_atencion(
             get_db()["turnos"], codigo, ventanilla,
             al_finalizar=lambda c: liberar_turno(c, ventanilla.strip()),
@@ -737,14 +851,76 @@ def acerca(request: Request):
     return templates.TemplateResponse(request, "acerca.html", {"base": BASE})
 
 
-@app.get("/administracion", response_class=HTMLResponse)
+# --- Inicio de sesión del personal ---------------------------------------------------------------
+
+def _pagina_acceso(request: Request, plantilla: str, status: int = 200, **contexto):
+    return templates.TemplateResponse(request, plantilla, {"base": BASE, **contexto}, status_code=status,
+                                      headers={"Cache-Control": "no-store"})
+
+
+def _cookie_sesion(respuesta, request: Request, doc: dict) -> None:
+    respuesta.set_cookie(value=auth.crear_token(doc), **auth.atributos_cookie(auth.es_https(request), BASE or "/"))
+
+
+@app.get("/login", response_class=HTMLResponse)
+def vista_login(request: Request, siguiente: str = "", salio: str = ""):
+    """Formulario de ingreso del personal. Con sesión abierta lleva directo a la página del rol."""
+    usuario = auth.usuario_de_la_peticion(request, get_db())
+    if usuario is not None:
+        return RedirectResponse(BASE + (auth.siguiente_seguro(siguiente) or auth.INICIO_POR_ROL[usuario["rol"]]), status_code=303)
+    return _pagina_acceso(request, "login.html", siguiente=auth.siguiente_seguro(siguiente), salio=bool(salio))
+
+
+@app.post("/login", response_class=HTMLResponse)
+def iniciar_sesion(request: Request, usuario: str = Form(""), clave: str = Form(""), siguiente: str = Form("")):
+    destino = auth.siguiente_seguro(siguiente)
+    if not auth.origen_permitido(request):
+        return _pagina_acceso(request, "login.html", 403, error="La solicitud no se originó en esta página.",
+                              usuario=usuario, siguiente=destino)
+    try:
+        doc = auth.autenticar(get_db(), usuario, clave)
+    except auth.AuthError as e:
+        return _pagina_acceso(request, "login.html", e.status, error=str(e), usuario=usuario, siguiente=destino)
+    respuesta = RedirectResponse(BASE + (destino or auth.INICIO_POR_ROL[doc["rol"]]), status_code=303)
+    _cookie_sesion(respuesta, request, doc)
+    return respuesta
+
+
+@app.get("/registro", response_class=HTMLResponse)
+def vista_registro(request: Request):
+    return _pagina_acceso(request, "registro.html")
+
+
+@app.post("/registro", response_class=HTMLResponse)
+def registrar_usuario(request: Request, usuario: str = Form(""), clave: str = Form(""), confirmacion: str = Form("")):
+    """Solicitud de acceso: queda pendiente y sin rol hasta que el administrador la habilite."""
+    if not auth.origen_permitido(request):
+        return _pagina_acceso(request, "registro.html", 403, error="La solicitud no se originó en esta página.", usuario=usuario)
+    if clave != confirmacion:
+        return _pagina_acceso(request, "registro.html", 400, error="Las contraseñas no coinciden.", usuario=usuario)
+    try:
+        nuevo = auth.registrar_solicitud(get_db(), usuario, clave)
+    except auth.AuthError as e:
+        return _pagina_acceso(request, "registro.html", e.status, error=str(e), usuario=usuario)
+    return _pagina_acceso(request, "registro.html", 201, enviado=nuevo["usuario"])
+
+
+@app.post("/salir")
+def cerrar_sesion(request: Request):
+    """Cierra la sesión de este navegador (no las de otros dispositivos)."""
+    respuesta = RedirectResponse(f"{BASE}/login?salio=1", status_code=303)
+    respuesta.delete_cookie(auth.NOMBRE_COOKIE, path=BASE or "/")
+    return respuesta
+
+
+@app.get("/administracion", dependencies=SOLO_ADMIN, response_class=HTMLResponse)
 def administracion(request: Request, coleccion: str = "", editar: str = "", ok: str = "", filtro_estado: str = "",
                    ventanilla: str = ""):
     return render(request, coleccion.strip(), editar.strip(), ok=ok, filtro_estado=filtro_estado.strip(),
                   ventanilla=ventanilla)
 
 
-@app.post("/crear_coleccion")
+@app.post("/crear_coleccion", dependencies=SOLO_ADMIN)
 def crear_coleccion(request: Request, nombre_coleccion: str = Form("")):
     nombre = nombre_coleccion.strip()
     if not nombre_valido(nombre):
@@ -756,8 +932,10 @@ def crear_coleccion(request: Request, nombre_coleccion: str = Form("")):
         return render(request, error=f"Error creando colección: {e}")
 
 
-@app.post("/insertar")
+@app.post("/insertar", dependencies=SOLO_ADMIN)
 def insertar(request: Request, coleccion: str = "", json_doc: str = Form("", alias="json")):
+    if coleccion == auth.COLECCION_USUARIOS:
+        return render(request, coleccion, error=MENSAJE_USUARIOS_APARTE, json_texto=json_doc)
     try:
         doc = json_a_documento(json_doc)
         if coleccion == "turnos":
@@ -771,9 +949,11 @@ def insertar(request: Request, coleccion: str = "", json_doc: str = Form("", ali
         return render(request, coleccion, error=f"Error insertando: {e}", json_texto=json_doc)
 
 
-@app.post("/actualizar")
+@app.post("/actualizar", dependencies=SOLO_ADMIN)
 def actualizar(request: Request, coleccion: str = "", id: str = Form(""),
                json_doc: str = Form("", alias="json")):
+    if coleccion == auth.COLECCION_USUARIOS:
+        return render(request, coleccion, error=MENSAJE_USUARIOS_APARTE)
     try:
         doc = json_a_documento(json_doc)
         if coleccion == "turnos":
@@ -787,8 +967,10 @@ def actualizar(request: Request, coleccion: str = "", id: str = Form(""),
         return render(request, coleccion, editar=id, error=f"Error actualizando: {e}")
 
 
-@app.post("/eliminar")
+@app.post("/eliminar", dependencies=SOLO_ADMIN)
 def eliminar(request: Request, coleccion: str = "", id: str = Form("")):
+    if coleccion == auth.COLECCION_USUARIOS:
+        return render(request, coleccion, error=MENSAJE_USUARIOS_APARTE)
     try:
         get_db()[coleccion].delete_one({"_id": a_object_id(id)})
         return ir(coleccion, ok="eliminado")
@@ -796,9 +978,114 @@ def eliminar(request: Request, coleccion: str = "", id: str = Form("")):
         return render(request, coleccion, error=f"Error eliminando: {e}")
 
 
+# --- Asignación de ventanillas a operadores (supervisor y administrador) ---------------------------
+
+MENSAJES_ASIGNACION = {
+    "asignada": "{usuario} atenderá en la ventanilla {ventanilla}.",
+    "quitada": "{usuario} quedó sin ventanilla.",
+}
+
+
+def _vista_asignaciones(request: Request, status: int = 200, mensaje: str = "", error: str = ""):
+    try:
+        datos = asignaciones.listar(get_db())
+    except auth.AuthError as e:
+        datos, error, status = {"operadores": [], "ventanillas": []}, error or str(e), e.status
+    return templates.TemplateResponse(
+        request, "supervisor_asignaciones.html",
+        {"base": BASE, **datos, "mensaje": mensaje, "error": error,
+         "es_admin": request.state.usuario["rol"] == auth.ROL_ADMINISTRADOR},
+        status_code=status, headers={"Cache-Control": "no-store"})
+
+
+def _resultado_asignacion(request: Request, aviso: str, funcion, **datos):
+    try:
+        res = funcion(get_db(), por=request.state.usuario["usuario"], **datos)
+    except auth.AuthError as e:
+        return _vista_asignaciones(request, e.status, error=str(e))
+    destino = f"{BASE}/supervisor/asignaciones?ok={aviso}&usuario={res['usuario']}&ventanilla={res['ventanilla'] or ''}"
+    return RedirectResponse(destino, status_code=303)
+
+
+@app.get("/supervisor/asignaciones", dependencies=SUPERVISION, response_class=HTMLResponse)
+def vista_asignaciones(request: Request, ok: str = "", usuario: str = "", ventanilla: str = ""):
+    nombre = usuario if auth.PATRON_USUARIO.fullmatch(usuario) else "el operador"
+    codigo = ventanilla if re.fullmatch(PATRON_VENTANILLA, ventanilla) else ""
+    mensaje = MENSAJES_ASIGNACION.get(ok, "").format(usuario=nombre, ventanilla=codigo)
+    return _vista_asignaciones(request, mensaje=mensaje)
+
+
+@app.post("/supervisor/asignaciones/asignar", dependencies=SUPERVISION)
+def asignar_ventanilla_operador(request: Request, operador: str = Form(""), ventanilla: str = Form("")):
+    return _resultado_asignacion(request, "asignada", asignaciones.asignar_ventanilla, operador=operador, ventanilla=ventanilla)
+
+
+@app.post("/supervisor/asignaciones/quitar", dependencies=SUPERVISION)
+def quitar_ventanilla_operador(request: Request, operador: str = Form("")):
+    return _resultado_asignacion(request, "quitada", asignaciones.quitar_ventanilla, operador=operador)
+
+
+# --- Gestión de usuarios y acceso (administrador) --------------------------------------------------
+
+MENSAJES_USUARIOS = {
+    "habilitado": "Se habilitó a {usuario} con el rol {rol}.",
+    "deshabilitado": "Se deshabilitó a {usuario}: su sesión deja de valer en la siguiente petición.",
+    "rol": "Ahora {usuario} tiene el rol {rol}.",
+    "clave": "Se restableció la contraseña de {usuario} y se cerraron sus sesiones.",
+}
+
+
+def _vista_usuarios(request: Request, status: int = 200, mensaje: str = "", error: str = ""):
+    try:
+        usuarios = auth.listar_usuarios(get_db())
+    except auth.AuthError as e:
+        usuarios, error, status = [], error or str(e), e.status
+    return templates.TemplateResponse(
+        request, "admin_usuarios.html",
+        {"base": BASE, "usuarios": usuarios, "roles": auth.ROLES, "yo": request.state.usuario["usuario"],
+         "mensaje": mensaje, "error": error},
+        status_code=status, headers={"Cache-Control": "no-store"})
+
+
+def _resultado_usuarios(request: Request, aviso: str, funcion, **datos):
+    """Aplica una acción sobre un usuario: si sale bien redirige con el aviso; si no, muestra el motivo en la misma pantalla."""
+    try:
+        res = funcion(get_db(), por=request.state.usuario["usuario"], **datos)
+    except auth.AuthError as e:
+        return _vista_usuarios(request, e.status, error=str(e))
+    return RedirectResponse(f"{BASE}/admin/usuarios?ok={aviso}&usuario={res['usuario']}&rol={res.get('rol', '')}", status_code=303)
+
+
+@app.get("/admin/usuarios", dependencies=SOLO_ADMIN, response_class=HTMLResponse)
+def vista_usuarios(request: Request, ok: str = "", usuario: str = "", rol: str = ""):
+    plantilla = MENSAJES_USUARIOS.get(ok, "")
+    nombre = usuario if auth.PATRON_USUARIO.fullmatch(usuario) else "el usuario"
+    return _vista_usuarios(request, mensaje=plantilla.format(usuario=nombre, rol=rol if rol in auth.ROLES else ""))
+
+
+@app.post("/admin/usuarios/habilitar", dependencies=SOLO_ADMIN)
+def habilitar_usuario(request: Request, usuario: str = Form(""), rol: str = Form("")):
+    return _resultado_usuarios(request, "habilitado", auth.habilitar_usuario, usuario=usuario, rol=rol)
+
+
+@app.post("/admin/usuarios/deshabilitar", dependencies=SOLO_ADMIN)
+def deshabilitar_usuario(request: Request, usuario: str = Form("")):
+    return _resultado_usuarios(request, "deshabilitado", auth.deshabilitar_usuario, usuario=usuario)
+
+
+@app.post("/admin/usuarios/rol", dependencies=SOLO_ADMIN)
+def cambiar_rol_usuario(request: Request, usuario: str = Form(""), rol: str = Form("")):
+    return _resultado_usuarios(request, "rol", auth.cambiar_rol, usuario=usuario, rol=rol)
+
+
+@app.post("/admin/usuarios/clave", dependencies=SOLO_ADMIN)
+def restablecer_clave_usuario(request: Request, usuario: str = Form(""), clave: str = Form("")):
+    return _resultado_usuarios(request, "clave", auth.restablecer_clave, usuario=usuario, clave=clave)
+
+
 # --- P09: Onboarding y Gestión Dinámica de Ventanillas (Carlos Espinoza) -----
 
-@app.get("/api/ventanillas")
+@app.get("/api/ventanillas", dependencies=SUPERVISION)
 def api_listar_ventanillas(solo_activas: bool = False):
     """Lista las ventanillas registradas en el sistema institucional (P09)."""
     try:
@@ -808,7 +1095,7 @@ def api_listar_ventanillas(solo_activas: bool = False):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
-@app.post("/api/ventanillas")
+@app.post("/api/ventanillas", dependencies=SOLO_ADMIN)
 def api_registrar_ventanilla(
     nombre: str = Form(""),
     tipo: str = Form("general"),
@@ -823,7 +1110,7 @@ def api_registrar_ventanilla(
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
-@app.post("/ventanillas/crear")
+@app.post("/ventanillas/crear", dependencies=SOLO_ADMIN)
 def web_crear_ventanilla(
     request: Request,
     nombre: str = Form(""),
@@ -838,7 +1125,7 @@ def web_crear_ventanilla(
         return render(request, error=f"Error registrando ventanilla: {e}")
 
 
-@app.post("/ventanillas/desactivar")
+@app.post("/ventanillas/desactivar", dependencies=SOLO_ADMIN)
 def web_desactivar_ventanilla(
     request: Request,
     codigo: str = Form(""),
@@ -852,7 +1139,7 @@ def web_desactivar_ventanilla(
         return render(request, error=f"Error desactivando ventanilla: {e}")
 
 
-@app.post("/ventanillas/reactivar")
+@app.post("/ventanillas/reactivar", dependencies=SOLO_ADMIN)
 def web_reactivar_ventanilla(
     request: Request,
     codigo: str = Form(""),
@@ -868,7 +1155,7 @@ def web_reactivar_ventanilla(
 
 # --- Mantenimiento de Sucursales y Capacidad (RFC-004) -----------------------
 
-@app.get("/api/admin/sucursales")
+@app.get("/api/admin/sucursales", dependencies=SOLO_ADMIN)
 def api_listar_sucursales(solo_activas: bool = False):
     """Retorna el catálogo de sucursales con métricas de capacidad (RFC-004)."""
     try:
@@ -879,7 +1166,7 @@ def api_listar_sucursales(solo_activas: bool = False):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
-@app.get("/api/admin/sucursales/{codigo}")
+@app.get("/api/admin/sucursales/{codigo}", dependencies=SOLO_ADMIN)
 def api_obtener_sucursal(codigo: str):
     """Detalle de una sucursal y el estado de sus ventanillas (RFC-004)."""
     try:
@@ -892,7 +1179,7 @@ def api_obtener_sucursal(codigo: str):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
-@app.post("/api/admin/sucursales")
+@app.post("/api/admin/sucursales", dependencies=SOLO_ADMIN)
 def api_crear_sucursal(payload: dict = Body(...)):
     """Crea una sucursal y aprovisiona automáticamente sus ventanillas en MongoDB (RFC-004)."""
     try:
@@ -913,7 +1200,7 @@ def api_crear_sucursal(payload: dict = Body(...)):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
-@app.put("/api/admin/sucursales/{codigo}")
+@app.put("/api/admin/sucursales/{codigo}", dependencies=SOLO_ADMIN)
 def api_actualizar_sucursal(codigo: str, payload: dict = Body(...)):
     """Modifica parámetros de la sucursal o ajusta la capacidad de ventanillas (RFC-004)."""
     try:
@@ -934,7 +1221,7 @@ def api_actualizar_sucursal(codigo: str, payload: dict = Body(...)):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
-@app.post("/api/admin/sucursales/{codigo}/desactivar")
+@app.post("/api/admin/sucursales/{codigo}/desactivar", dependencies=SOLO_ADMIN)
 def api_desactivar_sucursal(codigo: str):
     """Desactiva una sucursal validando previamente que no tenga turnos en atención (RFC-004)."""
     try:
@@ -945,7 +1232,7 @@ def api_desactivar_sucursal(codigo: str):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
-@app.post("/api/admin/sucursales/{codigo}/activar")
+@app.post("/api/admin/sucursales/{codigo}/activar", dependencies=SOLO_ADMIN)
 def api_activar_sucursal(codigo: str):
     """Reactiva una sucursal previamente inactiva (RFC-004)."""
     try:
@@ -956,7 +1243,7 @@ def api_activar_sucursal(codigo: str):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
-@app.get("/admin/sucursales", response_class=HTMLResponse)
+@app.get("/admin/sucursales", dependencies=SOLO_ADMIN, response_class=HTMLResponse)
 def vista_admin_sucursales(request: Request, ok: str = "", error: str = ""):
     """Pantalla administrativa para gestionar sucursales y ventanillas configurables (RFC-004)."""
     try:
@@ -987,7 +1274,7 @@ def vista_admin_sucursales(request: Request, ok: str = "", error: str = ""):
         )
 
 
-@app.post("/admin/sucursales/crear")
+@app.post("/admin/sucursales/crear", dependencies=SOLO_ADMIN)
 def web_crear_sucursal(
     request: Request,
     codigo: str = Form(""),
@@ -1016,7 +1303,7 @@ def web_crear_sucursal(
         return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
 
 
-@app.post("/admin/sucursales/actualizar")
+@app.post("/admin/sucursales/actualizar", dependencies=SOLO_ADMIN)
 def web_actualizar_sucursal(
     request: Request,
     codigo: str = Form(""),
@@ -1037,7 +1324,7 @@ def web_actualizar_sucursal(
         return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
 
 
-@app.post("/admin/sucursales/desactivar")
+@app.post("/admin/sucursales/desactivar", dependencies=SOLO_ADMIN)
 def web_desactivar_sucursal(
     request: Request,
     codigo: str = Form(""),
@@ -1051,7 +1338,7 @@ def web_desactivar_sucursal(
         return RedirectResponse(f"{BASE}/admin/sucursales?error={quote_plus(str(e))}", status_code=303)
 
 
-@app.post("/admin/sucursales/activar")
+@app.post("/admin/sucursales/activar", dependencies=SOLO_ADMIN)
 def web_activar_sucursal(
     request: Request,
     codigo: str = Form(""),
@@ -1067,7 +1354,7 @@ def web_activar_sucursal(
 
 # --- HU-010: Historial y Auditoría (Carlos Espinoza) -------------------------
 
-@app.get("/api/historial")
+@app.get("/api/historial", dependencies=SUPERVISION)
 def api_historial(
     estado: str = "",
     ventanilla: str = "",
@@ -1095,7 +1382,7 @@ def api_historial(
         return JSONResponse({"ok": False, "error": f"Error al consultar historial: {e}"}, status_code=500)
 
 
-@app.get("/api/historial/descargar")
+@app.get("/api/historial/descargar", dependencies=SUPERVISION)
 def api_descargar_historial(
     estado: str = "",
     ventanilla: str = "",
@@ -1138,7 +1425,7 @@ def api_descargar_historial(
 
 
 
-@app.get("/historial", response_class=HTMLResponse)
+@app.get("/historial", dependencies=SUPERVISION, response_class=HTMLResponse)
 def vista_historial(
     request: Request,
     estado: str = "",
@@ -1214,7 +1501,7 @@ def vista_historial(
 
 # --- HU-011: Dashboard y Métricas SLA (Carlos Espinoza) ----------------------
 
-@app.get("/api/dashboard")
+@app.get("/api/dashboard", dependencies=SUPERVISION)
 def api_dashboard(sla_espera: int = 300, fecha_desde: str = "", fecha_hasta: str = ""):
     """Indicadores operacionales y métricas SLA calculadas con aggregation pipelines (HU-011)."""
     try:
@@ -1224,7 +1511,7 @@ def api_dashboard(sla_espera: int = 300, fecha_desde: str = "", fecha_hasta: str
         return JSONResponse({"ok": False, "error": f"Error calculando métricas: {e}"}, status_code=500)
 
 
-@app.get("/api/dashboard/descargar")
+@app.get("/api/dashboard/descargar", dependencies=SUPERVISION)
 def api_descargar_dashboard(sla_espera: int = 300, fecha_desde: str = "", fecha_hasta: str = ""):
     """Descarga en archivo JSON los indicadores y el cumplimiento de SLA actual (HU-011)."""
     try:
@@ -1245,7 +1532,7 @@ def api_descargar_dashboard(sla_espera: int = 300, fecha_desde: str = "", fecha_
 
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/dashboard", dependencies=SUPERVISION, response_class=HTMLResponse)
 def vista_dashboard(request: Request, sla_espera: int = 300, fecha_desde: str = "", fecha_hasta: str = ""):
     """Panel visual para supervisores con KPIs de espera, atención y SLA (HU-011)."""
     try:

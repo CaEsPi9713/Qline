@@ -6,6 +6,7 @@ Requiere fakeredis, mongomock y httpx; si faltan, las pruebas se omiten.
 import json
 import time
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 import uuid
 
 from tests.test_ventanilla_unica import HAY_DEPENDENCIAS, BaseRedisMongo
@@ -27,7 +28,7 @@ class BaseNegocio(BaseRedisMongo):
     def setUp(self):
         super().setUp()
         hub.detener()
-        self.c = TestClient(main.app)
+        self.c = ClienteConSesion(main.app)
         self.suscriptor = self.redis.pubsub(ignore_subscribe_messages=True)
         self.suscriptor.subscribe(CLAVE_EVENTOS)
         self.suscriptor.get_message(timeout=0.05)

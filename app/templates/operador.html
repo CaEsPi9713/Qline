@@ -1,0 +1,123 @@
+{#- Vista de trabajo del operador (Fase 5): turno en curso con sus acciones y cola en vivo de UNA ventanilla.
+    El HTML se entrega completo desde el servidor (y las acciones funcionan como formularios sin JavaScript);
+    static/operador.js lo mantiene al día sin recargar. Los ids y clases de aquí los usa ese script. -#}
+{% extends "base.html" %}
+{% block titulo %}{% if ventanilla %}Ventanilla {{ ventanilla }}{% else %}Mi ventanilla{% endif %}{% endblock %}
+{% block lead %}{% if es_operador %}Llame al siguiente turno, atiéndalo y finalícelo. La pantalla se actualiza sola.{% else %}Vista de trabajo de una ventanilla, con las mismas acciones que ve el operador.{% endif %}{% endblock %}
+
+{% macro mmss(seg) %}{% set s = seg if seg > 0 else 0 %}{{ '%02d:%02d'|format(s // 60, s % 60) }}{% endmacro %}
+
+{% block contenido %}
+{% if mensaje %}<div class="ok" role="status">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+{% if not ventanilla %}
+<div class="mensaje mensaje--aviso" role="status">{{ sin_ventanilla_msg }}</div>
+{% else %}
+{% set e = estado %}
+{% set t = e.turno %}
+<div class="oper" id="oper" data-base="{{ base }}" data-ventanilla="{{ ventanilla }}" data-operador="{{ 1 if es_operador else 0 }}">
+  <div class="oper-barra">
+    <span class="oper-ventanilla">Ventanilla <strong>{{ ventanilla }}</strong></span>
+    <span class="oper-usuario">{{ usuario_actual }}</span>
+    {% if not es_operador %}
+    <form method="get" action="{{ base }}/cola" class="oper-cambio">
+      <label for="cambiar-ventanilla">Ver otra ventanilla</label>
+      <select id="cambiar-ventanilla" name="ventanilla">{% for v in ventanillas %}<option value="{{ v }}"{% if v == ventanilla %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      <button type="submit" class="btn-secundario btn-sm">Ver</button>
+      <a href="{{ base }}/cola">Volver a la supervisión</a>
+    </form>
+    {% endif %}
+    <span id="conexion" class="oper-conexion" data-estado="sin-js" role="status">Sin actualización en vivo: use «Actualizar»</span>
+    <label class="oper-sonido" hidden><input type="checkbox" id="sonido"> Aviso sonoro</label>
+  </div>
+
+  <div id="alertas" class="oper-alertas" role="alert"></div>
+  <p id="vivo" class="solo-lectores" role="status" aria-live="polite"></p>
+  <div id="pref-aviso" class="oper-pref" role="status" hidden></div>
+  <div id="avisos-estado">{% for a in e.avisos %}<div class="aviso">{{ a }}</div>{% endfor %}</div>
+
+  <div class="oper-grid">
+    <section class="card oper-actual" aria-labelledby="t-actual">
+      <h2 id="t-actual">Turno en curso</h2>
+      <div id="actual-cuerpo" data-firma="{{ (t.codigo ~ '|' ~ t.estado) if t else 'libre' }}">
+        {% if not t %}
+        <div class="oper-libre">
+          <p class="oper-vacio">Sin turno en curso</p>
+          <form method="post" action="{{ base }}/cola/llamar" class="js-accion" data-api="/api/llamar" data-ok="llamar">
+            <input type="hidden" name="ventanilla" value="{{ ventanilla }}">
+            <button type="submit" id="btn-llamar" class="oper-boton oper-boton--llamar"{% if not e.en_espera %} disabled{% endif %}><span class="oper-boton__texto">{{ 'Llamar siguiente' if e.en_espera else 'No hay turnos en espera' }}</span> <kbd>N</kbd></button>
+          </form>
+          <p id="resumen-cola" class="nota op-nota">{{ e.en_espera }} en espera{% if e.preferenciales %} · {{ e.preferenciales }} preferencial{{ '' if e.preferenciales == 1 else 'es' }}{% endif %}</p>
+        </div>
+        {% else %}
+        <div class="oper-turno" data-estado="{{ t.estado }}">
+          <div class="oper-codigo" id="codigo-actual">{{ t.codigo }}</div>
+          <div class="oper-etiquetas">
+            <span class="badge badge-{{ t.estado }}">{{ t.estado|replace('_', ' ') }}</span>
+            <span class="badge badge-{{ t.prioridad }}">{{ t.prioridad }}</span>
+          </div>
+          {% if t.puede_iniciar %}
+          <p class="oper-cuenta">{% if t.segundos_restantes is not none %}El cliente tiene <strong id="cuenta">{{ t.segundos_restantes }} s</strong> para presentarse; si no llega, el turno pasa a abandonado.{% else %}Espere a que el cliente se presente en la ventanilla.{% endif %}</p>
+          <form method="post" action="{{ base }}/panel/iniciar" class="js-accion" data-api="/api/atencion/iniciar" data-ok="iniciar">
+            <input type="hidden" name="codigo" value="{{ t.codigo }}">
+            <input type="hidden" name="ventanilla" value="{{ ventanilla }}">
+            <button type="submit" id="btn-iniciar" class="oper-boton oper-boton--iniciar"><span class="oper-boton__texto">Iniciar atención</span> <kbd>I</kbd></button>
+          </form>
+          {% else %}
+          <p class="oper-cuenta">En atención desde hace <strong id="cron">{{ mmss(((e.servidor_ms - t.inicio_ms) // 1000) if t.inicio_ms else 0) }}</strong></p>
+          <form method="post" action="{{ base }}/panel/finalizar" class="js-accion" id="form-cierre" data-api="/api/atencion/finalizar" data-ok="finalizar">
+            <input type="hidden" name="codigo" value="{{ t.codigo }}">
+            <input type="hidden" name="ventanilla" value="{{ ventanilla }}">
+            <details class="op-cierre">
+              <summary>Motivo y nota (opcional)</summary>
+              <label for="motivo-actual">Motivo</label>
+              <select name="motivo" id="motivo-actual">
+                <option value="">Sin motivo</option>
+                {% for clave, etiqueta in motivos_cierre.items() %}<option value="{{ clave }}">{{ etiqueta }}</option>{% endfor %}
+              </select>
+              <label for="nota-actual">Nota (hasta {{ nota_cierre_max }} caracteres)</label>
+              <input type="text" name="nota" id="nota-actual" maxlength="{{ nota_cierre_max }}" autocomplete="off">
+            </details>
+            <button type="submit" id="btn-finalizar" class="oper-boton oper-boton--finalizar"><span class="oper-boton__texto">Finalizar atención</span> <kbd>F</kbd></button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <noscript><p class="nota">Sin JavaScript la pantalla no se actualiza sola: pulse «Actualizar» para ver los cambios.</p></noscript>
+    </section>
+
+    <section class="card oper-cola" aria-labelledby="t-cola">
+      <div class="card-cabecera">
+        <h2 id="t-cola">Cola de espera</h2>
+        <a href="{{ base }}/cola{{ '' if es_operador else '?ventanilla=' ~ ventanilla }}" class="btn btn-secundario">Actualizar</a>
+      </div>
+      <dl class="oper-numeros">
+        <div><dt>En espera</dt><dd id="st-espera">{{ e.en_espera }}</dd></div>
+        <div><dt>Preferenciales</dt><dd id="st-pref">{{ e.preferenciales }}</dd></div>
+        <div><dt>Atendidos por mí hoy</dt><dd id="st-hoy">{{ e.mis_atendidos_hoy }}</dd></div>
+        <div><dt>Atención media hoy</dt><dd id="st-medio">{{ mmss(e.mi_atencion_media_seg) if e.mi_atencion_media_seg is not none else '—' }}</dd></div>
+      </dl>
+      <ol id="cola-lista" class="oper-lista" aria-label="Turnos en espera, en orden de atención">
+        {% for c in e.cola %}
+        <li class="oper-item oper-item--{{ c.prioridad }}"{% if c.creado_ms %} data-creado-ms="{{ c.creado_ms }}"{% endif %}>
+          <span class="oper-pos">{{ c.posicion }}</span>
+          <span class="oper-cod">{{ c.codigo }}</span>
+          <span class="badge badge-{{ c.prioridad }}">{{ c.prioridad }}</span>
+          <span class="oper-espera">{% if c.creado_ms %}{{ mmss((e.servidor_ms - c.creado_ms) // 1000) }}{% endif %}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      <p id="cola-vacia" class="texto-suave op-vacio"{% if e.cola %} hidden{% endif %}>No hay turnos en espera.</p>
+    </section>
+  </div>
+
+  <p class="oper-atajos">Atajos de teclado: <kbd>N</kbd> llamar siguiente · <kbd>I</kbd> iniciar atención · <kbd>F</kbd> ir a finalizar</p>
+</div>
+<script type="application/json" id="estado-inicial">{{ e|tojson }}</script>
+<script type="application/json" id="config-operador">{{ {"motivos": motivos_cierre, "nota_max": nota_cierre_max}|tojson }}</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}{% if ventanilla %}<script src="{{ base }}/static/operador.js?v={{ css_version }}" defer></script>{% endif %}{% endblock %}

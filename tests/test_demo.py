@@ -1,6 +1,7 @@
 """La guía /demo cubre el recorrido de la demo del Seguimiento 4, de la emisión a la evidencia."""
 import re
 import unittest
+from tests.apoyo_sesion import ClienteConSesion
 from unittest import mock
 
 from tests.test_ventanilla_unica import HAY_DEPENDENCIAS, BaseRedisMongo
@@ -15,7 +16,7 @@ class BaseDemo(BaseRedisMongo):
     def pedir(self, **env):
         with mock.patch("app.main.verificar_redis", return_value={"ok": True, "version": "7"}), \
                 mock.patch.dict("os.environ", env):
-            return TestClient(main.app).get("/demo").text
+            return ClienteConSesion(main.app).get("/demo").text
 
 
 class PruebasGuiaDemo(BaseDemo):

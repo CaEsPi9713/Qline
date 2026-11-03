@@ -115,7 +115,7 @@ def api_eventos_estado():
     return {"ok": True, **hub.estado()}
 
 
-def registrar(app: FastAPI, get_db=None) -> None:
+def registrar(app: FastAPI, get_db=None, dependencias_diagnostico=()) -> None:
     """
     Registra las rutas directamente sobre la app (sin APIRouter): así `app.routes`
     sigue siendo una lista plana de rutas con `path`, como espera el resto del proyecto.
@@ -124,5 +124,5 @@ def registrar(app: FastAPI, get_db=None) -> None:
     app.add_api_websocket_route("/ws/eventos", ws_eventos)
     if get_db is not None:
         app.add_api_websocket_route("/ws/turno/qr/{token}", crear_ws_turno_qr(get_db))
-    app.add_api_route("/api/eventos/prueba", api_evento_de_prueba, methods=["POST"])
-    app.add_api_route("/api/eventos/estado", api_eventos_estado, methods=["GET"])
+    app.add_api_route("/api/eventos/prueba", api_evento_de_prueba, methods=["POST"], dependencies=list(dependencias_diagnostico))
+    app.add_api_route("/api/eventos/estado", api_eventos_estado, methods=["GET"], dependencies=list(dependencias_diagnostico))

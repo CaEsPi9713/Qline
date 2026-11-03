@@ -10,11 +10,14 @@ ADAPTAR: si tu versión de Starlette es antigua, TemplateResponse recibe
 Las rutas de API (JSON) conservan el comportamiento por defecto de FastAPI.
 """
 import logging
+from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
+
+from app.auth import INICIO_POR_ROL, NoAutenticado, SinPermiso, siguiente_seguro
 
 log = logging.getLogger("qline.errores")
 
@@ -26,6 +29,23 @@ def _quiere_json(request: Request) -> bool:
 
 
 def registrar_errores(app, templates):
+    @app.exception_handler(NoAutenticado)
+    async def manejar_sin_sesion(request: Request, exc: NoAutenticado):
+        if _quiere_json(request):
+            return JSONResponse({"detail": "Inicie sesión para continuar."}, status_code=401)
+        destino = request.url.path + ("?" + request.url.query if request.url.query else "")
+        siguiente = siguiente_seguro(destino) if request.method == "GET" else ""
+        base = templates.env.globals.get("base", "")
+        return RedirectResponse(f"{base}/login" + (f"?siguiente={quote(siguiente, safe='')}" if siguiente else ""),
+                                status_code=303)
+
+    @app.exception_handler(SinPermiso)
+    async def manejar_sin_permiso(request: Request, exc: SinPermiso):
+        if _quiere_json(request):
+            return JSONResponse({"detail": "No tiene permiso para esta acción."}, status_code=403)
+        inicio = INICIO_POR_ROL.get(exc.usuario.get("rol"), "/")
+        return templates.TemplateResponse(request, "403.html", {"usuario": exc.usuario, "inicio": inicio}, status_code=403)
+
     @app.exception_handler(StarletteHTTPException)
     async def manejar_http(request: Request, exc: StarletteHTTPException):
         if exc.status_code in PLANTILLAS and not _quiere_json(request):
