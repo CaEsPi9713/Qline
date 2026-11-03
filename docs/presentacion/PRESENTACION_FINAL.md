@@ -243,7 +243,7 @@
 ### Contenido en Pantalla
 - **Aportes Integrados del Equipo:**
   - **Alessandro Cambronero:** Motor de Redis, concurrencia, ventanilla única, WebSockets y mediciones de rendimiento.
-  - **Carlos Espinoza:** Esquema $jsonSchema, índices parciales, pipelines de analítica, historial y scripts de datos sintéticos.
+  - **Carlos Espinoza:** Esquema $jsonSchema, índices parciales, pipelines de analítica, historial y scripts de datos sintéticos; ventanillas dinámicas (P09) y, **como extra al trabajo**, el mantenimiento lógico de sucursales (RFC-004), que cataloga sedes y aprovisiona sus ventanillas sin volver multisucursal la operación.
   - **Abigail Urbina:** Sistema de diseño visual Fintech, arquitectura de plantillas Jinja2, experiencia de quiosco y accesibilidad.
   - **Aaron Benavides:** Interfaz de cliente, tickets imprimibles, códigos QR, instrucciones de espera, changelog, portal.yml y presentación de release.
   *(Nota: Cada integrante validará personalmente sus conclusiones individuales en la sustentación final).*

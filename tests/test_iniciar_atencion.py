@@ -57,7 +57,7 @@ class PruebasIniciarAtencion(unittest.TestCase):
         self.assertIsNone(self.col.docs["A-020"]["timestamps"]["inicio_atencion"])
 
     def test_ventanilla_invalida(self):
-        for v in ("V-09", "", None, "v-01"):
+        for v in ("X-09", "V-9", "", None, "v-01"):
             with self.subTest(ventanilla=v):
                 with self.assertRaises(DatosInvalidos):
                     iniciar_atencion(self.col, "A-015", v)
@@ -138,7 +138,7 @@ class PruebasRutaIniciar(unittest.TestCase):
         self.assertEqual(self.post("A-016", "V-01").status_code, 409)    # pendiente
         self.assertEqual(self.post("A-020", "V-01").status_code, 409)    # otra ventanilla
         self.assertEqual(self.post("A-999", "V-01").status_code, 404)
-        self.assertEqual(self.post("A-015", "V-09").status_code, 422)
+        self.assertEqual(self.post("A-015", "X-09").status_code, 422)
         self.assertEqual(self.post("basura", "V-01").status_code, 422)
 
     def test_mongodb_caido_503(self):

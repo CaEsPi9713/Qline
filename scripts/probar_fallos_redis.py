@@ -127,7 +127,7 @@ def casos_datos_invalidos():
         ("Iniciar la atención con un código inválido", "POST", "/api/atencion/iniciar",
          {"codigo": "basura", "ventanilla": "V-01"}, {422}, None, "422"),
         ("Finalizar con una ventanilla inválida", "POST", "/api/atencion/finalizar",
-         {"codigo": "A-7777", "ventanilla": "V-99"}, {422}, None, "422"),
+         {"codigo": "A-7777", "ventanilla": "X-99"}, {422}, None, "422"),
     ]
 
 

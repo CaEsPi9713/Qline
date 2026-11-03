@@ -109,10 +109,11 @@ Se leen del archivo `.env` (copia de [`.env.example`](.env.example)). **Nunca** 
 ```bash
 python scripts/init_mongo.py                 # esquema JSON Schema, índices y prueba de integridad
 python scripts/generar_datos_sinteticos.py --cargar   # historial sintético (upsert, no duplica)
+python scripts/cargar_datos_release.py       # alternativa para el release: serie propia L-NNN, solo historial, idempotente
 python -m scripts.preparar_demo              # comprueba que todo quedó listo (no borra nada)
 ```
 
-- **Si `init_mongo` dice «Unauthorized» en `collMod`**: el usuario no puede cambiar el validador de una colección que ya existe. Los índices sí se aplican. La opción `--recrear --confirmar` **borra todos los turnos** y vuelve a crear la colección con el validador; úsela solo en un entorno de pruebas. El campo `cierre` (motivo y nota) funciona sin actualizar el validador (decisión D-31).
+- **Si `init_mongo` dice «Unauthorized» en `collMod`**: el usuario no puede cambiar el validador de una colección que ya existe. Los índices sí se aplican. Con el validador anterior, el motor solo acepta las ventanillas `V-01` a `V-03`: para usar ventanillas nuevas (P09) hay que pedir a un administrador que aplique el validador de `app/turnos_schema.py` (o recrear la colección). `python -m scripts.probar_ventanillas` lo comprueba sin tocar datos reales. La opción `--recrear --confirmar` **borra todos los turnos** y vuelve a crear la colección con el validador; úsela solo en un entorno de pruebas. El campo `cierre` (motivo y nota) funciona sin actualizar el validador (decisión D-31).
 - `scripts/init_mongo.py` es idempotente y comprueba que MongoDB rechaza prioridades inválidas y códigos duplicados.
 
 ### Datos sintéticos (TT-005)
@@ -130,6 +131,8 @@ python scripts/generar_datos_sinteticos.py --cargar                 # upsert en 
 python scripts/generar_datos_sinteticos.py --reiniciar --confirmar  # borra los sintéticos y vuelve a cargar
 python scripts/generar_datos_sinteticos.py --limpiar --confirmar    # borra solo los códigos S-NNN
 ```
+
+`scripts/cargar_datos_release.py` (TT-028) carga en cambio una serie propia **`L-NNN`** (50 turnos terminados por defecto, con `--turnos N`): crea la colección e índices si faltan, carga con upsert y comprueba las agregaciones del dashboard. **Nunca** escribe ni borra `A-NNN` ni `S-NNN`; `--limpiar --confirmar` elimina solo `L-NNN`.
 
 Opciones útiles: `--semilla`, `--dias`, `--fecha-fin`, `--llegadas-por-hora`, `--prefijo`, `--con-activos` y `--json`. Es reproducible (semilla y fecha fijas), validado antes de escribir y seguro: `--limpiar` y `--reiniciar` exigen `--confirmar` y solo tocan el prefijo sintético, nunca la serie `A-`.
 
@@ -158,14 +161,17 @@ Todo lo que no es del cliente exige usuario y contraseña de Apache (`.htaccess`
 | Cliente | `/consultar` | Consulta de un turno por código |
 | Sala | `/pantalla` | Turnos llamados y en atención, con aviso sonoro opcional |
 | Operador | `/cola`, `/panel` | Cola con prioridad; llamado, inicio y fin de la atención (con motivo y nota opcionales) |
-| Supervisor | `/historial`, `/dashboard` | Historial con filtros y descarga JSON; KPI y SLA |
-| Administración | `/administracion`, `/admin/sucursales` | Administrador técnico de MongoDB; alta y baja de ventanillas (P09); mantenimiento de sucursales (RFC-004) |
+| Supervisor | `/historial`, `/dashboard` | Historial con filtros, fechas, paginación y descarga JSON; KPI, SLA y desglose por fecha |
+| Administración | `/administracion`, `/admin/sucursales` | Administrador técnico de MongoDB; alta y baja de ventanillas (P09); **extra:** mantenimiento de sucursales (RFC-004) |
 | Equipo | `/demo`, `/salud`, `/acerca` | Guía de demostración; estado de la aplicación, Redis y MongoDB; equipo del proyecto |
 
 `/salud` responde `{estado, app, redis, mongo, barrido}` con **200** si Redis y MongoDB responden y **503** si falla alguno, sin ningún dato de infraestructura (decisión D-29).
 
 ## 9. Operación
 
+> **Extra del trabajo (RFC-004):** `/admin/sucursales` permite mantener un catálogo de sedes y aprovisionar sus ventanillas. No forma parte del plan de S4 y **no vuelve multisucursal al sistema**: la emisión, la cola, el llamado, el panel, el QR y la sala siguen siendo de un solo servicio y una sola sede.
+
+- **Ventanillas:** se dan de alta, se desactivan y se reactivan desde `/administracion` (formato `V-NN`). Solo las activas pueden llamar turnos y aparecen en el panel; una ventanilla con un turno en curso no se puede desactivar.
 - **Flujo normal:** el cliente emite el turno → el operador llama desde `/cola` o `/panel` → *Iniciar atención* → *Finalizar atención* (opcionalmente con un motivo de una lista cerrada y una nota de hasta 200 caracteres, que se guardan en el campo `cierre` del turno).
 - **Abandono:** un turno llamado que no inicia en 180 s pasa solo a `abandonado` (el barrido corre dentro de la aplicación; también `python -m scripts.barrer_abandonos`).
 - **Demostración:** `python -m scripts.preparar_demo [--cargar-sinteticos] [--en-espera N]` comprueba el entorno y deja turnos en la cola sin borrar nada; después siga la guía de `/demo`.
@@ -209,7 +215,7 @@ Las pruebas **contra los servicios reales** generan informes en [`docs/evidencia
 | [`docs/arquitectura/redis_claves.md`](docs/arquitectura/redis_claves.md) | Mapa de claves, tipos, TTL y recuperación de Redis |
 | [`docs/arquitectura/tiempo_real.md`](docs/arquitectura/tiempo_real.md) | Pub/Sub y WebSocket |
 | [`docs/arquitectura/qr_consulta.md`](docs/arquitectura/qr_consulta.md) | Consulta por QR |
-| [`docs/decisiones.md`](docs/decisiones.md) | Decisiones técnicas y su motivo (D-01 a D-33) |
+| [`docs/decisiones.md`](docs/decisiones.md) | Decisiones técnicas y su motivo (D-01 a D-34) |
 | [`docs/design-system.md`](docs/design-system.md) | Sistema de diseño: colores, componentes y regla del vidrio |
 | [`docs/seguimientos/`](docs/seguimientos/) | Bitácoras S1 a S4 |
 | [`docs/presentacion/`](docs/presentacion/) | Presentación final y guion de la demo |

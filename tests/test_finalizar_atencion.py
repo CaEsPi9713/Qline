@@ -82,7 +82,7 @@ class PruebasFinalizarAtencion(unittest.TestCase):
 
     # PF-08
     def test_pf08_ventanilla_invalida(self):
-        for v in ("V-09", "", None, "v-01"):
+        for v in ("X-09", "V-9", "", None, "v-01"):
             with self.subTest(ventanilla=v):
                 with self.assertRaises(DatosInvalidos):
                     finalizar_atencion(self.col, "A-030", v)

@@ -375,7 +375,8 @@
       <h3>Comprobar <code>/salud</code> y el cierre con nota</h3>
       <div class="terminal" data-copiar>python -m scripts.probar_salud --informe docs/evidencia/salud.md --url-publica https://grupo2.crnube.net/proyecto/qline</div>
       <div class="terminal" data-copiar>python -m scripts.probar_cierre --informe docs/evidencia/cierre.md</div>
-      <div class="esperado"><strong>Debe verse:</strong> en <code>/salud</code>, <code>estado: ok</code> con Redis y MongoDB en «ok» y sin ningún dato de infraestructura; en el primer informe, los cinco casos «OK» (servicios caídos dan 503 y sin credenciales Apache responde 401); en el segundo, los siete casos «OK» y la nota de que el servidor no valida <code>cierre</code> (lo valida la aplicación).</div>
+      <div class="terminal" data-copiar>python -m scripts.probar_ventanillas --informe docs/evidencia/ventanillas_dinamicas.md</div>
+      <div class="esperado"><strong>Debe verse:</strong> en <code>/salud</code>, <code>estado: ok</code> con Redis y MongoDB en «ok» y sin ningún dato de infraestructura; en el primer informe, los cinco casos «OK» (servicios caídos dan 503 y sin credenciales Apache responde 401); en el segundo, los siete casos «OK» y la nota de que el servidor no valida <code>cierre</code> (lo valida la aplicación); el tercero informa si el motor de MongoDB acepta una ventanilla nueva o necesita <code>collMod</code>.</div>
     </div>
     <div class="paso-acciones">
       <a class="btn" href="{{ base }}/salud">Abrir /salud</a>

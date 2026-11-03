@@ -38,7 +38,7 @@
   <div class="card">
     <div class="card-cabecera">
       <div>
-        <h2>Sucursales del Sistema (RFC-004)</h2>
+        <h2>Sucursales del Sistema (RFC-004) <span class="kpi-tag kpi-tag-info" title="Función adicional fuera del Plan Alternativo de S4">Extra</span></h2>
         <p class="sub" style="margin:4px 0 0">Sedes institucionales registradas con capacidad parametrizable de ventanillas.</p>
       </div>
       <a href="{{ base }}/admin/sucursales" class="btn btn-secundario">Administrar Sedes</a>
@@ -132,8 +132,8 @@
     <h3>Registrar nueva ventanilla (P09)</h3>
     <form method="post" action="{{ base }}/ventanillas/crear" class="barra-filtros" style="align-items:flex-end">
       <div class="grupo">
-        <label for="codigo_v">Código</label>
-        <input type="text" id="codigo_v" name="codigo" placeholder="Ej. V-04" required pattern="^V-[0-9]{2,}$">
+        <label>Código</label>
+        <p class="texto-suave" style="margin:0">Se asigna solo: <strong>{{ proximo_codigo_ventanilla }}</strong></p>
       </div>
       <div class="grupo">
         <label for="nombre_v">Nombre descriptivo</label>

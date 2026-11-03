@@ -10,10 +10,10 @@ from app.atencion import _iso
 from app.constantes import (
     ESTADO_EN_ATENCION,
     ESTADO_LLAMADO,
-    VENTANILLAS,
     clave_ventanilla_actual,
 )
 from app import cola
+from app.ventanillas import ventanillas_activas
 from app.redis_client import get_redis
 
 COLECCION = "turnos"
@@ -90,12 +90,16 @@ def estado_ventanillas(db, usar_redis: bool = True) -> tuple[list[dict], list[st
     avisos: list[str] = []
     ventanillas = []
     acceso = _AccesoRedis(usar_redis)
-    for v in VENTANILLAS:
+    # Una sola consulta con todos los turnos en curso, agrupados por ventanilla.
+    en_curso: dict = {}
+    for d in col.find({"estado": {"$in": [ESTADO_LLAMADO, ESTADO_EN_ATENCION]}}):
+        en_curso.setdefault(d.get("ventanilla"), []).append(d)
+    # Catálogo activo; si una ventanilla se desactivó con un turno en curso, sigue visible hasta que termine.
+    catalogo = list(ventanillas_activas(db))
+    codigos = catalogo + [v for v in sorted(k for k in en_curso if k) if v not in catalogo]
+    for v in codigos:
         codigo = acceso.actual(v)
-        activos = sorted(
-            col.find({"ventanilla": v, "estado": {"$in": [ESTADO_LLAMADO, ESTADO_EN_ATENCION]}}),
-            key=_orden,
-        )
+        activos = sorted(en_curso.get(v, []), key=_orden)
         turno = col.find_one({"codigo": codigo}) if codigo else None
         # Redis apunta a un turno que ya terminó (o no existe): no es un turno activo.
         if turno is not None and turno.get("estado") not in (ESTADO_LLAMADO, ESTADO_EN_ATENCION):

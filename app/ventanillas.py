@@ -25,6 +25,9 @@ PATRON_CODIGO_VENTANILLA = r"^V-[0-9]{2,}$"
 
 TIPOS_VENTANILLA = ("general", "preferencial")
 
+# Código reservado para la ventanilla temporal de la prueba de P09: nunca cuenta para la numeración consecutiva.
+VENTANILLA_PRUEBA = "V-98"
+
 
 class VentanillaError(Exception):
     """Excepción para errores de validación o lógica de negocio en ventanillas."""
@@ -41,6 +44,21 @@ def validar_codigo_ventanilla(codigo: str) -> str:
             f"Código de ventanilla inválido: {codigo!r}. Debe coincidir con el formato 'V-XX' (ej. V-01, V-04)."
         )
     return codigo_norm
+
+
+def siguiente_codigo_ventanilla(db: Optional[Database] = None) -> str:
+    """
+    Próximo código consecutivo con el formato V-NN (V-04, V-05, ... V-08): el número más alto
+    registrado (activas o inactivas, de cualquier sede) más uno, y nunca menos que las base.
+    """
+    mayor = max(int(v.split("-")[1]) for v in VENTANILLAS)
+    if db is not None:
+        for d in db[COLECCION_VENTANILLAS].find({}, {"codigo": 1}):
+            codigo = d.get("codigo")
+            if (isinstance(codigo, str) and codigo != VENTANILLA_PRUEBA
+                    and re.fullmatch(PATRON_CODIGO_VENTANILLA, codigo)):
+                mayor = max(mayor, int(codigo.split("-")[1]))
+    return f"V-{mayor + 1:02d}"
 
 
 def inicializar_ventanillas_base(db: Database) -> list[dict]:
@@ -74,7 +92,7 @@ def inicializar_ventanillas_base(db: Database) -> list[dict]:
 
 def registrar_ventanilla(
     db: Database,
-    codigo: str,
+    codigo: Optional[str] = None,
     nombre: Optional[str] = None,
     tipo: str = "general",
     sucursal: str = "central",
@@ -82,8 +100,9 @@ def registrar_ventanilla(
     """
     Registra o reactiva una ventanilla en MongoDB (P09 / RFC-004).
     Valida el formato del código, asocia la sucursal y garantiza que quede lista para atención.
+    Sin código, asigna el siguiente consecutivo (V-04, V-05, ...).
     """
-    codigo_norm = validar_codigo_ventanilla(codigo)
+    codigo_norm = validar_codigo_ventanilla(codigo) if codigo and codigo.strip() else siguiente_codigo_ventanilla(db)
     tipo_norm = tipo.strip().lower() if tipo else "general"
     if tipo_norm not in TIPOS_VENTANILLA:
         tipo_norm = "general"
@@ -287,3 +306,47 @@ def obtener_codigos_ventanillas(
     ventanillas = listar_ventanillas(db=db, solo_activas=solo_activas, sucursal=sucursal)
     return [v["codigo"] for v in ventanillas]
 
+
+
+# --- Catálogo operativo (P09 conectado a la operación) ------------------------------------------
+
+_ULTIMAS_CONOCIDAS: tuple = tuple(VENTANILLAS)
+
+
+def _orden_ventanilla(codigo: str):
+    return (int(codigo.split("-")[1]), codigo)
+
+
+def ventanillas_activas(db: Optional[Database] = None) -> tuple:
+    """
+    Códigos de las ventanillas que pueden operar (llamar y atender), según el catálogo de MongoDB.
+
+    - Con el catálogo vacío o sin inicializar, son las tres ventanillas base (V-01 a V-03).
+    - Una ventanilla desactivada deja de poder llamar; las demás siguen operando.
+    - Si MongoDB no responde se devuelve el último catálogo conocido (o las base), nunca se lanza.
+    """
+    global _ULTIMAS_CONOCIDAS
+    if db is None:
+        return _ULTIMAS_CONOCIDAS
+    try:
+        col = db[COLECCION_VENTANILLAS]
+        if col.find_one({}) is None:
+            _ULTIMAS_CONOCIDAS = tuple(VENTANILLAS)
+            return _ULTIMAS_CONOCIDAS
+        codigos = {
+            d["codigo"] for d in col.find({"estado": "activa"})
+            if isinstance(d.get("codigo"), str) and re.fullmatch(PATRON_CODIGO_VENTANILLA, d["codigo"])
+        }
+        _ULTIMAS_CONOCIDAS = tuple(sorted(codigos, key=_orden_ventanilla))
+        return _ULTIMAS_CONOCIDAS
+    except Exception:  # noqa: BLE001 · la operación no debe caerse porque falle la consulta del catálogo
+        return _ULTIMAS_CONOCIDAS
+
+
+def codigos_para_consulta(db: Optional[Database] = None) -> tuple:
+    """Todas las ventanillas conocidas (activas e inactivas) más las base: para filtros de historial."""
+    try:
+        registradas = obtener_codigos_ventanillas(db, solo_activas=False) if db is not None else []
+    except Exception:  # noqa: BLE001
+        registradas = []
+    return tuple(sorted(set(VENTANILLAS) | set(registradas), key=_orden_ventanilla))

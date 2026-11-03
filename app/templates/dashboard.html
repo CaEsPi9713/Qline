@@ -326,6 +326,76 @@
   </div>
 </div>
 
+<!-- Desglose por fecha (P02) -->
+{% set pf = metricas.por_fecha %}
+<div class="card" id="desglose-fecha" style="margin-bottom: 20px;">
+  <div class="card-cabecera">
+    <div>
+      <h2>Desglose por fecha</h2>
+      <p class="sub" style="margin:4px 0 0">
+        Turnos y tiempos de cada día{% if pf.zona %} (hora de {{ pf.zona }}){% endif %}.
+        {% if pf.rango.desde or pf.rango.hasta %}Rango: {{ pf.rango.desde or "el inicio" }} a {{ pf.rango.hasta or "hoy" }}.
+        {% else %}Se muestran los últimos {{ pf.max_dias }} días con datos.{% endif %}
+      </p>
+    </div>
+    <form method="get" action="{{ base }}/dashboard" class="barra-filtros">
+      <input type="hidden" name="sla_espera" value="{{ metricas.sla.objetivo_max_espera_seg }}">
+      <div class="grupo">
+        <label for="fecha_desde">Desde</label>
+        <input type="date" id="fecha_desde" name="fecha_desde" value="{{ pf.rango.desde }}">
+      </div>
+      <div class="grupo">
+        <label for="fecha_hasta">Hasta</label>
+        <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ pf.rango.hasta }}">
+      </div>
+      <button type="submit">Aplicar</button>
+      <a class="btn btn-secundario" href="{{ base }}/dashboard?sla_espera={{ metricas.sla.objetivo_max_espera_seg }}">Limpiar</a>
+    </form>
+  </div>
+
+  {% if pf.aviso %}<div class="aviso" role="status">{{ pf.aviso }}</div>{% endif %}
+
+  {% if pf.dias %}
+  <div class="grafico-barras-v" role="img" aria-label="Turnos por día">
+    {% for d in pf.dias %}
+    <div class="columna-hora" title="{{ d.fecha_legible }}: {{ d.total }} turno{% if d.total != 1 %}s{% endif %}">
+      <div class="columna-valor">{{ d.total }}</div>
+      <div class="columna-barra" style="height: {{ [d.porcentaje_barra, 4]|max }}%;"></div>
+      <div class="columna-etiqueta">{{ d.etiqueta }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="tabla-wrap" style="margin-top: 16px;">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th><th class="num">Turnos</th><th class="num">Atendidos</th><th class="num">Abandonados</th>
+          <th class="num">% abandono</th><th class="num">Espera prom.</th><th class="num">Atención prom.</th><th>SLA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in pf.dias|reverse %}
+        <tr>
+          <td><strong>{{ d.fecha_legible }}</strong></td>
+          <td class="num">{{ d.total }}</td>
+          <td class="num">{{ d.atendidos }}</td>
+          <td class="num">{{ d.abandonados }}</td>
+          <td class="num">{{ d.tasa_abandono }}%</td>
+          <td class="num">{{ d.espera_formateada }}</td>
+          <td class="num">{{ d.atencion_formateada }}</td>
+          <td><span class="badge {% if d.sla_estado == 'CUMPLIDO' %}badge-cumplido{% else %}badge-incumplido{% endif %}">{{ d.sla_pct }}% · {{ 'cumple' if d.sla_estado == 'CUMPLIDO' else 'no cumple' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="nota" style="margin: 10px 0 0">Total en el período mostrado: <strong>{{ pf.total_turnos }}</strong> turnos. El SLA de cada día usa la espera máxima elegida arriba ({{ metricas.sla.objetivo_max_espera_seg }} s).</p>
+  {% else %}
+  <p class="texto-suave" style="margin:0">No hay turnos en ese rango de fechas.</p>
+  {% endif %}
+</div>
+
 <!-- Productividad y atenciones por ventanilla -->
 <div class="card" style="margin-bottom: 20px;">
   <div class="card-cabecera">

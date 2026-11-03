@@ -24,7 +24,7 @@ from app.constantes import (
     ESTADO_LLAMADO,
     MOTIVOS_CIERRE,
     NOTA_CIERRE_MAX,
-    VENTANILLAS,
+    PATRON_VENTANILLA,
 )
 from app.excepciones import (
     DatosInvalidos,
@@ -46,10 +46,8 @@ def validar_codigo(codigo: Any) -> str:
 
 
 def validar_ventanilla(ventanilla: Any) -> str:
-    if ventanilla not in VENTANILLAS:
-        raise DatosInvalidos(
-            f"Ventanilla inválida. Valores permitidos: {', '.join(VENTANILLAS)}"
-        )
+    if not isinstance(ventanilla, str) or not re.fullmatch(PATRON_VENTANILLA, ventanilla):
+        raise DatosInvalidos("Ventanilla inválida. Use el formato V-NN (por ejemplo, V-01 o V-04)")
     return ventanilla
 
 

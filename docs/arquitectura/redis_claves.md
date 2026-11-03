@@ -1,6 +1,6 @@
 # Mapa de claves Redis de QLine
 
-Documento vivo del contrato de Redis (TT-011, TT-012, TT-013 y, al cierre, TT-027).
+Documento vivo del contrato de Redis (TT-011, TT-012, TT-013 y TT-027). **Revisado contra el código integrado el 02/11/2026** (TT-027): las diferencias verificadas están incorporadas y `tests/test_redis_claves_doc.py` vigila que el documento y el código no se separen.
 Todas las claves y canales empiezan con `grupo2:qline:`. Está prohibido `FLUSHALL` y `FLUSHDB`.
 Las constantes viven en [`app/constantes.py`](../../app/constantes.py); las operaciones, en [`app/cola.py`](../../app/cola.py).
 
@@ -9,12 +9,14 @@ Las constantes viven en [`app/constantes.py`](../../app/constantes.py); las oper
 | Clave / canal | Tipo | Vida | Quién la escribe | Estado |
 |---|---|---|---|---|
 | `grupo2:qline:contador:atencion_general` | String | Permanente | Emisión (`INCR`) | Implementada |
-| `grupo2:qline:cola:atencion_general` | Sorted Set | Mientras el turno espera | Emisión (`ZADD NX`) · llamada (`ZPOPMIN`) | Implementada |
-| `grupo2:qline:ventanilla:{id}:actual` | String | Mientras la ventanilla atiende el turno | Llamada · finalización | Implementada |
+| `grupo2:qline:cola:atencion_general` | Sorted Set | Mientras el turno espera | Emisión (`ZADD NX`) · llamada (`ZPOPMIN`) · compensaciones (`devolver_a_cola`, `reencolar`) · recuperación (`rehidratar_cola`) | Implementada |
+| `grupo2:qline:ventanilla:{id}:actual` | String | Reserva `__asignando__` de 10 s; después, el código del turno **sin TTL** hasta que se libera | Llamada (`SET NX`, luego `MULTI/EXEC`) · finalización · abandono (`liberar_ventanilla_si`) · compensación | Implementada |
 | `grupo2:qline:turno:{codigo}` | **Hash + TTL 180 s** | Hasta que el cliente se presenta o vence | Llamada · inicio/fin de atención | **Implementada (Fase 1)** |
 | `grupo2:qline:eventos` | Pub/Sub | — | Todas las transiciones | Publicador y receptor implementados; emitir, llamar, iniciar, finalizar y abandonar ya publican (el abandono lo publica el barrido, HU-008). Ver [tiempo_real.md](tiempo_real.md) |
 
 Con esto el flujo ya usa **tres estructuras distintas** de Redis (Sorted Set, String y Hash), requisito de TT-011.
+
+**Qué NO agrega claves:** el cierre con motivo y nota (S4-M03) vive solo en MongoDB (`cierre`); `/salud` solo hace `PING`; las ventanillas nuevas (P09) usan la misma clave `ventanilla:{id}:actual`; la pantalla de sala y el QR se alimentan de los eventos de `grupo2:qline:eventos` y de MongoDB. No se usan `EVAL`, `CONFIG SET`, `FLUSHALL` ni `FLUSHDB`.
 
 ## Cola (Sorted Set)
 
@@ -63,6 +65,8 @@ pendiente ──llamar──▶ llamado ──iniciar atención──▶ en_aten
 | `cola.turno_llamado(codigo)` | Datos del Hash, o `None` si no existe o expiró |
 | `cola.segundos_restantes(codigo)` | Segundos que faltan, o `None` |
 | `cola.confirmar_presencia(codigo)` | `True` si existía y se eliminó |
+| `cola.liberar_ventanilla_si(ventanilla, codigo)` | Libera la clave de la ventanilla solo si aún apunta a ese turno |
+| `cola.devolver_a_cola(codigo, score, ventanilla)` / `cola.reencolar(...)` | Compensaciones: el turno vuelve a la cola con su posición original |
 
 ## Contrato para el abandono (HU-008 / TT-012, de Abigail) · implementado
 
@@ -112,7 +116,7 @@ El escenario C de `prueba_concurrencia.py` (opcional, con `--http`) sí usa la c
 
 ## Identificador de ventanilla
 
-`{id}` en `ventanilla:{id}:actual` es hoy `V-01`, `V-02` o `V-03` (`VENTANILLAS` en `app/constantes.py`). La forma de la clave no depende del número de ventanillas; lo que cambiará con las ventanillas dinámicas es quién valida que el identificador exista (catálogo en MongoDB, pendiente de G0).
+`{id}` en `ventanilla:{id}:actual` es el código de una ventanilla con el formato `V-NN` (`PATRON_VENTANILLA` en `app/constantes.py`): `V-01` a `V-03` (las base, `VENTANILLAS`) y las que se den de alta en el catálogo de MongoDB (colección `ventanillas`, P09). La forma de la clave no depende del número de ventanillas y la reserva `SET NX` es la misma para cualquiera; quien valida que la ventanilla exista y esté activa es `app/ventanillas.ventanillas_activas(db)`, que `llamado.py` consulta **antes** de reservar. Si MongoDB no responde se usa el último catálogo conocido. No se agregan claves nuevas.
 
 ## Reglas de consistencia (sección 17 del plan)
 

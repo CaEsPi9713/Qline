@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel
+from app.constantes import PATRON_VENTANILLA
 
 
 class IniciarAtencionEntrada(BaseModel):
-    # Debe coincidir con app.constantes.VENTANILLAS. Se valida además en el servicio.
-    ventanilla: Literal["V-01", "V-02", "V-03"]
+    # Formato V-NN (catálogo dinámico, P09). Se valida además en el servicio.
+    ventanilla: str = Field(pattern=PATRON_VENTANILLA)
 
 
 class TurnoEnAtencion(BaseModel):

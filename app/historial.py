@@ -10,7 +10,9 @@ from typing import Any, Optional, Union
 
 from pymongo.database import Database
 
-from app.constantes import ESTADOS, PRIORIDADES, SERVICIO_ID, VENTANILLAS
+import re
+
+from app.constantes import ESTADOS, PATRON_VENTANILLA, PRIORIDADES, SERVICIO_ID
 
 COLECCION_TURNOS = "turnos"
 
@@ -102,7 +104,7 @@ def obtener_historial_turnos(
 
     if estado and estado in ESTADOS:
         filtro["estado"] = estado
-    if ventanilla and ventanilla in VENTANILLAS:
+    if ventanilla and re.fullmatch(PATRON_VENTANILLA, ventanilla):
         filtro["ventanilla"] = ventanilla
     if prioridad and prioridad in PRIORIDADES:
         filtro["prioridad"] = prioridad

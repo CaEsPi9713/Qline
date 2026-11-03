@@ -21,5 +21,23 @@
     </div>
     <button class="boton" type="submit">Consultar</button>
   </form>
+
+  {% if turno %}
+  <section class="tarjeta tarjeta--destacada" aria-live="polite" aria-labelledby="resultado-titulo">
+    <h2 id="resultado-titulo">Resultado de la consulta</h2>
+    <div class="codigo-grande">{{ turno.codigo }}</div>
+    <dl class="datos">
+      <dt>Estado</dt><dd><span class="badge badge-{{ turno.estado }}">{{ turno.estado|replace('_', ' ')|title }}</span></dd>
+      <dt>Prioridad</dt><dd><span class="badge badge-{{ turno.prioridad }}">{{ turno.prioridad|capitalize }}</span></dd>
+      {% if turno.ventanilla %}<dt>Ventanilla</dt><dd>{{ turno.ventanilla }}</dd>{% endif %}
+      {% if turno.turnos_antes is not none %}
+      <dt>Turnos por delante</dt><dd>{{ turno.turnos_antes }}</dd>
+      <dt>Posición en la cola</dt><dd>{{ turno.posicion }}</dd>
+      {% endif %}
+    </dl>
+    {% if turno.aviso %}<p class="mensaje mensaje--aviso" role="status">{{ turno.aviso }}</p>{% endif %}
+    <p class="texto-suave">Actualice esta página para ver el estado más reciente.</p>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

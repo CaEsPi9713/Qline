@@ -136,7 +136,7 @@ class TestTurnosSchema(unittest.TestCase):
 
     def test_rechazo_ventanilla_invalida(self):
         """Ventanillas fuera del catálogo acordado son rechazadas."""
-        self.doc_valido["ventanilla"] = "V-99"
+        self.doc_valido["ventanilla"] = "X-99"
         with self.assertRaises(TurnoValidationError):
             validar_documento_turno(self.doc_valido)
 

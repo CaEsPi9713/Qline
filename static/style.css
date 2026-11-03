@@ -1054,15 +1054,15 @@ body.quiosco .publico-cuerpo { max-width: 760px; }
    Primario: turquesa oscuro (texto blanco con contraste AA). Acentos: azul, verde, ámbar y coral.
    ========================================================================== */
 :root {
-  --c-marca: #0E7C8B;
+  --c-marca: #0B7380;
   --c-marca-oscuro: #0A5A66;
   --c-marca-claro: #E0F4F7;
   --c-fondo: #EEF4F8;
-  --viv-teal: #0E7C8B;   --viv-teal-suave: #DDF1F4;
+  --viv-teal: #0B6F7C;   --viv-teal-suave: #DDF1F4;
   --viv-azul: #2F5FD0;   --viv-azul-suave: #E4ECFC;
-  --viv-verde: #1F8A5B;  --viv-verde-suave: #DFF3EA;
-  --viv-ambar: #B86E00;  --viv-ambar-suave: #FFF0D3;
-  --viv-coral: #C2412D;  --viv-coral-suave: #FDE7E2;
+  --viv-verde: #187A50;  --viv-verde-suave: #DFF3EA;
+  --viv-ambar: #8A5200;  --viv-ambar-suave: #FFF0D3;
+  --viv-coral: #AD3524;  --viv-coral-suave: #FDE7E2;
 }
 body.publico { background: var(--c-fondo); }
 .app-header, .publico-cab { border-bottom: 3px solid var(--turquesa, #5BB6C5); }
@@ -1123,7 +1123,7 @@ body.publico { background: var(--c-fondo); }
 /* Banda de llamada a la acción */
 .banda-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--e5, 1.5rem); margin-top: var(--e7, 3rem); padding: var(--e6, 2rem); background: var(--viv-teal); color: #fff; border-radius: var(--radio-l, 20px); }
 .banda-cta h2 { margin: 0 0 var(--e2, .5rem); color: #fff; }
-.banda-cta p { margin: 0; color: #E6F7FA; max-width: 52ch; }
+.banda-cta p { margin: 0; color: #FFFFFF; max-width: 52ch; }
 .banda-cta .boton { background: #fff; color: var(--c-marca-oscuro); }
 .banda-cta .boton:hover { background: var(--azul-marino); color: #fff; }
 .banda-cta .boton--contorno { background: transparent; border-color: #fff; color: #fff; }
@@ -1161,11 +1161,93 @@ body.publico { background: var(--c-fondo); }
 
 /* Dashboard de Carlos (P02): sus indicadores con la paleta de la aplicación */
 .kpi-esperando { border-left-color: #5BB6C5; } .kpi-esperando .valor { color: #0B111C; }
-.kpi-atendidos { border-left-color: #1F8A5B; } .kpi-atendidos .valor { color: #1F8A5B; }
+.kpi-atendidos { border-left-color: #187A50; } .kpi-atendidos .valor { color: #187A50; }
 .kpi-prom-espera { border-left-color: #0B111C; } .kpi-prom-espera .valor { color: #0B111C; }
-.kpi-prom-atencion { border-left-color: #0E7C8B; } .kpi-prom-atencion .valor { color: #0B111C; }
+.kpi-prom-atencion { border-left-color: #0B6F7C; } .kpi-prom-atencion .valor { color: #0B111C; }
 .kpi-ventanillas { border-left-color: #2F5FD0; } .kpi-ventanillas .valor { color: #0B111C; }
-.kpi-sla-cumplido { border-left-color: #1F8A5B; } .kpi-sla-cumplido .valor { color: #1F8A5B; }
-.kpi-sla-incumplido, .kpi-abandono { border-left-color: #C2412D; } .kpi-sla-incumplido .valor, .kpi-abandono .valor { color: #C2412D; }
-.kpi-max-espera { border-left-color: #B86E00; } .kpi-max-espera .valor { color: #0B111C; }
+.kpi-sla-cumplido { border-left-color: #187A50; } .kpi-sla-cumplido .valor { color: #187A50; }
+.kpi-sla-incumplido, .kpi-abandono { border-left-color: #AD3524; } .kpi-sla-incumplido .valor, .kpi-abandono .valor { color: #AD3524; }
+.kpi-max-espera { border-left-color: #8A5200; } .kpi-max-espera .valor { color: #0B111C; }
 .kpi-tag-info { background: #E4ECFC; color: #2F5FD0; }
+
+/* ==========================================================================
+   Acentos de color en las pantallas internas
+   Un color por módulo y uno por significado, siempre los mismos:
+   Cliente azul · Operador turquesa · Supervisor verde · Administración ámbar
+   Estados: espera ámbar · llamado turquesa · en atención marino · atendido verde · abandono coral
+   Solo superficies sólidas (sin vidrio ni degradados).
+   ========================================================================== */
+:root {
+  /* Variantes claras para usar sobre el azul marino (contraste >= 4,5:1) */
+  --viv-teal-claro: #5BB6C5;
+  --viv-azul-claro: #8FB0FF;
+  --viv-verde-claro: #6FD3A3;
+  --viv-ambar-claro: #F0B35A;
+  --viv-coral-claro: #F59A8B;
+}
+.rol-cliente { --mod: var(--viv-azul); --mod-suave: var(--viv-azul-suave); }
+.rol-operador, .rol-demo, .rol-general { --mod: var(--viv-teal); --mod-suave: var(--viv-teal-suave); }
+.rol-supervisor { --mod: var(--viv-verde); --mod-suave: var(--viv-verde-suave); }
+.rol-administracion { --mod: var(--viv-ambar); --mod-suave: var(--viv-ambar-suave); }
+
+/* Cabecera de cada página: etiqueta del paso y título con la franja del módulo */
+.pagina .paso-pill { color: var(--mod); background: var(--mod-suave); }
+.pagina .page-head h1 { border-left: 6px solid var(--mod); padding-left: 14px; }
+.pagina > .card, .pagina > .grid > .card, .pagina .admin-layout .contenido > .card { border-top: 3px solid var(--mod); }
+
+/* Menú: cada grupo con su color */
+.nav-etiqueta { display: inline-flex; align-items: center; gap: 6px; }
+.nav-etiqueta::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.grupo-cliente .nav-etiqueta { color: var(--viv-azul-claro); }
+.grupo-operador .nav-etiqueta { color: var(--viv-teal-claro); }
+.grupo-supervisor .nav-etiqueta { color: var(--viv-verde-claro); }
+.grupo-administracion .nav-etiqueta { color: var(--viv-ambar-claro); }
+.grupo-cliente a.activo { background: var(--viv-azul); }
+.grupo-operador a.activo { background: var(--viv-teal); }
+.grupo-supervisor a.activo { background: var(--viv-verde); }
+.grupo-administracion a.activo { background: var(--viv-ambar); }
+
+/* Avisos con la paleta de la aplicación */
+.ok { background: var(--viv-verde-suave); border-color: var(--viv-verde); color: var(--viv-verde); }
+.error { background: var(--viv-coral-suave); border-color: var(--viv-coral); color: var(--viv-coral); }
+.aviso { background: var(--viv-ambar-suave); border-color: var(--viv-ambar); color: var(--viv-ambar); }
+.info { background: var(--viv-azul-suave); border-color: var(--viv-azul); color: var(--viv-azul); }
+.borrar { color: var(--viv-coral); }
+.borrar:hover { color: var(--viv-coral); }
+
+/* Tablas: franjas suaves y resalte con el color del módulo */
+.pagina tbody tr:nth-child(even) { background: #F6F9FB; }
+.pagina tbody tr:hover { background: var(--mod-suave); }
+.pagina .tabla-wrap { border-top: 3px solid var(--mod); }
+
+/* Administración: la colección activa con el color del módulo */
+.sidebar a.activa { background: var(--c-nav); border-left: 4px solid var(--viv-ambar); }
+
+/* Gráficos del dashboard: colores sólidos de la paleta */
+.columna-barra { background: var(--viv-teal); }
+.columna-barra:hover { background: var(--c-marca-oscuro); }
+.columna-hora.es-pico .columna-barra { background: var(--viv-ambar); box-shadow: none; }
+.llenado-barra { background: var(--viv-teal); }
+.llenado-barra.verde { background: var(--viv-verde); }
+.llenado-barra.naranja { background: var(--viv-ambar); }
+.llenado-barra.rojo { background: var(--viv-coral); }
+.barra-ventanilla-flex .llenado-barra { background: var(--viv-teal); }
+.card-banda.b-rapido { border-left-color: var(--viv-verde); }
+.card-banda.b-moderado { border-left-color: var(--viv-azul); }
+.card-banda.b-extendido { border-left-color: var(--viv-ambar); }
+.card-banda.b-critico { border-left-color: var(--viv-coral); }
+.sla-pill.activo { background: var(--viv-verde); box-shadow: none; }
+.kpi-tag-ok { background: var(--viv-verde-suave); color: var(--viv-verde); }
+.kpi-tag-aviso { background: var(--viv-ambar-suave); color: var(--viv-ambar); }
+.kpi-tag-alerta { background: var(--viv-coral-suave); color: var(--viv-coral); }
+.semaforo-verde { background: var(--viv-verde-suave); color: var(--viv-verde); border-color: var(--viv-verde); }
+.semaforo-amarillo { background: var(--viv-ambar-suave); color: var(--viv-ambar); border-color: var(--viv-ambar); }
+.semaforo-rojo { background: var(--viv-coral-suave); color: var(--viv-coral); border-color: var(--viv-coral); }
+
+/* Guía de demostración: cada paso con una franja y su avance en verde */
+.paso { border-left: 4px solid var(--viv-teal); }
+.paso.hecho { border-left-color: var(--viv-verde); }
+.paso .rol { color: var(--viv-teal); }
+.progreso > span { background: var(--viv-verde); }
+.chip.ok-chip::before { background: var(--viv-verde); }
+.chip.mal-chip::before { background: var(--viv-coral); }

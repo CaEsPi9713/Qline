@@ -7,8 +7,10 @@ Cada turno respeta el orden de los tiempos de su estado y las métricas derivabl
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 
+from app.constantes import PATRON_VENTANILLA
 from app.s3_comun import (
     ESTADO_ABANDONADO,
     ESTADO_ATENDIDO,
@@ -21,7 +23,6 @@ from app.s3_comun import (
     PRIORIDADES,
     SERVICIO_ID,
     TTL_ABANDONO_SEG,
-    VENTANILLAS,
     a_utc,
 )
 
@@ -65,7 +66,7 @@ def construir_turno(
         if ventanilla is not None or llamado is not None:
             raise ValueError("Un turno pendiente no tiene ventanilla ni llamado")
     else:
-        if ventanilla not in VENTANILLAS:
+        if not (isinstance(ventanilla, str) and re.fullmatch(PATRON_VENTANILLA, ventanilla)):
             raise ValueError(f"Ventanilla inválida: {ventanilla!r}")
         if llamado is None:
             raise ValueError("Un turno que ya fue llamado necesita la fecha de llamado")

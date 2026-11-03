@@ -259,7 +259,7 @@ Aprobadas en el punto de decisión G0 del plan alternativo de S4. Cada una indic
 |---|---|
 | **Decisión (propuesta)** | El catálogo vive en MongoDB (colección `ventanillas`); una función `ventanillas_activas(db)` con caché corta y último catálogo conocido si MongoDB no responde. Identificador `V-NN`, validado con expresión regular. El `enum` de `ventanilla` en el esquema pasa a un patrón y se aplica con `collMod`, verificado en el servidor antes de crear la primera. Redis no guarda el catálogo; la clave `ventanilla:{id}:actual` y el `SET NX` no cambian. |
 | **Por qué** | Las claves de Redis ya se construyen con el identificador, así que lo único que cambia es quién valida que exista. El servidor no actualiza el validador de una colección existente por sí solo (lección de `qr_token`). |
-| **Estado** | **Parcial (01/11/2026).** Carlos implementó el catálogo (colección `ventanillas`, `app/ventanillas.py`, alta, baja y reactivación desde `/administracion`) y lo usa el dashboard. **No está conectado a la operación**: llamar, el panel, la atención y el historial siguen usando `V-01` a `V-03` (`VENTANILLAS`), y el esquema de `turnos` (en memoria, en `turnos_schema.py` y en el servidor) sigue limitando `ventanilla` a esas tres; las pruebas de S2 y S3 fijan `V-99` como inválida. Además el servidor no permite `collMod`, por lo que el motor rechazaría un turno con una ventanilla nueva. Una ventanilla nueva sirve hoy como catálogo y reporte, no para atender. Hace falta una decisión del equipo para completarlo (ver `S4.md`). |
+| **Estado** | **Aplicación conectada (02/11/2026); motor de MongoDB pendiente.** Carlos implementó el catálogo (colección `ventanillas`, `app/ventanillas.py`, alta, baja y reactivación desde `/administracion`). Alessandro lo conectó a la operación: `ventanillas_activas(db)` (base + catálogo activo, con último catálogo conocido si MongoDB falla) decide quién puede llamar (`llamado.py`), qué se ve en el panel y en la lista de `/cola`; el historial filtra por cualquier `V-NN`; atender y finalizar solo exigen el formato porque el turno ya pertenece a una ventanilla; el esquema pasa de la lista fija a `pattern ^V-\d{2,}$` (en el JSON Schema y en el validador en memoria). Las pruebas que usaban `V-99` como inválida ahora usan `X-99`. Probado con 4 ventanillas simultáneas (0 duplicados). **Límite:** el servidor no permite `collMod`, así que su validador sigue siendo el anterior (lista fija) y **el motor rechazaría un turno con una ventanilla nueva** hasta que un administrador ejecute `collMod` con el validador de `app/turnos_schema.py` o se recree la colección (`init_mongo --recrear --confirmar`, que borra los turnos). `python -m scripts.probar_ventanillas` lo comprueba en el servidor y lo informa sin tocar datos reales. **02/11/2026:** el motor rechazó una llamada con `V-06` (error 121); tras actualizar el validador en el servidor, las ventanillas nuevas funcionan. **Verificado en el servidor con `scripts/probar_ventanillas.py` (el motor ACEPTA la ventanilla nueva).** Falta anotar el método usado para actualizar el validador. |
 
 ### D-31 · Cierre de turno: campo raíz `cierre` con motivo cerrado y nota corta (S4-M03)
 
@@ -276,6 +276,16 @@ Aprobadas en el punto de decisión G0 del plan alternativo de S4. Cada una indic
 |---|---|
 | **Decisión** | No se programa. El Plan Maestro excluye la predicción de espera y no hay autorización escrita del equipo. |
 | **Estado** | Queda fuera del release salvo acuerdo documentado. No bloquea ninguna otra tarea. |
+
+### D-34 · El mantenimiento de sucursales (RFC-004) se presenta como un extra del trabajo
+
+| | |
+|---|---|
+| **Decisión** | El mantenimiento lógico de sucursales que implementó Carlos (`app/sucursales.py`, `/admin/sucursales`, RFC-004) se conserva y se presenta como **extra al trabajo**, no como parte del Plan Alternativo de S4, que no incluye sucursales («no se crean servicios, sucursales, roles…»). Se rotula como «Extra» en sus pantallas, en la documentación y en el CHANGELOG. |
+| **Por qué** | Está implementado, probado y no rompe nada, pero el plan lo excluye explícitamente. Presentarlo con transparencia evita que parezca que el sistema es multisucursal. |
+| **Alcance real** | Catálogo de sedes y aprovisionamiento y ajuste de sus ventanillas, con salvaguarda contra turnos en curso. **No** hay colas, claves de Redis, emisión, quiosco, QR ni pantalla de sala por sucursal: el sistema sigue operando un solo servicio y una sola sede. |
+| **Alternativas** | *Ocultar el menú*: desperdicia trabajo hecho y probado. *Presentarlo como multisucursal*: sería falso, porque la operación no distingue sedes. |
+| **Estado** | Aplicado en las pantallas, `spec_mantenimiento_sucursales.md`, `S4.md`, README, CHANGELOG y la presentación. |
 
 ### D-33 · La administración de MongoDB vive en `/administracion`; `/` es la portada
 

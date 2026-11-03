@@ -36,9 +36,10 @@ from app.emitir import EmisionError, emitir_turno
 from app.consultar import ConsultaError, consultar_turno
 from app.llamado import LlamadoError, llamar_siguiente_turno
 from app.constantes import (ESTADOS, MOTIVOS_CIERRE, NOTA_CIERRE_MAX, PRIORIDADES, SERVICIO_ID, SERVICIO_NOMBRE,
-                            VENTANILLAS)
+                            PATRON_VENTANILLA, VENTANILLAS)
 from app.redis_client import get_redis, verificar_conexion as verificar_redis
 from app import salud as salud_app
+from app.ventanillas import codigos_para_consulta, siguiente_codigo_ventanilla, ventanillas_activas
 from app.errores import registrar_errores
 from app.turnos_schema import TurnoValidationError, validar_documento_turno
 from app.historial import exportar_historial_turnos, obtener_historial_turnos
@@ -65,7 +66,7 @@ MENSAJES = {
     "insertado": "Documento insertado correctamente.",
     "actualizado": "Documento actualizado correctamente.",
     "eliminado": "Documento eliminado correctamente.",
-    "ventanilla_creada": "Ventanilla registrada y activada correctamente (P09).",
+    "ventanilla_creada": "Ventanilla {codigo} registrada y activada correctamente (P09).",
     "ventanilla_desactivada": "Ventanilla desactivada correctamente (P09).",
     "ventanilla_reactivada": "Ventanilla reactivada correctamente (P09).",
     "sucursal_creada": "Sucursal y ventanillas aprovisionadas correctamente.",
@@ -208,7 +209,7 @@ def normalizar_timestamps_turno(doc: dict) -> None:
 
 
 def render(request: Request, coleccion: str = "", editar: str = "", error: str = "",
-           ok: str = "", json_texto: str = None, filtro_estado: str = ""):
+           ok: str = "", json_texto: str = None, filtro_estado: str = "", ventanilla: str = ""):
     plantilla_turnos = json.dumps({
         "codigo": "A-099",
         "servicio": SERVICIO_ID,
@@ -232,14 +233,17 @@ def render(request: Request, coleccion: str = "", editar: str = "", error: str =
     contexto = {
         "usuario": MONGO_USER, "base": BASE, "base_datos": MONGO_DB, "coleccion": coleccion,
         "colecciones": [], "documentos": [], "doc_editar": None, "id_editar": "",
-        "mensaje": MENSAJES.get(ok, ""), "error": error, "json_texto": json_texto,
+        "mensaje": MENSAJES.get(ok, "").replace("{codigo}", ventanilla if re.fullmatch(PATRON_VENTANILLA, ventanilla) else "nueva"),
+        "error": error, "json_texto": json_texto,
         "filtro_estado": filtro_estado, "plantilla_turnos": plantilla_turnos,
+        "proximo_codigo_ventanilla": siguiente_codigo_ventanilla(),
     }
     try:
         db = get_db()
         contexto["colecciones"] = sorted(db.list_collection_names())
         from app.ventanillas import listar_ventanillas
         contexto["ventanillas_gestion"] = listar_ventanillas(db, solo_activas=False)
+        contexto["proximo_codigo_ventanilla"] = siguiente_codigo_ventanilla(db)
         from app.sucursales import listar_sucursales
         contexto["sucursales_gestion"] = listar_sucursales(db, solo_activas=False)
         if coleccion and editar:
@@ -614,15 +618,17 @@ def ver_cola(request: Request, msg: str = "", error: str = ""):
         error = error or f"Redis no disponible: {e}"
     # Ventanillas que ya tienen un turno: no se les puede llamar otro (una a la vez).
     ocupadas = {}
+    ventanillas_operativas = list(VENTANILLAS)
     try:
         ventanillas_estado, _ = estado_ventanillas(get_db(), usar_redis=redis_responde)
         ocupadas = {v["id"]: v["turno"]["codigo"] for v in ventanillas_estado if v["turno"]}
+        ventanillas_operativas = list(ventanillas_activas(get_db()))
     except Exception:
         ocupadas = {}
     return templates.TemplateResponse(
         request, "cola.html",
         {"base": BASE, "servicio": SERVICIO_NOMBRE, "turnos": turnos, "error": error,
-         "mensaje": msg, "ventanillas": VENTANILLAS, "ocupadas": ocupadas},
+         "mensaje": msg, "ventanillas": ventanillas_operativas, "ocupadas": ocupadas},
     )
 
 
@@ -732,8 +738,10 @@ def acerca(request: Request):
 
 
 @app.get("/administracion", response_class=HTMLResponse)
-def administracion(request: Request, coleccion: str = "", editar: str = "", ok: str = "", filtro_estado: str = ""):
-    return render(request, coleccion.strip(), editar.strip(), ok=ok, filtro_estado=filtro_estado.strip())
+def administracion(request: Request, coleccion: str = "", editar: str = "", ok: str = "", filtro_estado: str = "",
+                   ventanilla: str = ""):
+    return render(request, coleccion.strip(), editar.strip(), ok=ok, filtro_estado=filtro_estado.strip(),
+                  ventanilla=ventanilla)
 
 
 @app.post("/crear_coleccion")
@@ -802,15 +810,13 @@ def api_listar_ventanillas(solo_activas: bool = False):
 
 @app.post("/api/ventanillas")
 def api_registrar_ventanilla(
-    codigo: str = Form(...),
     nombre: str = Form(""),
     tipo: str = Form("general"),
 ):
-    """Registra o actualiza una ventanilla dinámicamente en MongoDB (P09)."""
+    """Registra una ventanilla nueva en MongoDB; el código es siempre el siguiente consecutivo (V-04, V-05, ...) (P09)."""
     try:
         from app.ventanillas import VentanillaError, registrar_ventanilla
-        res = registrar_ventanilla(get_db(), codigo=codigo, nombre=nombre, tipo=tipo)
-        return res
+        return registrar_ventanilla(get_db(), nombre=nombre, tipo=tipo)
     except VentanillaError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     except Exception as e:
@@ -820,15 +826,14 @@ def api_registrar_ventanilla(
 @app.post("/ventanillas/crear")
 def web_crear_ventanilla(
     request: Request,
-    codigo: str = Form(""),
     nombre: str = Form(""),
     tipo: str = Form("general"),
 ):
     """Endpoint web para dar de alta una ventanilla desde la interfaz de administración (P09)."""
     try:
         from app.ventanillas import registrar_ventanilla
-        registrar_ventanilla(get_db(), codigo=codigo, nombre=nombre, tipo=tipo)
-        return RedirectResponse(f"{BASE}/administracion?ok=ventanilla_creada", status_code=303)
+        res = registrar_ventanilla(get_db(), nombre=nombre, tipo=tipo)
+        return RedirectResponse(f"{BASE}/administracion?ok=ventanilla_creada&ventanilla={res['codigo']}", status_code=303)
     except Exception as e:
         return render(request, error=f"Error registrando ventanilla: {e}")
 
@@ -1173,7 +1178,7 @@ def vista_historial(
                 "total_paginas": res.get("total_paginas", 1),
                 "filtros": res["filtros"],
                 "estados_disponibles": ESTADOS,
-                "ventanillas_disponibles": VENTANILLAS,
+                "ventanillas_disponibles": codigos_para_consulta(get_db()),
                 "prioridades_disponibles": PRIORIDADES,
                 "error": "",
             },
@@ -1210,19 +1215,21 @@ def vista_historial(
 # --- HU-011: Dashboard y Métricas SLA (Carlos Espinoza) ----------------------
 
 @app.get("/api/dashboard")
-def api_dashboard(sla_espera: int = 300):
+def api_dashboard(sla_espera: int = 300, fecha_desde: str = "", fecha_hasta: str = ""):
     """Indicadores operacionales y métricas SLA calculadas con aggregation pipelines (HU-011)."""
     try:
-        return calcular_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera)
+        return calcular_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera,
+                                           fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"Error calculando métricas: {e}"}, status_code=500)
 
 
 @app.get("/api/dashboard/descargar")
-def api_descargar_dashboard(sla_espera: int = 300):
+def api_descargar_dashboard(sla_espera: int = 300, fecha_desde: str = "", fecha_hasta: str = ""):
     """Descarga en archivo JSON los indicadores y el cumplimiento de SLA actual (HU-011)."""
     try:
-        datos = exportar_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera)
+        datos = exportar_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera,
+                                            fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
         contenido = json.dumps(datos, indent=2, ensure_ascii=False)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         nombre_archivo = f"dashboard_sla_{sla_espera}s_{timestamp}.json"
@@ -1239,10 +1246,11 @@ def api_descargar_dashboard(sla_espera: int = 300):
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def vista_dashboard(request: Request, sla_espera: int = 300):
+def vista_dashboard(request: Request, sla_espera: int = 300, fecha_desde: str = "", fecha_hasta: str = ""):
     """Panel visual para supervisores con KPIs de espera, atención y SLA (HU-011)."""
     try:
-        metricas = calcular_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera)
+        metricas = calcular_metricas_dashboard(get_db(), sla_espera_max_seg=sla_espera,
+                                               fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
         return templates.TemplateResponse(
             request,
             "dashboard.html",
@@ -1259,6 +1267,7 @@ def vista_dashboard(request: Request, sla_espera: int = 300):
             "ventanillas": {"total_configuradas": len(VENTANILLAS), "activas": 0, "detalle": [{"ventanilla": v, "ocupada": False, "turnos_en_proceso": 0} for v in VENTANILLAS]},
             "sla": {"objetivo_max_espera_seg": sla_espera, "total_evaluados": 0, "cumplen": 0, "incumplen": 0, "porcentaje_cumplimiento": 100.0, "tasa_minima_requerida": 80.0, "estado": "CUMPLIDO"},
             "graficos": {"afluencia_horaria": [], "rendimiento_ventanillas": [], "distribucion_espera": {"hasta_2min": 0, "de_2_a_5min": 0, "de_5_a_10min": 0, "mas_de_10min": 0}, "porcentajes_espera": {}, "cumplimiento_5min_pct": 100.0},
+            "por_fecha": {"zona": "", "rango": {"desde": "", "hasta": ""}, "max_dias": 14, "dias": [], "total_turnos": 0, "aviso": ""},
             "kpis_avanzados": {"tasa_abandono": 0.0, "tasa_atencion": 0.0, "turnos_en_proceso": 0, "ocupacion_ventanillas_pct": 0.0, "max_espera_seg": 0.0, "min_espera_seg": 0.0, "max_espera_formateada": "0s", "min_espera_formateada": "0s", "promedio_espera_formateado": "0s", "promedio_atencion_formateado": "0s"},
             "diagnostico": {"semaforo": "verde", "estado_operativo": "FLUIDO", "alertas": [], "recomendaciones": [], "hora_pico": None, "ventanilla_lider": None, "cumplimiento_5min_pct": 100.0},
         }

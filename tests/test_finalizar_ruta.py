@@ -63,7 +63,7 @@ class PruebasRutaFinalizar(unittest.TestCase):
         self.redis.set(clave_ventanilla_actual("V-01"), "A-031")
         self.assertEqual(self.post("A-031", "V-01").status_code, 409)   # nunca inició
         self.assertEqual(self.post("A-999", "V-01").status_code, 404)
-        self.assertEqual(self.post("A-030", "V-09").status_code, 422)
+        self.assertEqual(self.post("A-030", "X-09").status_code, 422)
         self.assertEqual(self.redis.get(clave_ventanilla_actual("V-01")), "A-031")
 
     def test_reintento_rechazado(self):

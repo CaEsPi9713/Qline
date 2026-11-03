@@ -10,8 +10,11 @@ Calcula mediante Aggregation Pipelines e indicadores analíticos en MongoDB:
   - Ventanillas activas / con turno asignado
   - Cumplimiento de objetivo SLA (tiempo de espera)
 """
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
+
 from pymongo.database import Database
 
 
@@ -141,9 +144,125 @@ def formatear_duracion_legible(segundos: float) -> str:
     return f"{horas}h {m_resto:02d}m"
 
 
+MAX_DIAS_POR_DEFECTO = 14
+
+
+def _zona(nombre: Optional[str] = None):
+    """Zona horaria de las pantallas (ZONA_HORARIA); UTC si no existe."""
+    nombre = nombre or os.getenv("ZONA_HORARIA", "America/Costa_Rica")
+    try:
+        return ZoneInfo(nombre), nombre
+    except Exception:  # noqa: BLE001
+        return timezone.utc, "UTC"
+
+
+def _parsear_fecha(texto: Optional[str]):
+    """'YYYY-MM-DD' -> date, o None si está vacío o es inválido."""
+    if not texto:
+        return None
+    try:
+        return datetime.strptime(texto.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def desglose_por_fecha(
+    db: Database,
+    sla_espera_max_seg: int = SLA_OBJETIVO_ESPERA_SEG_DEFECTO,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
+    zona: Optional[str] = None,
+    max_dias: int = MAX_DIAS_POR_DEFECTO,
+) -> dict:
+    """
+    Indicadores por día (P02, «desglose por fecha»): turnos, atendidos, abandonados, tasa de abandono,
+    espera y atención promedio y cumplimiento del SLA de cada día.
+
+    Los días son los de la zona horaria de las pantallas (los datos se guardan en UTC). Sin rango se muestran los
+    últimos ``max_dias`` días con datos; con ``fecha_desde`` y/o ``fecha_hasta`` (YYYY-MM-DD, hora local) se muestra ese rango.
+    Una fecha inválida se ignora y se avisa en ``aviso``.
+    """
+    tz, nombre_zona = _zona(zona)
+    desde, hasta = _parsear_fecha(fecha_desde), _parsear_fecha(fecha_hasta)
+    avisos = []
+    if fecha_desde and desde is None:
+        avisos.append("La fecha «desde» no es válida (use AAAA-MM-DD); se ignoró.")
+    if fecha_hasta and hasta is None:
+        avisos.append("La fecha «hasta» no es válida (use AAAA-MM-DD); se ignoró.")
+    if desde and hasta and desde > hasta:
+        desde, hasta = hasta, desde
+        avisos.append("Las fechas estaban invertidas; se intercambiaron.")
+
+    filtro: dict = {"servicio": SERVICIO_ID, "timestamps.creado": {"$type": "date"}}
+    if desde:
+        filtro["timestamps.creado"]["$gte"] = datetime.combine(desde, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+    if hasta:
+        filtro["timestamps.creado"]["$lt"] = datetime.combine(
+            hasta + timedelta(days=1), datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+
+    dias: dict = {}
+    proyeccion = {"estado": 1, "timestamps.creado": 1, "metricas": 1}
+    for d in db[COLECCION_TURNOS].find(filtro, proyeccion):
+        creado = d["timestamps"]["creado"]
+        if creado.tzinfo is None:
+            creado = creado.replace(tzinfo=timezone.utc)
+        dia = creado.astimezone(tz).date()
+        a = dias.setdefault(dia, {"total": 0, "atendidos": 0, "abandonados": 0, "esperas": [], "atenciones": []})
+        a["total"] += 1
+        estado = d.get("estado")
+        if estado == ESTADO_ATENDIDO:
+            a["atendidos"] += 1
+        elif estado == ESTADO_ABANDONADO:
+            a["abandonados"] += 1
+        met = d.get("metricas") or {}
+        if met.get("espera_seg") is not None:
+            a["esperas"].append(met["espera_seg"])
+        if met.get("atencion_seg") is not None:
+            a["atenciones"].append(met["atencion_seg"])
+
+    fechas = sorted(dias)
+    if not (desde or hasta):
+        fechas = fechas[-max_dias:]
+    maximo = max([dias[f]["total"] for f in fechas] or [1])
+    salida = []
+    for f in fechas:
+        a = dias[f]
+        espera = round(sum(a["esperas"]) / len(a["esperas"]), 1) if a["esperas"] else 0.0
+        atencion = round(sum(a["atenciones"]) / len(a["atenciones"]), 1) if a["atenciones"] else 0.0
+        cumplen = sum(1 for e in a["esperas"] if e <= sla_espera_max_seg)
+        sla_pct = round(cumplen / len(a["esperas"]) * 100, 1) if a["esperas"] else 100.0
+        salida.append({
+            "fecha": f.isoformat(),
+            "fecha_legible": f.strftime("%d/%m/%Y"),
+            "etiqueta": f.strftime("%d/%m"),
+            "total": a["total"],
+            "atendidos": a["atendidos"],
+            "abandonados": a["abandonados"],
+            "en_proceso": a["total"] - a["atendidos"] - a["abandonados"],
+            "tasa_abandono": round(a["abandonados"] / a["total"] * 100, 1) if a["total"] else 0.0,
+            "espera_seg": espera,
+            "espera_formateada": formatear_duracion_legible(espera),
+            "atencion_seg": atencion,
+            "atencion_formateada": formatear_duracion_legible(atencion),
+            "sla_pct": sla_pct,
+            "sla_estado": "CUMPLIDO" if sla_pct >= SLA_TASA_MINIMA_CUMPLIMIENTO else "INCUMPLIDO",
+            "porcentaje_barra": round(a["total"] / maximo * 100, 1) if maximo else 0,
+        })
+    return {
+        "zona": nombre_zona,
+        "rango": {"desde": desde.isoformat() if desde else "", "hasta": hasta.isoformat() if hasta else ""},
+        "max_dias": max_dias,
+        "dias": salida,
+        "total_turnos": sum(x["total"] for x in salida),
+        "aviso": " ".join(avisos),
+    }
+
+
 def calcular_metricas_dashboard(
     db: Database,
     sla_espera_max_seg: int = SLA_OBJETIVO_ESPERA_SEG_DEFECTO,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
 ) -> dict:
     """
     Ejecuta aggregation pipelines sobre la colección `turnos` de MongoDB
@@ -383,6 +502,12 @@ def calcular_metricas_dashboard(
         "cumplimiento_5min_pct": cumplimiento_5min_pct,
     }
 
+    try:
+        por_fecha = desglose_por_fecha(db, sla_espera_max_seg, fecha_desde, fecha_hasta)
+    except Exception:  # noqa: BLE001 · el resto del dashboard no debe caerse por el desglose
+        por_fecha = {"zona": "", "rango": {"desde": "", "hasta": ""}, "max_dias": MAX_DIAS_POR_DEFECTO, "dias": [],
+                     "total_turnos": 0, "aviso": "No se pudo calcular el desglose por fecha."}
+
     return {
         "ok": True,
         "servicio": SERVICIO_ID,
@@ -432,18 +557,22 @@ def calcular_metricas_dashboard(
             "promedio_atencion_formateado": formatear_duracion_legible(prom_atencion),
         },
         "diagnostico": diagnostico,
+        "por_fecha": por_fecha,
     }
 
 
 def exportar_metricas_dashboard(
     db: Database,
     sla_espera_max_seg: int = SLA_OBJETIVO_ESPERA_SEG_DEFECTO,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
 ) -> dict:
     """
     Exporta las métricas operacionales del dashboard y el análisis de SLA (HU-011)
     con metadatos de auditoría para descarga en formato JSON.
     """
-    metricas = calcular_metricas_dashboard(db, sla_espera_max_seg=sla_espera_max_seg)
+    metricas = calcular_metricas_dashboard(db, sla_espera_max_seg=sla_espera_max_seg,
+                                           fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
     return {
         "ok": True,
         "servicio": SERVICIO_ID,

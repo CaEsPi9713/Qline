@@ -113,7 +113,7 @@ class PruebasValidador(unittest.TestCase):
         casos = {
             "prioridad": ("prioridad", "urgente"),
             "estado": ("estado", "perdido"),
-            "ventanilla": ("ventanilla", "V-99"),
+            "ventanilla": ("ventanilla", "X-99"),
             "servicio": ("servicio", "otro"),
             "codigo": ("codigo", "xx"),
         }

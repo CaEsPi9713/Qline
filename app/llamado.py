@@ -17,7 +17,8 @@ from pymongo.errors import PyMongoError
 from redis.exceptions import RedisError
 
 from app import cola, eventos
-from app.constantes import ESTADO_EN_ATENCION, ESTADO_LLAMADO, ESTADO_PENDIENTE, VENTANILLAS
+from app.constantes import ESTADO_EN_ATENCION, ESTADO_LLAMADO, ESTADO_PENDIENTE
+from app.ventanillas import ventanillas_activas
 
 COLECCION = "turnos"
 ESTADOS_ACTIVOS = [ESTADO_LLAMADO, ESTADO_EN_ATENCION]
@@ -60,8 +61,8 @@ def llamar_siguiente_turno(db, ventanilla: str) -> dict:
     Devuelve {"codigo": None, ...} si no hay turnos; si no, los datos del turno
     llamado. Lanza LlamadoError / ColaError / RedisError en los fallos.
     """
-    if ventanilla not in VENTANILLAS:
-        raise cola.ColaError(f"Ventanilla inválida: {ventanilla!r}")
+    if ventanilla not in ventanillas_activas(db):
+        raise cola.ColaError(f"Ventanilla inválida o inactiva: {ventanilla!r}")
     try:
         activo = _turno_activo_de(db, ventanilla)
     except PyMongoError as e:

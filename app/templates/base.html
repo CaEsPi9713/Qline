@@ -21,6 +21,9 @@
   {%- endif -%}
 {%- endfor -%}
 {%- set actual = ns.actual -%}
+{#- Color de cada módulo: Cliente azul, Operador turquesa, Supervisor verde, Administración ámbar. -#}
+{%- set clases_rol = {"Cliente": "cliente", "Operador": "operador", "Supervisor": "supervisor", "Administración": "administracion"} -%}
+{%- set rol_clase = clases_rol.get(actual.rol, 'general') if actual else ('demo' if ruta_actual == '/demo' else 'general') -%}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -41,7 +44,7 @@
         <a href="{{ base }}/demo" class="{{ 'activo' if ruta_actual == '/demo' else '' }}">Guía de demo</a>
       </div>
       {%- for rol in ["Cliente", "Operador", "Supervisor", "Administración"] %}
-      <div class="nav-grupo">
+      <div class="nav-grupo grupo-{{ clases_rol[rol] }}">
         <span class="nav-etiqueta">{{ rol }}</span>
         {%- for p in pasos if p.rol == rol %}
         <a href="{{ base }}{{ p.ruta }}" class="{{ 'activo' if actual and actual.n == p.n else '' }}"{% if actual and actual.n == p.n %} aria-current="page"{% endif %}>
@@ -54,7 +57,7 @@
   </div>
 </header>
 
-<main class="pagina {{ ancho or '' }}">
+<main class="pagina {{ ancho or '' }} rol-{{ rol_clase }}">
   <div class="page-head">
     {% if actual %}<div class="paso-pill">Paso {{ actual.n }} de {{ pasos|length }} · {{ actual.rol }}</div>
     {% elif ruta_actual == '/demo' %}<div class="paso-pill">Seguimiento 4 · Guía de demostración</div>{% endif %}

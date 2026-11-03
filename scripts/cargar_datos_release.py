@@ -4,17 +4,20 @@ TT-028 · Script reproducible de inicialización y carga de MongoDB para release
 Responsable: Carlos Espinoza (cespinoza)
 Objetivo:
   - Configurar las colecciones `turnos` y `ventanillas` con sus validadores e índices oficiales.
-  - Cargar el dataset representativo de release/demostración de forma idempotente (upsert por código).
+  - Cargar un historial de release/demostración de forma idempotente (upsert por código), en la serie propia
+    L-NNN y solo con turnos terminados (atendido o abandonado). NO toca la serie A-NNN de la operación real,
+    ni la sintética S-NNN: tampoco las sobrescribe ni las borra.
   - Validar la consistencia de los datos contra el JSON Schema oficial (TT-002).
   - Ejecutar un health check del aggregation pipeline de métricas y SLA (HU-011).
 
 Uso:
   python scripts/cargar_datos_release.py
   python scripts/cargar_datos_release.py --turnos 60 --json
-  python scripts/cargar_datos_release.py --limpiar --confirmar
+  python scripts/cargar_datos_release.py --limpiar --confirmar     # borra solo la serie L-NNN y vuelve a cargar
   python scripts/cargar_datos_release.py --simulado
 """
 import argparse
+import re
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -28,9 +31,6 @@ sys.path.insert(0, str(RAIZ))
 from app.constantes import (  # noqa: E402
     ESTADO_ABANDONADO,
     ESTADO_ATENDIDO,
-    ESTADO_EN_ATENCION,
-    ESTADO_LLAMADO,
-    ESTADO_PENDIENTE,
     PRIORIDAD_NORMAL,
     PRIORIDAD_PREFERENCIAL,
     SERVICIO_ID,
@@ -102,56 +102,49 @@ def preparar_colecciones_e_indices(db: Any) -> dict:
     return resultado
 
 
+PREFIJO_RELEASE = "L"                                   # serie propia: L-001, L-002… (no toca A-NNN ni S-NNN)
+PATRON_RELEASE = r"^L-\d+$"
+FECHA_BASE_RELEASE = datetime(2026, 10, 28, 13, 0, tzinfo=timezone.utc)   # fija: la carga es reproducible
+CANTIDAD_MAXIMA = 500
+
+
+def es_codigo_release(codigo: Any) -> bool:
+    """Solo los códigos de la serie L-NNN pertenecen a esta carga."""
+    return isinstance(codigo, str) and re.fullmatch(PATRON_RELEASE, codigo) is not None
+
+
 def generar_dataset_release(cantidad: int = 50, semilla: int = 42) -> list[dict]:
-    """Genera turnos consistentes y realistas para release con cumplimiento de SLA y distribución equilibrada."""
+    """
+    Genera turnos de historial para el release: serie ``L-NNN``, solo estados terminales
+    (``atendido`` y ``abandonado``), con tiempos coherentes y fechas fijas.
+
+    No usa la serie ``A-NNN`` de la operación real ni deja turnos ``pendiente``, ``llamado`` o ``en_atencion``,
+    que se confundirían con la operación en vivo o con la rehidratación de Redis.
+    """
+    if not isinstance(cantidad, int) or not 1 <= cantidad <= CANTIDAD_MAXIMA:
+        raise ValueError(f"La cantidad debe estar entre 1 y {CANTIDAD_MAXIMA}.")
     rng = random.Random(semilla)
     docs = []
-    ahora = datetime.now(timezone.utc)
-    base_tiempo = ahora - timedelta(hours=4)
 
     for i in range(1, cantidad + 1):
-        codigo = f"A-{i:03d}"
-        es_preferencial = (i % 4 == 0)
-        prioridad = PRIORIDAD_PREFERENCIAL if es_preferencial else PRIORIDAD_NORMAL
+        codigo = f"{PREFIJO_RELEASE}-{i:03d}"
+        prioridad = PRIORIDAD_PREFERENCIAL if i % 4 == 0 else PRIORIDAD_NORMAL
+        estado = ESTADO_ABANDONADO if i % 8 == 0 else ESTADO_ATENDIDO
 
-        # Distribución de estados: primeros son atendidos, algunos abandonados, y los últimos activos
-        if i <= int(cantidad * 0.70):
-            estado = ESTADO_ATENDIDO
-        elif i <= int(cantidad * 0.80):
-            estado = ESTADO_ABANDONADO
-        elif i <= int(cantidad * 0.90):
-            estado = ESTADO_EN_ATENCION
-        elif i <= int(cantidad * 0.95):
-            estado = ESTADO_LLAMADO
-        else:
-            estado = ESTADO_PENDIENTE
+        creado = FECHA_BASE_RELEASE + timedelta(minutes=i * 4)
+        ventanilla = rng.choice(VENTANILLAS)
+        # Esperas realistas: la mayoría entre 45 y 260 s, algunas más altas
+        espera_seg = rng.randint(45, 260) if i % 7 != 0 else rng.randint(310, 500)
+        llamado = creado + timedelta(seconds=espera_seg)
 
-        creado = base_tiempo + timedelta(minutes=(i * 4))
-        llamado = None
-        inicio_atencion = None
-        finalizado = None
-        abandonado = None
-        ventanilla = None
-        operador = None
-        espera_seg = None
+        inicio_atencion = finalizado = abandonado = None
         atencion_seg = None
-
-        if estado != ESTADO_PENDIENTE:
-            ventanilla = rng.choice(VENTANILLAS)
-            operador = f"operador_{ventanilla.lower().replace('-', '_')}"
-            # Esperas realistas: la mayoría entre 60 y 240s, algunos más altos
-            espera_seg = rng.randint(45, 260) if (i % 7 != 0) else rng.randint(310, 500)
-            llamado = creado + timedelta(seconds=espera_seg)
-
-            if estado in (ESTADO_EN_ATENCION, ESTADO_ATENDIDO):
-                t_presentacion = rng.randint(15, 30)
-                inicio_atencion = llamado + timedelta(seconds=t_presentacion)
-
-                if estado == ESTADO_ATENDIDO:
-                    atencion_seg = rng.randint(90, 240)
-                    finalizado = inicio_atencion + timedelta(seconds=atencion_seg)
-            elif estado == ESTADO_ABANDONADO:
-                abandonado = llamado + timedelta(seconds=180)
+        if estado == ESTADO_ATENDIDO:
+            inicio_atencion = llamado + timedelta(seconds=rng.randint(15, 30))
+            atencion_seg = rng.randint(90, 240)
+            finalizado = inicio_atencion + timedelta(seconds=atencion_seg)
+        else:
+            abandonado = llamado + timedelta(seconds=180)
 
         doc = {
             "codigo": codigo,
@@ -159,8 +152,7 @@ def generar_dataset_release(cantidad: int = 50, semilla: int = 42) -> list[dict]
             "prioridad": prioridad,
             "estado": estado,
             "ventanilla": ventanilla,
-            "operador": operador,
-            "qr_token": None,
+            "operador": f"operador_{ventanilla.lower().replace('-', '_')}",
             "timestamps": {
                 "creado": creado,
                 "llamado": llamado,
@@ -186,21 +178,27 @@ def cargar_datos_release(
     cantidad: int = 50,
     limpiar: bool = False,
 ) -> dict:
-    """Carga de forma reproducible e idempotente los datos de release en MongoDB."""
-    col_turnos = db[COLECCION_TURNOS]
+    """
+    Carga de forma reproducible e idempotente el historial de release en MongoDB.
 
+    Solo escribe y solo borra documentos de la serie ``L-NNN``: nunca toca los turnos reales (``A-NNN``),
+    los sintéticos (``S-NNN``) ni los de las pruebas de evidencia.
+    """
+    col_turnos = db[COLECCION_TURNOS]
+    dataset = generar_dataset_release(cantidad=cantidad)          # valida la cantidad antes de escribir nada
+    filtro_serie = {"servicio": SERVICIO_ID, "codigo": {"$regex": PATRON_RELEASE}}
+
+    eliminados = 0
     if limpiar:
-        col_turnos.delete_many({"servicio": SERVICIO_ID})
+        eliminados = col_turnos.delete_many(filtro_serie).deleted_count
 
     # Asegurar colecciones e índices
     meta_prep = preparar_colecciones_e_indices(db)
 
-    # Generar y cargar turnos
-    dataset = generar_dataset_release(cantidad=cantidad)
     insertados = 0
     actualizados = 0
-
     for doc in dataset:
+        assert es_codigo_release(doc["codigo"]), doc["codigo"]     # defensa: nada fuera de la serie L-NNN
         res = col_turnos.update_one(
             {"codigo": doc["codigo"], "servicio": doc["servicio"]},
             {"$set": doc},
@@ -211,15 +209,18 @@ def cargar_datos_release(
         elif res.modified_count > 0:
             actualizados += 1
 
-    # Verificación de salud con aggregation pipelines (HU-011)
+    # Verificación de salud con aggregation pipelines (HU-011): solo lectura
     health = calcular_metricas_dashboard(db)
 
     return {
         "ok": True,
         "servicio": SERVICIO_ID,
+        "serie": f"{PREFIJO_RELEASE}-NNN",
         "turnos_solicitados": cantidad,
+        "eliminados": eliminados,
         "insertados": insertados,
         "actualizados": actualizados,
+        "turnos_release": col_turnos.count_documents(filtro_serie),
         "total_en_coleccion": col_turnos.count_documents({"servicio": SERVICIO_ID}),
         "indices_configurados": meta_prep["turnos_indices"],
         "ventanillas_activas": len(listar_ventanillas(db, solo_activas=True)),
@@ -238,7 +239,7 @@ def main(argumentos=None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--turnos", type=int, default=50, help="Cantidad de turnos representativos a sembrar (default: 50).")
-    parser.add_argument("--limpiar", action="store_true", help="Limpia los turnos previos antes de cargar.")
+    parser.add_argument("--limpiar", action="store_true", help="Elimina solo los turnos de la serie L-NNN antes de cargar (nunca A-NNN ni S-NNN).")
     parser.add_argument("--confirmar", action="store_true", help="Confirmación obligatoria para usar con --limpiar.")
     parser.add_argument("--simulado", action="store_true", help="Ejecuta en base de datos en memoria (mongomock) para pruebas y CI.")
     parser.add_argument("--json", action="store_true", help="Imprime el resultado en formato JSON estructurado.")
@@ -266,6 +267,9 @@ def main(argumentos=None) -> int:
             cantidad=args.turnos,
             limpiar=args.limpiar,
         )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 2
     except Exception as e:
         print(f"Error cargando datos de release: {e}", file=sys.stderr)
         return 1
@@ -275,6 +279,7 @@ def main(argumentos=None) -> int:
     else:
         print(f"[OK] Inicialización y carga de release completada con éxito (TT-028).")
         print(f"     - Servicio: {resultado['servicio']}")
+        print(f"     - Serie cargada: {resultado['serie']} ({resultado['turnos_release']} turnos; insertados {resultado['insertados']}, actualizados {resultado['actualizados']}, eliminados {resultado['eliminados']})")
         print(f"     - Total turnos en colección: {resultado['total_en_coleccion']}")
         print(f"     - Ventanillas activas: {resultado['ventanillas_activas']}")
         print(f"     - Índices configurados: {len(resultado['indices_configurados'])}")

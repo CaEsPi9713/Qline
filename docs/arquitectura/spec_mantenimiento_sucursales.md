@@ -8,6 +8,10 @@
 
 ---
 
+> **Nota de alcance (02/11/2026).** Este RFC es un **extra del trabajo**: no forma parte de las 29 tareas del Plan Alternativo de S4, que no prevé sucursales. **Implementado:** catálogo de sucursales (`app/sucursales.py`), pantalla `/admin/sucursales` y aprovisionamiento y ajuste de las ventanillas de cada sede, con salvaguarda contra turnos en curso y 31 pruebas automáticas junto con las de P09. **No implementado:** colas, claves de Redis, emisión, quiosco, QR ni pantalla de sala por sucursal; la operación sigue siendo de un solo servicio y de una sola sede (`atencion_general`). Las secciones de este documento que describen espacios de nombres de Redis por sucursal son una propuesta futura, no el estado actual.
+
+---
+
 ## 1. Resumen Ejecutivo y Motivación
 
 Actualmente, QLine opera bajo un modelo institucional de sede única centralizada (`atencion_general`) con ventanillas parametrizadas de forma global (`V-01`, `V-02`, etc.) en la colección `ventanillas` y colas lineales en Redis (`cola:atencion_general`).

@@ -10,9 +10,9 @@ from app.constantes import (
     ESTADOS,
     MOTIVOS_CIERRE,
     NOTA_CIERRE_MAX,
+    PATRON_VENTANILLA,
     PRIORIDADES,
     SERVICIO_ID,
-    VENTANILLAS,
 )
 
 COLECCION_TURNOS = "turnos"
@@ -56,8 +56,8 @@ SCHEMA_TURNOS = {
             },
             "ventanilla": {
                 "bsonType": ["string", "null"],
-                "enum": list(VENTANILLAS) + [None],
-                "description": "Identificador de la ventanilla asignada o null",
+                "pattern": PATRON_VENTANILLA,
+                "description": "Identificador de la ventanilla asignada (V-01, V-04…; el catálogo está en la colección ventanillas) o null",
             },
             "operador": {
                 "bsonType": ["string", "null"],
@@ -199,8 +199,8 @@ def validar_documento_turno(doc: dict) -> bool:
         raise TurnoValidationError(f"Estado inválido: {doc.get('estado')!r}. Opciones: {ESTADOS}")
 
     ventanilla = doc.get("ventanilla")
-    if ventanilla is not None and ventanilla not in VENTANILLAS:
-        raise TurnoValidationError(f"Ventanilla inválida: {ventanilla!r}. Opciones: {VENTANILLAS} o null.")
+    if ventanilla is not None and not (isinstance(ventanilla, str) and re.fullmatch(PATRON_VENTANILLA, ventanilla)):
+        raise TurnoValidationError(f"Ventanilla inválida: {ventanilla!r}. Debe tener el formato V-NN o ser null.")
 
     qr_token = doc.get("qr_token")
     if qr_token is not None:

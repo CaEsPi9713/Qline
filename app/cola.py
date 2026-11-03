@@ -10,6 +10,7 @@ Cola activa en Redis (TT-007).
 
 Solo toca claves con el prefijo grupo2:qline: (ver app.constantes).
 """
+import re
 import time
 
 from redis.exceptions import RedisError
@@ -20,7 +21,7 @@ from app.constantes import (
     PRIORIDAD_PREFERENCIAL,
     PRIORIDADES,
     TTL_ABANDONO_SEG,
-    VENTANILLAS,
+    PATRON_VENTANILLA,
     clave_turno,
     clave_ventanilla_actual,
 )
@@ -139,7 +140,7 @@ def reservar_y_extraer(ventanilla: str, clave_cola: str = CLAVE_COLA, clave_actu
     (pruebas); por defecto la oficial. `validar_ventanilla=False` (solo pruebas de
     concurrencia) permite consumidores simulados que no son ventanillas del sistema.
     """
-    if validar_ventanilla and ventanilla not in VENTANILLAS:
+    if validar_ventanilla and not (isinstance(ventanilla, str) and re.fullmatch(PATRON_VENTANILLA, ventanilla)):
         raise ColaError(f"Ventanilla inválida: {ventanilla!r}")
     r = get_redis()
     clave = clave_actual or clave_ventanilla_actual(ventanilla)

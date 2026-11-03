@@ -529,17 +529,17 @@ class TestVentanillasDinamicas(unittest.TestCase):
         self.assertTrue(datos["ok"])
 
         # POST API registrar
-        resp_post = self.client.post("/api/ventanillas", data={"codigo": "V-05", "nombre": "Módulo 5"})
+        resp_post = self.client.post("/api/ventanillas", data={"nombre": "Módulo 5"})
         self.assertEqual(resp_post.status_code, 200)
-        self.assertEqual(resp_post.json()["codigo"], "V-05")
+        self.assertEqual(resp_post.json()["codigo"], "V-04")   # siempre el siguiente consecutivo
 
         # Formulario web crear
-        resp_web_crear = self.client.post("/ventanillas/crear", data={"codigo": "V-06", "nombre": "Módulo 6"}, follow_redirects=False)
+        resp_web_crear = self.client.post("/ventanillas/crear", data={"nombre": "Módulo 6"}, follow_redirects=False)
         self.assertEqual(resp_web_crear.status_code, 303)
         self.assertIn("ok=ventanilla_creada", resp_web_crear.headers.get("location", ""))
 
         # Formulario web desactivar
-        resp_web_desact = self.client.post("/ventanillas/desactivar", data={"codigo": "V-06"}, follow_redirects=False)
+        resp_web_desact = self.client.post("/ventanillas/desactivar", data={"codigo": "V-05"}, follow_redirects=False)
         self.assertEqual(resp_web_desact.status_code, 303)
         self.assertIn("ok=ventanilla_desactivada", resp_web_desact.headers.get("location", ""))
 
@@ -571,11 +571,11 @@ class TestCargarDatosRelease(unittest.TestCase):
         self.assertEqual(res1["insertados"], 25)
         self.assertEqual(res1["total_en_coleccion"], 25)
 
-        # Segunda ejecución: debe actualizar y mantener total en 25
+        # Segunda ejecución: datos fijos, así que no inserta ni modifica nada y el total sigue en 25
         res2 = cargar_datos_release(db, cantidad=25, limpiar=False)
         self.assertTrue(res2["ok"])
         self.assertEqual(res2["insertados"], 0)
-        self.assertEqual(res2["actualizados"], 25)
+        self.assertEqual(res2["actualizados"], 0)
         self.assertEqual(res2["total_en_coleccion"], 25)
 
     def test_cargar_datos_release_cli_simulado(self):

@@ -11,7 +11,8 @@ SERVICIO_ID = "atencion_general"
 SERVICIO_NOMBRE = "Atención General"
 
 # --- Ventanillas ---------------------------------------------------------
-VENTANILLAS = ("V-01", "V-02", "V-03")
+VENTANILLAS = ("V-01", "V-02", "V-03")          # ventanillas base; el catálogo de MongoDB (P09) puede agregar más
+PATRON_VENTANILLA = r"^V-\d{2,}$"                 # formato de cualquier ventanilla: V-01, V-04, V-12…
 
 # --- Prioridades ---------------------------------------------------------
 PRIORIDAD_NORMAL = "normal"

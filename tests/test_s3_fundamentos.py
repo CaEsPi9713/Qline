@@ -69,7 +69,7 @@ class PruebasDatosPrueba(unittest.TestCase):
         with self.assertRaises(ValueError):
             construir_turno("A-001", "llamado", "normal", AHORA, "V-01")          # sin fecha de llamado
         with self.assertRaises(ValueError):
-            construir_turno("A-001", "llamado", "normal", AHORA, "V-99", AHORA)   # ventanilla inválida
+            construir_turno("A-001", "llamado", "normal", AHORA, "X-99", AHORA)   # ventanilla inválida
         with self.assertRaises(ValueError):
             construir_turno("A-001", "pendiente", "normal", AHORA, "V-01")
         with self.assertRaises(ValueError):
