@@ -1,0 +1,31 @@
+{#- Tarjeta del ticket (sólida, sin vidrio). La comparten el quiosco y la emisión web. Espera: turno, servicio, qr_svg, qr_url. -#}
+<div class="ticket">
+  <div class="ticket-institucion">QLine · {{ servicio }}</div>
+  <div class="ticket-etiqueta">Su número de turno es</div>
+  <div class="ticket-codigo">{{ turno.codigo }}</div>
+  {% if turno.prioridad == 'preferencial' %}
+    <span class="badge badge-preferencial">Prioridad Preferencial</span>
+  {% else %}
+    <span class="badge badge-normal">Prioridad Normal</span>
+  {% endif %}
+
+  {% if qr_svg %}
+  <div class="ticket-qr-seccion">
+    <div class="ticket-qr-marco">
+      {{ qr_svg|safe }}
+    </div>
+    <p class="ticket-qr-instruccion">Escanee con su celular para seguir su turno en tiempo real</p>
+    {% if qr_url %}
+    <p class="ticket-qr-url"><a href="{{ qr_url }}" target="_blank" rel="noopener">{{ qr_url }}</a></p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <dl class="datos">
+    <dt>Servicio</dt><dd>{{ servicio }}</dd>
+    <dt>Estado inicial</dt><dd><span class="badge badge-pendiente">En espera</span></dd>
+    <dt>Fecha</dt><dd>{{ turno.creado|fecha }}</dd>
+    <dt>Hora</dt><dd>{{ turno.creado|hora(false) }}</dd>
+  </dl>
+  <p class="texto-suave">Tome asiento en la sala de espera y permanezca atento al llamado en la pantalla de sala.</p>
+</div>

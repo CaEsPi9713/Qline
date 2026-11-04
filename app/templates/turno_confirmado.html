@@ -1,0 +1,17 @@
+{% extends "base_publico.html" %}
+{% block titulo %}Turno {{ turno.codigo }}{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block contenido %}
+<div class="quiosco-confirmacion">
+  <h1>Turno generado</h1>
+  <div class="mensaje mensaje--ok" role="status">¡Su turno ha sido generado e ingresado a la cola exitosamente!</div>
+
+  {% include "_ticket.html" %}
+
+  <div class="ticket-acciones">
+    <button type="button" id="btn-imprimir" class="btn btn-grande btn-bloque btn-imprimir" onclick="window.print()">🖨️ Imprimir ticket</button>
+    <a href="{{ base }}/turno/{{ turno.codigo }}" class="btn btn-secundario btn-grande btn-bloque">Consultar este turno</a>
+    <a href="{{ base }}/emitir" class="btn btn-secundario btn-grande btn-bloque">Solicitar otro turno</a>
+  </div>
+</div>
+{% endblock %}

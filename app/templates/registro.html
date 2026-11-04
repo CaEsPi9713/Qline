@@ -1,0 +1,38 @@
+{#- Solicitud de acceso del personal. Queda pendiente hasta que el administrador la habilite y le asigne un rol. -#}
+{% extends "base_publico.html" %}
+{% block titulo %}Solicitar acceso{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
+
+{% block contenido %}
+<div class="contenedor--estrecho pila">
+  <h1>Solicitar acceso</h1>
+
+  {% if enviado %}
+  <p class="mensaje mensaje--ok" role="status">Solicitud enviada para <strong>{{ enviado }}</strong>. El administrador debe aprobarla y asignarle un rol antes de que pueda ingresar.</p>
+  <a class="boton boton--contorno" href="{{ base }}/login">Ir al ingreso</a>
+  {% else %}
+  <p class="mensaje">Cree su usuario. No tendrá acceso hasta que el administrador lo habilite y le asigne un rol (operador o supervisor).</p>
+  {% if error %}<p class="mensaje mensaje--error" role="alert">{{ error }}</p>{% endif %}
+
+  <form class="tarjeta" method="post" action="{{ base }}/registro">
+    <div class="campo">
+      <label for="usuario">Usuario</label>
+      <input id="usuario" name="usuario" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required minlength="3" maxlength="30" pattern="[A-Za-z]{3,30}" value="{{ usuario|default('') }}">
+      <span class="campo__ayuda">Solo letras, mayúsculas o minúsculas, de 3 a 30: sin números, espacios, tildes ni símbolos. «Ana» y «ana» son la misma cuenta.</span>
+    </div>
+    <div class="campo">
+      <label for="clave">Contraseña</label>
+      <input id="clave" name="clave" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+      <span class="campo__ayuda">Al menos 8 caracteres.</span>
+    </div>
+    <div class="campo">
+      <label for="confirmacion">Repita la contraseña</label>
+      <input id="confirmacion" name="confirmacion" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+    </div>
+    <button class="boton" type="submit">Enviar solicitud</button>
+  </form>
+  <p class="texto-suave">¿Ya tiene acceso? <a href="{{ base }}/login">Ingrese aquí</a>.</p>
+  {% endif %}
+</div>
+{% endblock %}

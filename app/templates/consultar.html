@@ -1,0 +1,43 @@
+{# UI-03 · Consulta de turno por código. P05 (Aaron) define el texto de indicaciones en el bloque marcado.
+   ADAPTAR: name/action reales del formulario. #}
+{% extends "base_publico.html" %}
+{% block titulo %}Consultar turno{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
+
+{% block contenido %}
+<div class="contenedor--estrecho pila">
+  <h1>Consultar mi turno</h1>
+
+  {# P05 (Aaron): indicaciones sobre conservar la página y recibir actualizaciones #}
+  <p class="mensaje">Conserve esta página abierta: el estado de su turno se actualiza solo.</p>
+
+  {% if error %}<p class="mensaje mensaje--error" role="alert">{{ error }}</p>{% endif %}
+  <form class="tarjeta" method="get" action="{{ base }}/consultar">   {# ADAPTAR #}
+    <div class="campo">
+      <label for="codigo">Código del turno</label>
+      <input id="codigo" name="codigo" type="text" inputmode="text" autocomplete="off" required value="{{ codigo|default('') }}">
+      <span class="campo__ayuda">Aparece en su ticket.</span>
+    </div>
+    <button class="boton" type="submit">Consultar</button>
+  </form>
+
+  {% if turno %}
+  <section class="tarjeta tarjeta--destacada" aria-live="polite" aria-labelledby="resultado-titulo">
+    <h2 id="resultado-titulo">Resultado de la consulta</h2>
+    <div class="codigo-grande">{{ turno.codigo }}</div>
+    <dl class="datos">
+      <dt>Estado</dt><dd><span class="badge badge-{{ turno.estado }}">{{ turno.estado|replace('_', ' ')|title }}</span></dd>
+      <dt>Prioridad</dt><dd><span class="badge badge-{{ turno.prioridad }}">{{ turno.prioridad|capitalize }}</span></dd>
+      {% if turno.ventanilla %}<dt>Ventanilla</dt><dd>{{ turno.ventanilla }}</dd>{% endif %}
+      {% if turno.turnos_antes is not none %}
+      <dt>Turnos por delante</dt><dd>{{ turno.turnos_antes }}</dd>
+      <dt>Posición en la cola</dt><dd>{{ turno.posicion }}</dd>
+      {% endif %}
+    </dl>
+    {% if turno.aviso %}<p class="mensaje mensaje--aviso" role="status">{{ turno.aviso }}</p>{% endif %}
+    <p class="texto-suave">Actualice esta página para ver el estado más reciente.</p>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

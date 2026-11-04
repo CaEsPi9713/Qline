@@ -1,0 +1,8 @@
+{#- Navegación de las páginas públicas del sitio (portada, acerca de, quiosco, consulta y errores). -#}
+<nav class="publico-nav" aria-label="Navegación principal">
+  <a href="{{ base }}/"{% if request.url.path == base ~ '/' %} aria-current="page"{% endif %}>Inicio</a>
+  <a href="{{ base }}/quiosco"{% if request.url.path == base ~ '/quiosco' %} aria-current="page"{% endif %}>Sacar turno</a>
+  <a href="{{ base }}/consultar"{% if request.url.path == base ~ '/consultar' %} aria-current="page"{% endif %}>Consultar turno</a>
+  <a href="{{ base }}/login"{% if request.url.path in (base ~ '/login', base ~ '/registro') %} aria-current="page"{% endif %}>Personal</a>
+  <a href="{{ base }}/acerca"{% if request.url.path == base ~ '/acerca' %} aria-current="page"{% endif %}>Acerca de</a>
+</nav>

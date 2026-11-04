@@ -1,0 +1,5 @@
+{% extends "error_base.html" %}
+{% set codigo = 403 %}
+{% set titulo = "Acceso no permitido" %}
+{% set mensaje = "No tiene permiso para ver esta página." %}
+{% block extra %}{% if usuario %}<p>Sesión iniciada como <strong>{{ usuario.usuario }}</strong> ({{ usuario.rol }}). <a href="{{ base }}{{ inicio }}">Ir a mi página</a></p>{% endif %}{% endblock %}

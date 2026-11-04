@@ -1,0 +1,36 @@
+{#- UI-03 · Quiosco. Fondo claro; panel «Bienvenido» 100 % sólido; vidrio discreto (~15 %) SOLO en las tarjetas de elección (.opcion-turno).
+    Mismo formulario de siempre: POST a /quiosco con `prioridad` = normal | preferencial. Solo la navegación pública, sin módulos internos. -#}
+{% extends "base_publico.html" %}
+{% block titulo %}Quiosco de turnos{% endblock %}
+{% block clase_body %}quiosco{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}quiosco-escena{% endblock %}
+{% block contenido %}
+<section class="quiosco-panel" aria-labelledby="bienvenida">
+  <h1 id="bienvenida">Bienvenido a QLine</h1>
+  <p>Seleccione el tipo de atención para solicitar su turno en <strong>{{ servicio }}</strong>.</p>
+</section>
+
+{% if error %}<div class="mensaje mensaje--error" role="alert">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ base }}/quiosco">
+  <fieldset class="quiosco-opciones">
+    <legend class="solo-lectores">Tipo de atención</legend>
+    <label class="opcion-turno">
+      <input type="radio" name="prioridad" value="normal" {% if prioridad_seleccionada != 'preferencial' %}checked{% endif %}>
+      <span class="opcion-turno__cuerpo">
+        <span class="opcion-turno__titulo">Atención Regular (Normal)</span>
+        <span class="opcion-turno__texto">Para todo público y trámites generales.</span>
+      </span>
+    </label>
+    <label class="opcion-turno">
+      <input type="radio" name="prioridad" value="preferencial" {% if prioridad_seleccionada == 'preferencial' %}checked{% endif %}>
+      <span class="opcion-turno__cuerpo">
+        <span class="opcion-turno__titulo">Atención Preferencial</span>
+        <span class="opcion-turno__texto">Adultos mayores, personas con discapacidad o mujeres embarazadas.</span>
+      </span>
+    </label>
+  </fieldset>
+  <button type="submit" class="boton boton--grande quiosco-emitir">Emitir mi turno</button>
+</form>
+{% endblock %}

@@ -1,0 +1,58 @@
+{# P06 · Acerca de: propósito, equipo y repositorio. No inventar perfiles ni datos institucionales. #}
+{% extends "base_publico.html" %}
+{% block titulo %}Acerca de{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
+
+{% block contenido %}
+{# COMPLETAR: pegar la URL REAL y verificada del repositorio. Si queda vacía, el enlace no se muestra. #}
+{% set repo_url = "https://github.com/CaEsPi9713/Qline" %}
+<section class="cabecera-pagina">
+  <span class="heroe__etiqueta">Acerca de</span>
+  <h1>Acerca de QLine</h1>
+  <p>QLine gestiona filas y turnos: emisión con prioridad, llamado por ventanilla, seguimiento por QR, historial y estadísticas de atención.</p>
+</section>
+
+<section class="seccion" aria-labelledby="proposito">
+  <h2 id="proposito" class="seccion__titulo">El proyecto</h2>
+  <div class="tarjeta tarjeta--destacada">
+    <p>Es el proyecto final del curso <strong>Tópicos Avanzados de Bases de Datos</strong> de la Universidad Nacional. Combina dos bases de datos con un propósito distinto cada una:</p>
+    <div class="rejilla rejilla--dos">
+      <div><h3>MongoDB · lo que ocurrió</h3><p>Guarda cada turno con sus estados y tiempos, valida su estructura e indexa para el historial y las estadísticas.</p></div>
+      <div><h3>Redis · lo que ocurre ahora</h3><p>Controla la cola con prioridad, la ventanilla que atiende cada turno y los avisos en tiempo real.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="seccion" aria-labelledby="tecnologias">
+  <h2 id="tecnologias" class="seccion__titulo">Tecnologías</h2>
+  <ul class="chips">
+    <li class="chip-tec chip-tec--teal">FastAPI</li>
+    <li class="chip-tec chip-tec--verde">MongoDB</li>
+    <li class="chip-tec chip-tec--coral">Redis</li>
+    <li class="chip-tec chip-tec--azul">WebSocket</li>
+    <li class="chip-tec chip-tec--ambar">Jinja2</li>
+    <li class="chip-tec chip-tec--teal">Python</li>
+  </ul>
+</section>
+
+<section class="seccion" aria-labelledby="equipo">
+  <h2 id="equipo" class="seccion__titulo">Equipo Query Logic (Grupo 2)</h2>
+  <ul class="lista-equipo">
+    <li class="miembro miembro--teal"><span class="miembro__inicial" aria-hidden="true">A</span><div><strong>Aaron Benavides</strong><span>Mensajes al cliente, ticket y documentación de release</span></div></li>
+    <li class="miembro miembro--azul"><span class="miembro__inicial" aria-hidden="true">A</span><div><strong>Abigail Urbina</strong><span>Diseño visual, accesibilidad y README</span></div></li>
+    <li class="miembro miembro--verde"><span class="miembro__inicial" aria-hidden="true">A</span><div><strong>Alessandro Cambronero</strong><span>Operación, Redis, salud del sistema y demo</span></div></li>
+    <li class="miembro miembro--ambar"><span class="miembro__inicial" aria-hidden="true">C</span><div><strong>Carlos Espinoza</strong><span>Ventanillas, Mongo, métricas e historial</span></div></li>
+  </ul>
+</section>
+
+{% if repo_url %}
+<section class="banda-cta" aria-labelledby="repositorio">
+  <div>
+    <h2 id="repositorio">Repositorio</h2>
+    <p>Código, bitácoras de cada seguimiento y evidencia de las pruebas.</p>
+  </div>
+  <div class="fila"><a class="boton boton--grande" href="{{ repo_url }}">Ver el código en el repositorio</a></div>
+</section>
+{% endif %}
+{% endblock %}

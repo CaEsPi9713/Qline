@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block titulo %}Mantenimiento de Sucursales{% endblock %}
+{% block lead %}Administración lógica de sedes institucionales, gestión de capacidad instalada y aprovisionamiento automático de ventanillas (RFC-004).{% endblock %}
+
+{% block contenido %}
+<div class="info extra-aviso" role="note"><strong>Extra del proyecto.</strong> Función adicional (extra) fuera del alcance del Plan Alternativo de S4: administra el catálogo de sedes y aprovisiona sus ventanillas. La operación (emisión, cola, llamado, panel, QR y sala) sigue siendo de un solo servicio y de una sola sede.</div>
+{% if mensaje %}<div class="ok" role="alert">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+<!-- Tarjeta de Resumen y Catálogo de Sucursales -->
+<div class="card">
+  <div class="card-cabecera">
+    <div>
+      <h2>Sucursales Registradas</h2>
+      <p class="sub" style="margin:4px 0 0">Sedes activas para atención al cliente y despacho de turnos institucionales.</p>
+    </div>
+    <a href="#crear-sucursal" class="btn">Nueva Sucursal</a>
+  </div>
+
+  <div class="tabla-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre de la Sede</th>
+          <th>Dirección</th>
+          <th class="num">Ventanillas</th>
+          <th class="num">Turnos en Curso</th>
+          <th>SLA Espera</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sucursales %}
+        <tr>
+          <td class="codigo">{{ s.codigo }}</td>
+          <td><strong>{{ s.nombre }}</strong></td>
+          <td class="texto-suave">{{ s.direccion or 'No especificada' }}</td>
+          <td class="num">
+            <strong>{{ s.ventanillas_activas }}</strong> <small class="texto-tenue">/ {{ s.ventanillas_totales }}</small>
+          </td>
+          <td class="num">
+            {% if s.turnos_activos > 0 %}
+            <span class="badge badge-llamado">{{ s.turnos_activos }} en curso</span>
+            {% else %}
+            <span class="texto-tenue">0</span>
+            {% endif %}
+          </td>
+          <td>&le; {{ s.sla_espera_max_seg }}s ({{ s.sla_tasa_minima }}%)</td>
+          <td>
+            {% if s.estado == 'activa' %}
+            <span class="badge badge-atendido">Activa</span>
+            {% else %}
+            <span class="badge badge-abandonado">Inactiva</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="fila" style="gap:6px">
+              {% if s.estado == 'activa' %}
+              <form method="post" action="{{ base }}/admin/sucursales/desactivar" style="display:inline">
+                <input type="hidden" name="codigo" value="{{ s.codigo }}">
+                <button type="submit" class="btn btn-secundario btn-sm">Desactivar</button>
+              </form>
+              {% else %}
+              <form method="post" action="{{ base }}/admin/sucursales/activar" style="display:inline">
+                <input type="hidden" name="codigo" value="{{ s.codigo }}">
+                <button type="submit" class="btn btn-ok btn-sm">Activar</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not sucursales %}
+        <tr><td colspan="8" class="vacio">No existen sucursales registradas.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modificación de Capacidad de Sucursal Existente -->
+<div class="card">
+  <h2>Ajustar Capacidad de Ventanillas</h2>
+  <p class="sub">Incremente o reduzca el número de módulos aprovisionados para una sede existente.</p>
+  <form method="post" action="{{ base }}/admin/sucursales/actualizar" class="barra-filtros">
+    <div class="grupo">
+      <label for="sucursal_codigo_act">Sucursal a modificar</label>
+      <select id="sucursal_codigo_act" name="codigo" required>
+        {% for s in sucursales %}
+        <option value="{{ s.codigo }}">{{ s.nombre }} ({{ s.codigo }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="grupo">
+      <label for="nuevo_nombre">Nombre descriptivo (opcional)</label>
+      <input type="text" id="nuevo_nombre" name="nombre" placeholder="Dejar en blanco para conservar actual">
+    </div>
+    <div class="grupo">
+      <label for="nueva_cantidad">Nueva cantidad de ventanillas</label>
+      <input type="number" id="nueva_cantidad" name="cantidad_ventanillas" min="1" max="50" required placeholder="Ej. 5">
+    </div>
+    <button type="submit" class="btn-secundario">Actualizar Capacidad</button>
+  </form>
+</div>
+
+<!-- Formulario para Registrar Nueva Sucursal con Auto-Aprovisionamiento -->
+<div class="card" id="crear-sucursal">
+  <h2>Crear Nueva Sucursal y Aprovisionar Ventanillas</h2>
+  <p class="sub">Registra la sede y genera automáticamente los registros de ventanilla correspondientes en MongoDB.</p>
+
+  <form method="post" action="{{ base }}/admin/sucursales/crear">
+    <div class="grid grid-2">
+      <div class="campo">
+        <label for="codigo_s">Código canónico de la sucursal</label>
+        <input type="text" id="codigo_s" name="codigo" placeholder="Ej. heredia, sede_norte" required pattern="^[a-z0-9_-]{3,20}$">
+        <p class="campo-ayuda">Minúsculas, números, guiones. Entre 3 y 20 caracteres (usado en namespaces de Redis y MongoDB).</p>
+      </div>
+
+      <div class="campo">
+        <label for="nombre_s">Nombre institucional de la sede</label>
+        <input type="text" id="nombre_s" name="nombre" placeholder="Ej. Sede Regional Heredia" required minlength="3">
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="campo">
+        <label for="direccion_s">Dirección física</label>
+        <input type="text" id="direccion_s" name="direccion" placeholder="Ej. Costado Norte del Parque Central">
+      </div>
+
+      <div class="campo">
+        <label for="telefono_s">Teléfono de contacto</label>
+        <input type="text" id="telefono_s" name="telefono" placeholder="Ej. +506 2260-0000">
+      </div>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="campo">
+        <label for="cantidad_v">Cantidad inicial de ventanillas</label>
+        <input type="number" id="cantidad_v" name="cantidad_ventanillas" value="3" min="1" max="50" required>
+        <p class="campo-ayuda">Generará automáticamente desde V-01 hasta la cantidad indicada.</p>
+      </div>
+
+      <div class="campo">
+        <label for="prefijo_v">Prefijo de código de ventanilla</label>
+        <input type="text" id="prefijo_v" name="prefijo_ventanilla" value="V" required maxlength="5">
+      </div>
+
+      <div class="campo">
+        <label for="sla_max">Objetivo SLA (espera máxima en segundos)</label>
+        <select id="sla_max" name="objetivo_max_espera_seg">
+          <option value="120">2 minutos (120 s)</option>
+          <option value="180">3 minutos (180 s)</option>
+          <option value="300" selected>5 minutos (300 s)</option>
+          <option value="600">10 minutos (600 s)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="fila" style="margin-top:14px">
+      <button type="submit" class="btn">Crear Sucursal y Aprovisionar Ventanillas</button>
+      <a href="{{ base }}/" class="btn btn-secundario">Volver al Panel CRUD</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

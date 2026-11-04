@@ -1,0 +1,21 @@
+# Ficha del proyecto para el portal de proyectos destacados del curso.
+# Formato oficial del enunciado (sección 7): una clave por línea, sin anidar.
+# Antes de entregar: `python -m scripts.verificar_entrega` indica qué datos siguen pendientes.
+
+nombre: QLine
+resumen: Gestión de filas y turnos en tiempo real, con cola de prioridad en Redis e historial e indicadores en MongoDB
+problema: En las oficinas con atención al público nadie sabe cuánto va a esperar, la prioridad depende de la buena voluntad de quien atiende y no queda registro de cuánto tardó cada atención
+usuarios: Clientes, operadores, supervisores y administradores de una oficina con atención al público (institución, PYME o municipio)
+motores: [Redis, MongoDB]
+lenguaje: Python
+licencia: MIT
+repositorio: https://github.com/CaEsPi9713/Qline
+# Opcional: enlace público del video de demostración (3 a 5 minutos). Si se agrega, también va en el README y en el PDF.
+demo_video:
+demo_url: https://grupo2.crnube.net/proyecto/qline/
+captura: docs/img/05-vista-operador.jpg
+grupo: 2
+dia: martes
+periodo: II-2026
+# Los nombres solo se publican con autorización de cada integrante. Agregue aquí a quienes la den, por ejemplo [Nombre Apellido, Nombre Apellido].
+autores_publicos: []

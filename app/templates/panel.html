@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titulo %}Panel de atención{% endblock %}
+{% block lead %}Turno actual de cada ventanilla. Para obtener un turno use <em>Llamar siguiente</em> en la <a href="{{ base }}/cola">cola activa</a>; aquí se inicia y se finaliza la atención.{% endblock %}
+{% macro campos_cierre(id) %}
+<details class="op-cierre">
+  <summary>Motivo y nota (opcional)</summary>
+  <label for="motivo-{{ id }}">Motivo</label>
+  <select name="motivo" id="motivo-{{ id }}">
+    <option value="">Sin motivo</option>
+    {% for clave, etiqueta in motivos_cierre.items() %}<option value="{{ clave }}">{{ etiqueta }}</option>{% endfor %}
+  </select>
+  <label for="nota-{{ id }}">Nota (hasta {{ nota_cierre_max }} caracteres)</label>
+  <input type="text" name="nota" id="nota-{{ id }}" maxlength="{{ nota_cierre_max }}" autocomplete="off">
+</details>
+{% endmacro %}
+{% block contenido %}
+{% if mensaje %}<div class="ok" role="status">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+{% for a in avisos %}<div class="aviso">{{ a }}</div>{% endfor %}
+
+<div class="op op-panel">
+<div class="fila op-barra">
+  <a href="{{ base }}/panel" class="btn btn-secundario">Actualizar</a>
+  <a href="{{ base }}/cola" class="btn btn-secundario">Ir a la cola activa</a>
+</div>
+
+<div class="ventanillas">
+{% for v in ventanillas %}
+  <section class="ventanilla {{ '' if v.turno else 'libre' }}">
+    <div class="ventanilla-cab">
+      <h2>{{ v.id }}</h2>
+      {% if v.turno %}<span class="badge badge-{{ v.turno.estado }}">{{ v.turno.estado|replace('_', ' ') }}</span>{% else %}<span class="badge">libre</span>{% endif %}
+    </div>
+    {% if v.turno %}
+    <div class="ventanilla-cuerpo">
+      <div class="turno-grande">{{ v.turno.codigo }}</div>
+      <span class="badge badge-{{ v.turno.prioridad }}">{{ v.turno.prioridad }}</span>
+      {% if v.turno.segundos_restantes is not none %}<p class="nota op-nota">Si no se presenta, se marcará como abandonado en <strong>{{ v.turno.segundos_restantes }} s</strong>.</p>{% endif %}
+    </div>
+    <div class="ventanilla-pie">
+      {% if v.turno.puede_iniciar %}
+      <form method="post" action="{{ base }}/panel/iniciar">
+        <input type="hidden" name="codigo" value="{{ v.turno.codigo }}">
+        <input type="hidden" name="ventanilla" value="{{ v.id }}">
+        <button type="submit" class="btn-bloque btn-grande">Iniciar atención</button>
+      </form>
+      {% elif v.turno.puede_finalizar %}
+      <form method="post" action="{{ base }}/panel/finalizar">
+        <input type="hidden" name="codigo" value="{{ v.turno.codigo }}">
+        <input type="hidden" name="ventanilla" value="{{ v.id }}">
+        {{ campos_cierre(v.turno.codigo) }}
+        <button type="submit" class="btn-ok btn-bloque btn-grande">Finalizar atención</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="ventanilla-cuerpo">
+      <div class="sin-turno"><strong>&mdash;</strong>Sin turno asignado</div>
+    </div>
+    {% endif %}
+    {% if v.extras %}
+    <div class="ventanilla-extras">
+      <div class="nota"><strong>Otros turnos asignados a {{ v.id }}</strong></div>
+      {% for t in v.extras %}
+      <div class="fila extra">
+        <span class="codigo">{{ t.codigo }}</span>
+        <span class="badge badge-{{ t.estado }}">{{ t.estado|replace('_', ' ') }}</span>
+        {% if t.puede_iniciar %}
+        <form method="post" action="{{ base }}/panel/iniciar">
+          <input type="hidden" name="codigo" value="{{ t.codigo }}">
+          <input type="hidden" name="ventanilla" value="{{ v.id }}">
+          <button type="submit" class="btn-secundario">Iniciar atención</button>
+        </form>
+        {% elif t.puede_finalizar %}
+        <form method="post" action="{{ base }}/panel/finalizar">
+          <input type="hidden" name="codigo" value="{{ t.codigo }}">
+          <input type="hidden" name="ventanilla" value="{{ v.id }}">
+          {{ campos_cierre(t.codigo) }}
+          <button type="submit" class="btn-ok">Finalizar atención</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+{% endfor %}
+</div>
+</div>
+{% endblock %}

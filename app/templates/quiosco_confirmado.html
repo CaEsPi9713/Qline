@@ -1,0 +1,58 @@
+{% extends "base_publico.html" %}
+{% block titulo %}Turno {{ turno.codigo }} - Quiosco{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block contenido %}
+<div class="quiosco-confirmacion">
+  <div class="mensaje mensaje--ok" role="status">¡Turno generado con éxito!</div>
+
+  {% include "_ticket.html" %}
+
+  <div class="ticket-acciones">
+    <button type="button" id="btn-imprimir" class="btn btn-grande btn-bloque btn-imprimir" onclick="imprimirTicket()">
+      🖨️ Imprimir ticket
+    </button>
+    <a href="{{ base }}/quiosco" class="btn btn-secundario btn-grande btn-bloque">Solicitar otro turno</a>
+    <p id="contador-retorno" class="nota">Esta pantalla volverá al inicio en <span id="segundos">25</span> segundos.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var seg = 25;
+  var el = document.getElementById("segundos");
+  var pausado = false;
+
+  window.imprimirTicket = function() {
+    pausado = true;
+    window.print();
+    setTimeout(function() {
+      pausado = false;
+      seg = 25;
+      if (el) el.textContent = seg;
+    }, 1000);
+  };
+
+  window.addEventListener("beforeprint", function() {
+    pausado = true;
+  });
+
+  window.addEventListener("afterprint", function() {
+    pausado = false;
+    seg = 25;
+    if (el) el.textContent = seg;
+  });
+
+  var t = setInterval(function() {
+    if (pausado) return;
+    seg--;
+    if (el) el.textContent = seg;
+    if (seg <= 0) {
+      clearInterval(t);
+      window.location.href = "{{ base }}/quiosco";
+    }
+  }, 1000);
+})();
+</script>
+{% endblock %}

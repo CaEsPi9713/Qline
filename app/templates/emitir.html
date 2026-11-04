@@ -1,0 +1,24 @@
+{# UI-03 · Emisión (formulario cliente). Superficies sólidas, sin vidrio.
+   ADAPTAR: conservar action/method/name de los campos reales. #}
+{% extends "base_publico.html" %}
+{% block titulo %}Sacar turno{% endblock %}
+{% block nav_publica %}{% include "_nav_publica.html" %}{% endblock %}
+{% block clase_cuerpo %}ancho{% endblock %}
+
+{% block contenido %}
+<div class="contenedor--estrecho">
+  <h1>Sacar un turno</h1>
+  {% if error %}<p class="mensaje mensaje--error" role="alert">{{ error }}</p>{% endif %}
+  <form class="tarjeta" method="post" action="{{ base }}/emitir">   {# ADAPTAR #}
+    <div class="campo">
+      <label for="prioridad">Tipo de turno</label>
+      <select id="prioridad" name="prioridad" required>
+        <option value="normal"{% if prioridad_seleccionada != 'preferencial' %} selected{% endif %}>Regular (normal)</option>
+        <option value="preferencial"{% if prioridad_seleccionada == 'preferencial' %} selected{% endif %}>Preferencial</option>
+      </select>
+      <span class="campo__ayuda">El turno preferencial se atiende con prioridad.</span>
+    </div>
+    <button class="boton boton--grande" type="submit">Emitir turno</button>
+  </form>
+</div>
+{% endblock %}
