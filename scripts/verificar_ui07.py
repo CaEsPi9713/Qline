@@ -8,7 +8,7 @@ usando el arnés de prueba en memoria (fakeredis y ColeccionFalsa), comprobando:
 4. Ticket imprimible (@media print) y acciones de usuario
 5. Identidad institucional visible y consistencia de textos
 6. Detección de dependencias pendientes de compañeros
-Genera un informe completo en docs/seguimientos/UI_07_INTEGRACION_VISUAL.md.
+Genera un informe completo en la carpeta temporal del sistema (no en docs/) y muestra su ruta.
 """
 
 import os
@@ -142,8 +142,9 @@ def ejecutar_verificacion_ui07():
     css_imprimir = ".btn-imprimir" in css
     
     # 5. Generar informe Markdown
-    os.makedirs(os.path.join("docs", "seguimientos"), exist_ok=True)
-    reporte_path = os.path.join("docs", "seguimientos", "UI_07_INTEGRACION_VISUAL.md")
+    import tempfile
+    reporte_path = os.path.join(tempfile.gettempdir(), "UI_07_INTEGRACION_VISUAL.md")
+    print(f"Informe: {reporte_path}")
     
     with open(reporte_path, "w", encoding="utf-8") as rep:
         rep.write("# UI-07 · Informe de Integración Visual, Regresión y Aceptación Estética\n\n")

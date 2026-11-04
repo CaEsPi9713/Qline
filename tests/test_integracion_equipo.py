@@ -5,8 +5,7 @@
   Abigail  abandono y recuperación de la cola
   Carlos   qr_token en el esquema, historial y dashboard, descargas JSON
 
-Recorre el flujo por HTTP con MongoDB y Redis simulados (el servidor real se verifica con el guion de
-GUION_VERIFICACION_S3.md). Cada prueba protege un contrato entre dos áreas.
+Recorre el flujo por HTTP con MongoDB y Redis simulados (el servidor real se verifica a mano). Cada prueba protege un contrato entre dos áreas.
 """
 import io
 import json

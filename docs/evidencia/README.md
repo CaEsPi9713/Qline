@@ -1,4 +1,4 @@
-# Evidencias del Seguimiento 3
+# Evidencias de pruebas y mediciones
 
 Los informes de esta carpeta **los genera el script que los produce**, con los resultados de esa ejecución. No se editan a mano ni se escriben antes de correr la prueba: deben salir del servidor donde se demuestra el proyecto.
 
@@ -12,6 +12,8 @@ Los informes de esta carpeta **los genera el script que los produce**, con los r
 | `fallos_recuperacion.md` | `python -m scripts.probar_fallos_recuperacion --informe docs/evidencia/fallos_recuperacion.md` | TT-019 · Redis y MongoDB caídos, datos inválidos y carreras (HU-008 y HU-012) |
 | `indices_mongo.md` | `python scripts/medir_indices_mongo.py --informe docs/evidencia/indices_mongo.md` | TT-014 y TT-015 · índices con `explain()` y aggregation pipelines del dashboard (Carlos). **Se genera en el servidor** |
 | `qr_token.md` | `python -m scripts.probar_qr_token --informe docs/evidencia/qr_token.md` | TT-001, TT-002 y HU-003 · `qr_token` aceptado, repetido rechazado, turnos sin token conviven y la consulta usa el índice (Carlos y Aaron). **Se genera en el servidor** |
+
+**Informes presentes en esta carpeta:** `concurrencia.md`, `rendimiento.md`, `fallos.md`, `indices_mongo.md`, `ventanillas_dinamicas.md` y el ejemplo `reporte_diario_ejemplo.md`/`.json` (informe diario de Carlos). **Pendientes de traer del servidor:** `recuperacion.md`, `rendimiento_recuperacion.md`, `fallos_recuperacion.md`, `qr_token.md`, `salud.md` y `cierre.md`; se generan con los comandos de esta página y no se escriben a mano.
 
 ## Cómo ejecutar TT-016 en el servidor
 

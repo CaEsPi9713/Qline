@@ -3,7 +3,7 @@
 
 **Documento independiente. No modifica ni reemplaza el Plan Maestro ni el enunciado del curso.**
 
-**Base:** `development`, `docs/seguimientos/S4.md`, Plan Maestro `docs/Plan de Desarrollo QLINE/PLAN_DESARROLLO_QLINE.md`, feedback del profesor, y propuestas preseleccionadas de `docs/propuestas_mejoras.md`.
+**Base:** `development`, `docs/seguimientos/S4.md`, Plan Maestro `docs/plan/PLAN_DESARROLLO_QLINE.md`, feedback del profesor, y propuestas preseleccionadas de `docs/propuestas_mejoras.md`.
 
 **Estado:** planificación. La asignación propuesta no prueba implementación ni representa aceptación formal del equipo.
 

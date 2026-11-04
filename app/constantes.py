@@ -1,7 +1,7 @@
 """
 Constantes comunes de QLine (TT-009).
 
-Fuente única de los contratos aprobados en docs/Plan de Desarrollo QLINE.
+Fuente única de los contratos aprobados en docs/plan/.
 Ningún módulo debe redefinir servicio, ventanillas, prioridades, estados,
 TTL ni el prefijo de claves Redis.
 """

@@ -3,11 +3,26 @@
 Todos los cambios notables en este proyecto están documentados en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
-Estado de versión actual: **v0.9.0-rc** (Candidato a release de Seguimiento 4, pendiente de acuerdo final de release del equipo TT-029).
+Estado de versión actual: **v0.9.0** (release candidate del Seguimiento 4, 03/11/2026). La versión final **v1.0.0** se publica antes de la exposición del 10/11/2026. Los tags `v0.1.0`, `v0.2.0` y `v0.3.0` se crearon de forma retroactiva el 03/11/2026 sobre el último commit de cada seguimiento.
 
 ---
 
-## [Sin publicar] - Entrega a sucursal (en curso)
+## [Sin publicar]
+
+Para la **v1.0.0**: instalación desde cero verificada por una persona que no configuró el entorno, presentación final y, de forma opcional, el video de demostración.
+
+---
+
+## [0.9.0] - 2026-11-03 (Seguimiento 4 · Release candidate y entrega a sucursal)
+
+Incluye lo de la candidata `0.9.0-rc` (más abajo) y lo que se añadió después.
+
+### Documentación y entrega
+- **README profesional:** el problema y la solución, 8 capturas (`docs/img/`), quién usa QLine, funcionalidades, arquitectura con diagrama, instalación paso a paso (con la creación del primer administrador), variables de entorno, datos de prueba, tabla de mediciones, seguridad, roadmap y equipo.
+- **`docs/arquitectura/arquitectura.md`:** diagrama de la aplicación y los motores, qué dato vive en cada motor y por qué, modelo de datos, flujos, consistencia entre motores, qué pasa si algo falla y mediciones.
+- **`portal.yml` con el formato oficial del enunciado** (claves planas). Quedan por completar el día del grupo, el enlace del video y los autores públicos.
+- **`scripts/verificar_entrega.py`:** revisa archivos obligatorios, ficha del portal, enlaces de la documentación, secretos versionados, tags y árbol de trabajo, e indica qué falta antes del release.
+- **`docs/` limpia para la entrega:** se retiran los planes de trabajo internos, reportes personales, guiones y borradores (siguen en el historial de git); el plan de desarrollo pasa a `docs/plan/` y la especificación funcional a `docs/especificacion_funcional.md`. `scripts/verificar_ui07.py` ya no escribe su informe dentro de `docs/`.
 
 ### Añadido
 - **Inicio de sesión del personal por rol (Fases 1 y 2):** `app/auth.py` guarda solo un hash `scrypt` de la contraseña, firma la sesión en una cookie `HttpOnly` y `SameSite=Lax`, bloquea 5 minutos tras 5 intentos fallidos y relee el usuario en cada petición, de modo que deshabilitarlo o cambiarle el rol surte efecto al instante. Páginas `/login`, `/registro` (queda pendiente hasta que el administrador la habilite) y `/salir`.
@@ -36,7 +51,7 @@ Estado de versión actual: **v0.9.0-rc** (Candidato a release de Seguimiento 4, 
 
 ---
 
-## [0.9.0-rc] - 2026-11-01 (Seguimiento 4 · Release Candidate; actualizado el 2026-11-02)
+## [0.9.0-rc] - 2026-11-01 (Seguimiento 4 · candidata inicial; actualizada el 2026-11-02)
 
 ### Añadido
 - **P01 · Aviso de finalización en QR:** Notificación explícita al cliente cuando el turno pasa a estado `atendido` indicando que la atención ha finalizado y que puede cerrar la pestaña del navegador (`app/templates/turno_qr.html`). Soportado en renderizado inicial (SSR) y en actualización dinámica vía JavaScript.
@@ -95,7 +110,7 @@ Estado de versión actual: **v0.9.0-rc** (Candidato a release de Seguimiento 4, 
 
 ---
 
-## [0.3.0] - 2026-10-27 (Seguimiento 3 · Concurrencia, Tiempo Real, Abandono y Movilidad)
+## [0.3.0] - 2026-10-26 (Seguimiento 3 · Concurrencia, Tiempo Real, Abandono y Movilidad)
 
 ### Añadido
 - **HU-003 / HU-013 · Consulta por código QR móvil:** Generación de SVG de código QR en quiosco y emisión; endpoint público de consulta `/turno/qr/{uuid}` y API JSON asociada.
@@ -114,7 +129,7 @@ Estado de versión actual: **v0.9.0-rc** (Candidato a release de Seguimiento 4, 
 
 ---
 
-## [0.2.0] - 2026-10-18 (Seguimiento 2 · Ciclo de Atención, Persistencia y Analítica)
+## [0.2.0] - 2026-10-19 (Seguimiento 2 · Ciclo de Atención, Persistencia y Analítica)
 
 ### Añadido
 - **TT-001 / TT-002 · Contrato estricto en MongoDB:** Esquema `$jsonSchema` estricto a nivel de colección (`turnos_schema.py`) y validador en memoria en Python.
@@ -127,7 +142,7 @@ Estado de versión actual: **v0.9.0-rc** (Candidato a release de Seguimiento 4, 
 
 ---
 
-## [0.1.0] - 2026-10-08 (Seguimiento 1 · Fundaciones y Concurrencia Base)
+## [0.1.0] - 2026-10-13 (Seguimiento 1 · Fundaciones y Concurrencia Base)
 
 ### Añadido
 - Estructura base de la aplicación con FastAPI y Jinja2.

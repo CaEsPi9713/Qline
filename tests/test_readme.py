@@ -34,8 +34,9 @@ class PruebasReadme(unittest.TestCase):
         self.assertNotRegex(README, r"(?i)(password|contraseña|pass)\s*[:=]\s*\S{6,}")
 
     def test_enlaza_el_mapa_de_claves_y_el_changelog_y_nombra_la_version(self):
-        for texto in ("docs/arquitectura/redis_claves.md", "CHANGELOG.md", "portal.yml", "v0.9.0"):
+        for texto in ("docs/arquitectura/redis_claves.md", "docs/arquitectura/arquitectura.md", "CHANGELOG.md", "portal.yml"):
             self.assertIn(texto, README)
+        self.assertRegex(README, r"v(0\.9\.0|1\.0\.0)")
 
     def test_menciona_las_rutas_clave_de_la_operacion(self):
         for ruta in ("/salud", "/administracion", "/demo", "/turno/qr/{uuid}", "scripts.preparar_demo"):

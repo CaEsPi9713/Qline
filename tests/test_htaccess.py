@@ -1,7 +1,7 @@
 """El .htaccess deja sin contraseña solo las rutas del cliente (QR) y mantiene protegido todo lo demás.
 
 No ejecuta Apache: lee las reglas `SetEnvIf Request_URI` del archivo y comprueba, con la misma expresión,
-qué direcciones quedarían públicas. La verificación real se hace en el servidor (GUION_VERIFICACION_S3.md).
+qué direcciones quedarían públicas. La verificación real se hace en el servidor.
 """
 import re
 import unittest

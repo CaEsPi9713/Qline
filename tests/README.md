@@ -68,7 +68,7 @@ Estados de turno: `pendiente`, `llamado`, `en_atencion`, `atendido`, `abandonado
 - Datos de demostración sintéticos.
 
 ## 9. Interfaz y accesibilidad
-Sistema de diseño en `docs/diseno/design-system.md`; checklist en `docs/diseno/checklist_accesibilidad_ui06.md`.
+Sistema de diseño en `docs/design-system.md`.
 
 ## 10. Capturas
 `[COMPLETAR: Aaron, desde UI-07]` capturas reales de escritorio, móvil y quiosco: `docs/capturas/`.
