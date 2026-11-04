@@ -2,7 +2,7 @@
 
 **Proyecto:** QLine · Grupo 2 / Query Logic · **Perfil B** (MongoDB + Redis)
 **Fuente:** *Proyecto Final Open Source — Enunciado y Seguimientos* (secciones 2, 4, 5, 6 y 7)
-**Elaborado:** 03/11/2026 · **Estado:** en ejecución. Avance del 03/11/2026: hecho C1 (`arquitectura.md`), C3 (README profesional), C4 (8 capturas con datos de demostración), C6 (`portal.yml` oficial: grupo de martes, video opcional y autores sin publicar), C7 (CHANGELOG cerrado en `[0.9.0]`), C8 (`S4.md` como bitácora; S1 a S3 cerradas) y la limpieza de `docs/`; nuevo `scripts/verificar_entrega.py` (lista lo que falta antes del tag). **Retirar este archivo de `docs/seguimientos/` antes del tag `v1.0.0`**: es un documento de trabajo del equipo
+**Elaborado:** 03/11/2026 · **Estado:** en ejecución. Avance del 03/11/2026: hecho C1 (`arquitectura.md`), C3 (README profesional), C4 (8 capturas con datos de demostración), C6 (`portal.yml` oficial: grupo de martes, video opcional y autores sin publicar), C7 (CHANGELOG cerrado en `[0.9.0]`), C8 (`S4.md` como bitácora; S1 a S3 cerradas), B3 (`scripts/crear_usuarios_demo.py`) y la limpieza de `docs/`; nuevo `scripts/verificar_entrega.py` (lista lo que falta antes del tag). **Retirar este archivo de `docs/seguimientos/` antes del tag `v1.0.0`**: es un documento de trabajo del equipo
 **La presentación (`.pptx`) la prepara otro compañero y queda fuera de este plan**; en la sección 8 va la lista de lo que debe saber para actualizarla.
 
 > Convención de las bitácoras: «verificado en el servidor» es lo ejecutado con MongoDB y Redis reales; «prueba automática» es la suite de `tests/` con simulados.

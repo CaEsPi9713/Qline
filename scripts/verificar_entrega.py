@@ -155,8 +155,10 @@ def revisar(raiz: Path = RAIZ) -> list:
             contenido = archivo.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        # Las pruebas llevan credenciales falsas a propósito (u:p@h) para comprobar que nunca se filtran.
-        if PATRON_VARIABLE.search(contenido) or (not ruta.startswith("tests/") and PATRON_URI.search(contenido)):
+        # Las pruebas llevan credenciales falsas a propósito, para comprobar que nunca se filtran.
+        if ruta.startswith("tests/"):
+            continue
+        if PATRON_VARIABLE.search(contenido) or PATRON_URI.search(contenido):
             hallazgos.append(ruta)
     (error("Secretos", "posibles credenciales en: " + ", ".join(hallazgos[:5])) if hallazgos
      else ok("Secretos", "ninguna credencial en los archivos versionados"))

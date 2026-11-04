@@ -124,6 +124,7 @@ class PruebasDelVerificador(unittest.TestCase):
             (raiz / "tests" / "t.py").write_text('X = "mongodb://u:p@h"\n', encoding="utf-8")          # credencial falsa de una prueba
             (raiz / "app.py").write_text('uri = f"mongodb://{user}:{pwd}@{host}"\n', encoding="utf-8")  # armada con variables
             (raiz / ".env.example").write_text("MONGO_PASS=tu_clave_aqui\n", encoding="utf-8")         # el ejemplo no cuenta
+            (raiz / "tests" / "u.py").write_text('E = "MONGO_PASS=ejemplo123"\n', encoding="utf-8")   # tampoco las pruebas
             git("add", "-A")
             git("commit", "-m", "base")
             self.assertIn(("OK", "Secretos"), self.estados(raiz))

@@ -179,6 +179,8 @@ python -m scripts.crear_admin --usuario administrador   # pide la contraseña do
 
 El nombre de usuario lleva solo letras. Con `--restablecer` se cambia la contraseña de un administrador que ya existe.
 
+Para una demostración, `python -m scripts.crear_usuarios_demo` crea los tres roles (`administrador`, `supervisor` y `operador`, este último con la ventanilla `V-01` asignada) con contraseñas generadas al azar, que se muestran **una sola vez** y no se guardan en ningún archivo; es idempotente y no pisa cuentas existentes.
+
 **5. Ejecutar la aplicación**
 
 ```bash
