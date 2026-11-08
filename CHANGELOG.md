@@ -11,6 +11,9 @@ Estado de versión actual: **v0.9.0** (release candidate del Seguimiento 4, 03/1
 
 Para la **v1.0.0**: instalación desde cero verificada por una persona que no configuró el entorno, presentación final y, de forma opcional, el video de demostración.
 
+### Documentación
+- README: qué hacer cuando `python -m venv` falla con «ensurepip is not available» (servidor sin permisos de administrador): entorno sin `pip` y `get-pip.py`, o `virtualenv`.
+
 ### Añadido
 - `scripts/crear_usuarios_demo.py`: crea los usuarios de demostración (administrador, supervisor y operador con su ventanilla) con contraseñas generadas que se muestran una sola vez para copiarlas al PDF de entrega. Idempotente, no escribe archivos y no pisa cuentas existentes; `--restablecer`, `--ventanilla` y `--sin-asignar` ajustan su comportamiento.
 

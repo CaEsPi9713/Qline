@@ -156,6 +156,19 @@ source venv/bin/activate            # en Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+> **Si `python -m venv` termina con «ensurepip is not available»** (pasa en Debian y Ubuntu sin el paquete `python3-venv`, por ejemplo en un hosting de Virtualmin donde no se tienen permisos de administrador), no hace falta instalar nada con `apt`: cree el entorno sin `pip` y descárguelo dentro de él.
+>
+> ```bash
+> python3 -m venv --without-pip venv
+> source venv/bin/activate
+> curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+> python get-pip.py
+> rm get-pip.py
+> pip install -r requirements.txt
+> ```
+>
+> Si ya existe un entorno con `pip` (por ejemplo el de una instalación anterior), otra salida es `pip install virtualenv` y luego `python -m virtualenv venv`. Si `python -m venv` falló a medias, borre la carpeta `venv` incompleta antes de repetirlo.
+
 **2. Configurar el entorno**
 
 ```bash
