@@ -9,7 +9,7 @@ Estado de versión actual: **v0.9.0** (release candidate del Seguimiento 4, 03/1
 
 ## [Sin publicar]
 
-Para la **v1.0.0**: instalación desde cero verificada por una persona que no configuró el entorno, presentación final y, de forma opcional, el video de demostración.
+Para la **v1.0.0**: Para el día 10 de noviembre se realiza la presentación final del aplicativo QLine , se realiza una presentación en formato PDF y un video demostrativo.
 
 ### Documentación
 - README: qué hacer cuando `python -m venv` falla con «ensurepip is not available» (servidor sin permisos de administrador): entorno sin `pip` y `get-pip.py`, o `virtualenv`.
