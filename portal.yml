@@ -10,12 +10,10 @@ motores: [Redis, MongoDB]
 lenguaje: Python
 licencia: MIT
 repositorio: https://github.com/CaEsPi9713/Qline
-# Opcional: enlace público del video de demostración (3 a 5 minutos). Si se agrega, también va en el README y en el PDF.
-demo_video:
+demo_video: https://youtu.be/kZH0j2MF300
 demo_url: https://grupo2.crnube.net/proyecto/qline/
 captura: docs/img/05-vista-operador.jpg
 grupo: 2
 dia: martes
 periodo: II-2026
-# Los nombres solo se publican con autorización de cada integrante. Agregue aquí a quienes la den, por ejemplo [Nombre Apellido, Nombre Apellido].
-autores_publicos: []
+autores_publicos: [Carlos Espinoza, Aaron Vega, Alessandro Cambronero, Abigail Urbina]
